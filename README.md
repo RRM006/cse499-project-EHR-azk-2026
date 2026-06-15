@@ -1,4 +1,5 @@
 # CSE499: EHR-Based Pre-Consultation Medical Documentation System
+## (AI Medical Pre-Screening Assistant)
 
 **North South University | Department of Electrical & Computer Engineering**
 
@@ -6,16 +7,13 @@
 
 ## Project Overview
 
-This is a CSE499 capstone project that develops an AI system to automatically convert patient voice input in Bangla (including multiple dialects and Bangla-English code-mixed speech) into structured Electronic Health Records (EHR).
+This capstone project (CSE499A/B) develops an interactive **AI Medical Pre-Screening Assistant** to streamline the patient intake process. The system enables patients in Bangladesh to verbally describe their symptoms in Bangla, Banglish, or regional dialects, and converts this information into a structured, physician-ready Electronic Health Record (EHR) pre-screening report.
 
-### Core Functionality
+### The Architectural Evolution
 
-The system operates as a five-stage pipeline:
-1. **Patient Speech Capture** - Voice input via kiosk/tablet.
-2. **Automatic Speech Recognition (ASR)** - Converts Bangla dialect/code-mixed speech to text.
-3. **Medical Named Entity Recognition (NER)** - Extracts symptoms, diseases, medications, etc.
-4. **Structured EHR Construction** - Normalizes and structures the data.
-5. **Doctor Dashboard** - Displays EHR, original transcript, and differential-diagnosis hints.
+Originally proposed as a passive, linear **5-Stage ASR Pipeline**, empirical results during Phases 1–3 demonstrated that even the strongest open-source Bangla ASR model (BengaliAI Regional) yields a **46.94% Word Error Rate (WER)** on real dialect speech. In a single-pass system, this level of noise leads to critical, silent clinical omissions.
+
+To ensure safety and reliability, the architecture has been upgraded to a **15-Module Conversational Clinical Intelligence System**. This design uses an active conversational loop to detect missing information, ask target follow-up questions to fill gaps, perform emergency triage, assign clinical risk tiers, and generate explainable medical summaries.
 
 ---
 
@@ -25,7 +23,7 @@ The system operates as a five-stage pipeline:
 |--------|-------------|
 | **Course** | CSE499A/B Capstone Project |
 | **Supervisor** | Dr. Mohammad Ashrafuzzaman Khan (AzK) |
-| **Department** | Electrical & Computer Engineering |
+| **Department** | Department of Electrical & Computer Engineering |
 | **University** | North South University (NSU), Dhaka, Bangladesh |
 
 ---
@@ -34,159 +32,144 @@ The system operates as a five-stage pipeline:
 
 | Name | Student ID | Role | Email |
 |------|-----------|------|-------|
+| Rafiur Rahman Mashrafi | 2221971042 | Team Member | rafiurmashrafi@northsouth.edu |
 | M.G. Rabbi Hossen | 2222516042 | Team Member | rabbi.hossen@northsouth.edu |
 | Israt Zaman Srity | 2211084042 | Team Member | israt.srity@northsouth.edu |
-| Rafiur Rahman Mashrafi | 2221971042 | Team Member | rafiurmashrafi@northsouth.edu |
 
 ---
 
-## System Architecture
+## System Architecture (15-Module Pipeline)
+
+The system coordinates fifteen modules to transform noisy verbal inputs into high-quality clinical reports. Rather than a linear progression, it uses a parallel triage path and a stateful conversational feedback loop.
 
 ```text
-┌─────────────────────────────────────────────────────────────┐
-│                 STAGE 1: PATIENT SPEECH                     │
-│         (Bangla / Dialects / Code-mixed Speech)             │
-└─────────────────────────────┬───────────────────────────────┘
-                              │
-                              ▼
-┌─────────────────────────────────────────────────────────────┐
-│                 STAGE 2: ASR (Speech to Text)               │
-│  Models: BengaliAI, Whisper, Wav2Vec2, Qwen3-ASR...         │
-└─────────────────────────────┬───────────────────────────────┘
-                              │
-                              ▼
-┌─────────────────────────────────────────────────────────────┐
-│                 STAGE 3: Medical NER                        │
-│  Extraction: Symptoms, meds, duration, allergies            │
-└─────────────────────────────┬───────────────────────────────┘
-                              │
-                              ▼
-┌─────────────────────────────────────────────────────────────┐
-│                 STAGE 4: Structured EHR                     │
-│  Standard format (JSON + Human Readable)                    │
-└─────────────────────────────┬───────────────────────────────┘
-                              │
-                              ▼
-┌─────────────────────────────────────────────────────────────┐
-│                 STAGE 5: Doctor Dashboard                   │
-│  UI with EHR, transcript, and differential-diagnosis hints  │
-└─────────────────────────────────────────────────────────────┘
+               Patient Speaks (Bangla / Banglish / Dialect)
+                                    |
+                                    v
+                     [Module 1: Speech-to-Text (ASR)]
+                                    |
+                                    v
+              [Module 2: Text Processing & Normalisation]
+                                    |
+                                    v
+                  [Module 3: Information Extraction]
+                                    |
+                                    v
+                [Module 4: Initial Clinical Summary]
+                                    |
+                   +----------------+----------------+
+                   |                                 |
+                   v                                 v
+     [Module 5: Emergency Detection]   [Module 6: Missing Info Analysis]
+             | (Parallel Triage)                     |
+             v                                       v
+      [ALERT IF CRITICAL]              [Module 7: Follow-up Question Gen]
+             |                                       |
+    (Medical Staff Alert)                            v
+                                              Patient Answers
+                                                     |
+                                                     v
+                                       [Module 8: Response Processing]
+                                                     |
+                                                     v
+                                       [Module 9: Case Completion Check]
+                                           +---------+---------+
+                                           |                   |
+                                      [Incomplete]         [Complete]
+                                       Loop to M7          Continue
+                                                               |
+                                                               v
+                                                 [Module 10: Risk Assessment]
+                                                               |
+                                                               v
+                                                 [Module 11: Explainable AI]
+                                                               |
+                                                               v
+                                                 [Module 12: Report Generation]
+                                                               |
+                                                               v
+                                                 [Module 13: EHR Database (Store)]
+                                                               |
+                                                               v
+                                                 [Module 14: Doctor Dashboard]
+                                                               |
+                                                               v
+                                                 [Module 15: Feedback Loop]
 ```
 
----
+### Module Breakdown
 
-## Features
-
-### Language Support
-- **Primary Language:** Bengali (Bangla)
-- **Dialects Supported:** Dhaka, Sylhet, Barishal, Standard Bangla, Kolkata (Indian Bengali)
-- **Code-mixing:** Bangla-English (natural in Bangladesh)
-
-### Medical Entities Extracted
-| Entity Type | Example (Bangla) |
-|-------------|-------------------|
-| Symptoms | জ্বর (fever), মাথা ঘুরা (dizziness), কাশি (cough) |
-| Diseases | ডায়াবেটিস (diabetes), উচ্চ রক্তচাপ (high BP) |
-| Medications | প্যারাসিটামল, ইনসুলিন |
-| Duration | ৩ দিন, এক সপ্তাহ |
-| Allergies | পেনিসিলিনে অ্যালার্জি |
-| Body Parts | মাথা, বুক, পেট |
-
----
-
-## Technical Details
-
-### ASR Models Evaluated
-- **Baseline Models:** Whisper (Small/Medium/Large/Turbo), Wav2Vec2 (XLSR-53, 300M, CV-Bengali), MMS, Vakyansh-Bn, BengaliAI Whisper, BengaliAI Regional, SeamlessM4T. (Strongest: BengaliAI Regional)
-- **Larger Multimodal Models:** Qwen2-Audio, Qwen3-ASR-1.7B, Voxtral-Mini, Phi-4 Multimodal, Qwen2.5-Omni. 
-- **Fine-Tuning Target:** Qwen3-ASR-1.7B (using LoRA)
-
-### NER & Application Stack
-- **NER Model:** BanglaBERT (Token Classification)
-- **Planned Backend:** FastAPI, PostgreSQL
-- **Planned Frontend:** React / Next.js (Dashboard), Flutter / PWA (Patient App)
+1. **M1: Speech-to-Text (ASR)**: Transcribes patient speech in Bangla/Banglish/dialects. Incorporates noise-tolerant voice activity detection and falls back to manual text entry if input quality is too low.
+2. **M2: Text Processing & Normalisation**: Performs spelling correction, Banglish normalization, punctuation restoration, and sentence boundary detection.
+3. **M3: Information Extraction (Medical NER)**: Extracts clinical entities (symptoms, body parts, duration, severity, medications, allergies, age, etc.).
+4. **M4: Initial Clinical Summary**: Generates a concise human-readable summary of the initial chief complaint.
+5. **M5: Emergency Detection**: Parallel safety check flagging red-flag symptoms (e.g., chest pain, stroke signs, severe breathing difficulties) to alert medical staff immediately.
+6. **M6: Missing Information Analysis**: Checks extracted clinical data against expected symptoms per disease template to generate a structured gap report.
+7. **M7: Dynamic Follow-up Question Generation**: Generates contextual questions in Bangla or English to systematically collect missing information.
+8. **M8: Response Processing & Profile Update**: Processes the patient's answers to update the overall clinical profile and resolve contradictions.
+9. **M9: Case Completion Check**: Evaluates if the collected profile is complete enough for clinical assessment; loops back to M7 up to a configured turn limit.
+10. **M10: Risk Assessment**: Assigns a risk level (**Low / Medium / High / Critical**) using clinical decision rules and a weighted scoring engine.
+11. **M11: Explainable AI (XAI)**: Provides clear, plain-language text explanations showing which specific symptoms and factors led to the assigned risk level.
+12. **M12: Structured Clinical Report Generation**: Packages details into a standardized pre-screening template (comprising chief complaints, symptoms, emergency status, follow-up log, and risk analysis).
+13. **M13: EHR Database**: Stores session records securely (HIPAA/PDPA-compliant relational storage with row-level encryption).
+14. **M14: Doctor Dashboard**: A real-time interface for physicians to review intake reports, review raw transcript audio, and override or annotate system findings.
+15. **M15: Feedback & Continuous Learning**: Collects physician adjustments to system outputs, driving model retraining and long-term optimization.
 
 ---
 
-## Dataset
+## Design Comparison: Old vs. New
 
-### Data Sources
-- YouTube (medical interviews, health consultations)
-- Self-collected audio recordings
-- Mozilla Common Voice (Bengali)
-
-### Target Dataset
-| Dialect | Target Samples |
-|---------|---------------|
-| Dhaka | 50+ |
-| Sylhet | 50+ |
-| Barishal | 50+ |
-| Standard Bangla | 50+ |
-| Kolkata | 50+ |
-| **Total** | **250+** |
+| Feature / Dimension | Original 5-Stage Design | Updated 15-Module Design |
+|:---|:---|:---|
+| **Interaction Model** | Single-pass, stateless transcription pipeline. | Stateful, interactive conversational loop. |
+| **Handling Gaps** | None (incomplete data passed to doctor). | Active gap analysis (M6) and follow-up (M7–M9). |
+| **Emergency Triage** | Not supported. | Dedicated parallel triage module (M5) with staff alerts. |
+| **Risk Stratification** | Differential diagnostic hints only. | 4-tier risk classification (Low, Medium, High, Critical). |
+| **Reasoning Audit** | Not supported. | Dedicated Explainable AI module (M11) using SHAP/LIME. |
+| **Language Support** | Standard Bangla and Bangla-English code-mixed. | Bangla, Banglish, and regional dialects (Dhaka, Sylhet, Barishal). |
+| **Quality Control** | No post-deployment learning path. | Dr. Feedback loop (M15) to drive continuous training. |
+| **Data Traceability** | Audio linked directly to static transcripts. | Complete session logs (transcripts, gap QA, overrides). |
 
 ---
 
-## Tools & Resources
+## Technical Stack & Software Components
 
-### Key Software Components
-| Tool | Purpose |
-|------|---------|
-| **Python 3.10 / PyTorch** | Core implementation and deep learning framework |
-| **HF Transformers / Datasets** | Model loading, inference, and fine-tuning (PEFT/LoRA) |
-| **WhisperX** | Long-form audio segmentation and forced alignment |
-| **Librosa / FFmpeg** | Audio I/O and preprocessing |
-| **Google Colab (T4, A100)** | Primary GPU compute |
-| **yt-dlp** | Public-source audio collection |
+The architecture relies entirely on software-based elements, leveraging open-source ML/DL frameworks and modern web tools.
 
-**Budget:** ৳0 (Zero Taka - All tools are free)
-
----
-
-## Repository Structure
-
-```
-cse499-project/
-├── notebooks/                          # Colab notebooks (active work)
-│   ├── 00_project_setup.ipynb         # Environment & Drive setup
-│   ├── 01_data_download.ipynb         # YouTube data collection
-│   ├── 02_audio_preprocessing.ipynb   # Audio segmentation & cleaning
-│   ├── 03_model_comparison.ipynb      # Baseline ASR model evaluation
-│   ├── 04_bigger_model_comparison.ipynb # Larger ASR model evaluation
-│   └── 05_chatbot_comparison.ipynb    # Phase 5: AI chatbot EHR comparison
-│
-├── evaluation/                         # Model evaluation results
-│   ├── baseline_models/               # WER scores, charts, confusion matrices
-│   └── bigger_models/                 # Larger model metrics & comparisons
-│
-├── docs/                               # Written deliverables
-│   ├── submissions/                   # Graded assignment PDFs + LaTeX source
-│   └── literature_reviews/            # Paper reviews (EHR + other topics)
-│
-├── presentations/                      # Slide decks for demos & defenses
-│
-├── research/                           # Exploratory & background work
-│   ├── ideas/                         # Early project idea proposals
-│   ├── pitch_decks/                   # Pitch presentations (pre-selection)
-│   ├── gap_analysis_templates/        # Templates for paper reading & gaps
-│   └── archive/                       # Old drafts, guides, & backups
-│
-├── context_and_task.md                 # Project context & phase descriptions
-├── requirements.txt                    # Python dependencies
-└── README.md                           # This file
-```
+| Tool | Function | Why Selected |
+|------|----------|--------------|
+| **Python 3.10 / PyTorch 2.x** | Core ML/NLP backend and execution runtime | Industry standard for machine learning; vast NLP library ecosystem. |
+| **HF Transformers** | Model execution and tokenization | Standardized API for Whisper, Wav2Vec2, and Qwen-Audio variants. |
+| **HF PEFT / LoRA** | Parameter-efficient fine-tuning | Enables Speech Encoder fine-tuning of Qwen3-ASR-1.7B on limited GPU budgets. |
+| **BanglaBERT** | Token classification for Medical NER (M3) | High performance on Bangla-specific text with low adaptation cost. |
+| **spaCy + Custom Rules** | Entity tracking & clinical checklists (M6/M9) | Fast, production-ready parsing; allows deterministic medical checklist checks. |
+| **WhisperX** | Audio segmentation and alignment (M1) | Segments long-form audio beyond Whisper's 30-second window limitations. |
+| **FastAPI** | REST & WebSocket Backend server | High-performance, asynchronous endpoints suitable for live conversational loops. |
+| **PostgreSQL** | Relational database storage (M13) | Supports structured clinical schema design, indices, and row-level encryption. |
+| **React / Next.js** | Doctor Dashboard application (M14) | Robust dashboard UI ecosystem; server-side rendering support for low-bandwidth clinics. |
+| **Flutter / PWA** | Patient Kiosk interface (M1) | Single-button audio recording UX; unified mobile/tablet/PWA distribution. |
+| **SHAP / LIME** | XAI feature attribution (M11) | Model-agnostic calculations for plain-text explanation of risk scores. |
+| **Google Colab** | Primary GPU compute (T4 / A100) | Adequate for academic prototyping, benchmarking, and low-cost LoRA adapter training. |
 
 ---
 
-## Project Progress / Phases
+## Project Status & Phases
 
-| Phase | Description | Status |
-|-------|-------------|--------|
-| **Phase 1** | Audio collection & preprocessing (4.7h multi-dialect Bangla) | Completed |
-| **Phase 2** | Baseline ASR benchmark (12 open-source models) | Completed |
-| **Phase 3** | Larger multimodal audio LLM benchmark (2B-7B parameters) | Completed |
-| **Phase 4** | Qwen3-ASR-1.7B fine-tuning research (LoRA) | In Progress |
-| **Phase 5** | Comparative chatbot output study (EHR schema design) | Pending |
+The academic roadmap spans 5 core phases across CSE499A and CSE499B:
+
+| Phase | Focus Area | Status | Key Deliverables & Milestones |
+|:---:|:---|:---:|:---|
+| **Phase 1** | **Audio Collection & Preprocessing** | **Completed** | Collected 4.7 hours of multi-dialect audio; normalized to 16kHz mono; WhisperX VAD segmentation. |
+| **Phase 2** | **Baseline ASR Benchmarking** | **Completed** | Evaluated 12 models on dialects. Best model: `BengaliAI Regional` at 46.94% WER (showed need for conversational gaps loop). |
+| **Phase 3** | **Multimodal Audio LLM Benchmark** | **Completed** | Benchmarked 6 LLMs (1.7B-7B). Verified that general large models do not outperform specialized models on Bangla dialect. |
+| **Phase 4** | **ASR Fine-Tuning Research** | **In Progress** | Formulated LoRA fine-tuning methodology for `Qwen3-ASR-1.7B` on dialect datasets (planned execution in CSE499B). |
+| **Phase 5** | **Comparative Chatbot & EHR Study** | **Selected** | Evaluated public LLMs (ChatGPT, DeepSeek, Perplexity, Qwen) on medical extraction, prompting the 15-module redesign. |
+
+### Upcoming for Deployed System (CSE499B)
+- **JWT Auth & RBAC**: Dedicated authentication levels for patients, triage nurses, clinicians, and system admins.
+- **PDPA-compliant Consent**: Patient intake flow requiring explicit verbal/digital consent prior to audio processing.
+- **MLflow Tracking**: Experiment tracking and automated model deployments as Module 15 collects doctor correction data.
+- **PDF Report Exporter**: Direct PDF creation from structured reports for physical printing or inclusion in legacy hospital databases.
 
 ---
 
@@ -194,8 +177,8 @@ cse499-project/
 
 ### 1. Clone the Repository
 ```bash
-git clone https://github.com/your-repo/cse499-bangla-ehr.git
-cd cse499-bangla-ehr
+git clone https://github.com/RRM006/cse499-project-temp-azk-2026.git
+cd cse499-project-temp-azk-2026
 ```
 
 ### 2. Install Dependencies
@@ -203,55 +186,22 @@ cd cse499-bangla-ehr
 pip install -r requirements.txt
 ```
 
-### 3. Set Up Google Drive
-Mount Google Drive in Colab for dataset and model storage.
-
-### 4. Understand the Project
-See `context_and_task.md` for the full project description and phase-by-phase progress.
-See `docs/` for submissions, literature reviews, and LaTeX sources.
-See `notebooks/` for the Colab notebooks (run in order: 00 → 05).
-
----
-
-## Evaluation Metrics
-
-### ASR (Lower is Better)
-- **Word Error Rate (WER)** - Target: <30%
-
-### NER (Higher is Better)
-- **Precision, Recall, F1-Score** - Target: F1 >75%
-
-### System
-- End-to-end pipeline functionality
-- EHR output accuracy
+### 3. Notebook Execution
+To review model comparisons and research benchmarks, run the notebooks in the `notebooks/` directory sequentially:
+1. `00_project_setup.ipynb` - Colab environment validation
+2. `01_data_download.ipynb` - Data ingestion pipeline
+3. `02_audio_preprocessing.ipynb` - Audio cleaning and WhisperX chunking
+4. `03_model_comparison.ipynb` - 12 baseline ASR models comparison
+5. `04_bigger_model_comparison.ipynb` - 1.7B–7B multimodal models evaluation
+6. `05_chatbot_comparison.ipynb` - Chatbot pre-screening outputs audit
 
 ---
 
-## Contributing
+## License & Acknowledgments
 
-This is an academic project. For questions:
-1. Read `context_and_task.md` for project context
-2. Review `docs/` for submissions and literature reviews
-3. Contact team members
+This project is conducted for academic purposes at North South University.
+- Special thanks to our Faculty Advisor, **Dr. Mohammad Ashrafuzzaman Khan (AzK)**, for guidance and architecture feedback.
+- Thanks to the open-source community for providing Whisper, Wav2Vec2, BanglaBERT, and Qwen audio weights.
 
----
-
-## License
-
-This project is for academic purposes.
-
----
-
-## Acknowledgments
-
-- Dr. Mohammad Ashrafuzzaman Khan (AzK) - Project Supervisor
-- North South University - Academic Support
-- Hugging Face - Pre-trained Models
-- OpenAI - Whisper
-- Meta AI - Wav2Vec2, HuBERT, Data2Vec
-- Microsoft - WavLM
-
----
-
-*Last Updated: March 2026*
+*Last Updated: June 2026*
 *CSE499 Capstone Project - North South University*
