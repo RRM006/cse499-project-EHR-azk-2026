@@ -1,0 +1,12 @@
+# Voice Medical Pre-Screener — single cross-platform dependency list (Windows + Arch Linux).
+# All pure-Python wheels; install with:  pip install -r requirements.txt
+# Phase 0: live STT happens in the browser (Web Speech API), so no ML deps here yet.
+
+fastapi==0.115.6          # web framework + API
+uvicorn[standard]==0.34.0 # ASGI server (run the app)
+pydantic-settings==2.7.1  # load config/keys from backend/.env
+SQLAlchemy==2.0.51        # SQLite persistence (foundation for future EHR); 2.0.51+ needed for Python 3.14
+openai==1.59.6            # OpenAI-compatible client; points at Gemini now, Groq/OpenRouter later
+
+# --- dev / test ---
+pytest==8.3.4             # raw-immutability guard + future tests
