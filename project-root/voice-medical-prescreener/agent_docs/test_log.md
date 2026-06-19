@@ -35,6 +35,22 @@ transcribed by hand (the "ground truth"). Record the model + machine each time.
 
 ## Test entries (newest first)
 
+## 2026-06-19 — Module 1 (infra) — Correction guards + API/frontend smoke test
+- Setup: Python 3.14.4 on Windows; `.venv`. Backend served via the preview tool
+  (uvicorn on port 8000). Browser checks via preview_eval / console logs.
+- Metric(s): test pass/fail; HTTP status of endpoints; JS console errors.
+- Result:
+  * `pytest backend/tests/` → **7 passed** (3 immutability + 4 corrector guards).
+  * Endpoints: `/`, `/app.js`, `/styles.css` → 200; `/api/transcripts` → 200 `[]`;
+    `/health` → 200; routes = `/`, `/api/correct`, `/api/transcripts`, `/health`.
+  * Frontend: page renders, all elements present, Web Speech API detected,
+    **0 console errors**, recent-list fetch returned 200.
+- Notes: Corrector guards are OFFLINE (no network) — empty input short-circuits,
+  provider selection, missing-key → RuntimeError, unknown-provider → ValueError.
+  The LIVE Gemini call (`POST /api/correct` / the module `__main__`) was NOT run
+  this session (spends free-tier quota) — that is the human's Step-6 live test.
+  No WER/latency numbers yet; those come from the live test on real utterances.
+
 ## 2026-06-19 — Module 1 (infra) — Raw-immutability guard + clean install
 - Setup: Python 3.14.4 on Windows; `.venv`; deps from `requirements.txt`
   (fastapi 0.115.6, uvicorn 0.34.0, pydantic-settings 2.7.1, SQLAlchemy 2.0.51,

@@ -126,6 +126,29 @@
   on 3.14); pinning an older Python (the Windows dev machine is on 3.14.4).
 - Status: Accepted
 
+## ADR-0013 — 2026-06-19 — POST /api/correct persists RAW before correcting
+- Decision: The `/api/correct` endpoint stores the raw text (write-once) BEFORE
+  calling the LLM. If the LLM call fails, it returns HTTP 502 but the raw record is
+  kept (with `corrected_text` null). Misconfiguration (missing key / bad provider)
+  fails fast with HTTP 500 before anything is stored.
+- Why: Constitution rule #1 — the patient's words must never be lost, even when the
+  (free, rate-limited, network-dependent) correction step fails.
+- Rejected: Correcting first then storing both (loses raw if the call fails);
+  silently returning 200 with no correction (hides failures from the UI).
+- Status: Accepted
+
+## ADR-0014 — 2026-06-19 — Live transcription is browser-side; backend hit only on "Correct"
+- Decision: In Phase 0, live STT runs entirely in the browser (Web Speech API,
+  Chrome/Edge, `bn-BD`) talking to Google's cloud. Our FastAPI backend is invoked
+  only when the user clicks "Correct" (one Gemini request per click). Talking is
+  effectively unlimited; the real cap is the Gemini free tier (~15 req/min,
+  ~1,500/day on flash).
+- Why: Matches the Phase 0 goal of a zero-ML-setup demo and the build plan's
+  quick-start path. Keeps the loop simple and the backend stateless during speech.
+- Rejected: Streaming audio to the backend in Phase 0 (that is Phase 1 with
+  faster-whisper over WebSocket, not needed for the demo).
+- Status: Accepted (Phase 0 only; Phase 1 moves STT server-side)
+
 ## ADR-0008 — 2026-06-18 — Default Whisper model is small/base; upgrade to a Bangla fine-tune later
 - Decision: Start with Whisper `small` (or `base` if we need a snappier live feel)
   for streaming on CPU. Upgrade to a Bangla-fine-tuned model (e.g.

@@ -1,0 +1,65 @@
+<!DOCTYPE html>
+<html lang="bn">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Voice Medical Pre-Screener — Phase 0</title>
+  <link rel="stylesheet" href="/styles.css" />
+</head>
+<body>
+  <header>
+    <h1>Voice Medical Pre-Screener <small>— Phase 0 demo</small></h1>
+    <p class="note">
+      Speak in Bangla, Banglish, Roman Bangla, or a dialect. The <strong>RAW</strong>
+      text is kept exactly as recognized and never changed. Correction is shown
+      separately on the right.
+    </p>
+    <p id="browserWarn" class="warn" hidden>
+      ⚠ This browser has no live speech recognition. Use <strong>Chrome</strong> or
+      <strong>Edge</strong> for the mic, or type into the manual box below.
+    </p>
+  </header>
+
+  <main>
+    <section class="panel">
+      <div class="panel-head">
+        <h2>1 · Live microphone</h2>
+        <div class="controls">
+          <button id="micToggle" class="primary">🎤 Start mic</button>
+          <button id="clearRaw">Clear</button>
+        </div>
+      </div>
+      <p id="status" class="status">Idle.</p>
+
+      <h3>RAW — exactly as recognized (never changed)</h3>
+      <div id="rawBox" class="box raw">
+        <span id="rawText"></span><span id="interim" class="interim"></span>
+      </div>
+      <button id="correctMic" class="primary wide">Correct this raw text →</button>
+    </section>
+
+    <section class="panel">
+      <div class="panel-head"><h2>2 · Corrected (separate)</h2></div>
+      <h3>CORRECTED — produced by the LLM, stored apart from RAW</h3>
+      <div id="correctedBox" class="box corrected"><em>No correction yet.</em></div>
+    </section>
+
+    <section class="panel full">
+      <div class="panel-head"><h2>Manual text fallback</h2></div>
+      <p class="note">Use this if speech quality is poor or the browser has no mic support.</p>
+      <textarea id="manualText" rows="3" placeholder="Type a Bangla / Banglish / Roman-Bangla utterance…"></textarea>
+      <button id="correctManual" class="primary">Correct typed text →</button>
+    </section>
+
+    <section class="panel full">
+      <div class="panel-head">
+        <h2>Recently saved (raw → corrected)</h2>
+        <button id="refreshRecent">Refresh</button>
+      </div>
+      <ul id="recentList" class="recent"></ul>
+    </section>
+  </main>
+
+  <script src="/app.js"></script>
+</body>
+</html>

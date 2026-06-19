@@ -6,11 +6,12 @@
 
 **Status keys:** ⬜ Not started · 🟨 In progress · 🟦 Blocked · ✅ Done
 
-**Last updated:** 2026-06-19 (Session 1 — Phase 0 scaffolding + backend skeleton)
+**Last updated:** 2026-06-19 (Session 2 — Phase 0 correction service + API + frontend)
 **Current phase:** Phase 0 (quick demo) → see "Roadmap phases" below.
 **Module in focus:** Module 1 — Speech-to-Text.
-**Progress:** Build steps 1–2 of 6 done (scaffolding + backend skeleton with the
-raw-immutability guard passing). Next: step 3 (correction service).
+**Progress:** Build steps 1–5 of 6 done (full stack built; server runs end to end,
+7 tests pass). Next: step 6 (human runs live mic test in Chrome + collects ~50
+sample utterances). Module 1 stays 🟨 until the live test + samples are recorded.
 
 ---
 
@@ -46,9 +47,9 @@ with zero ML setup, using the browser Web Speech API + one free LLM for correcti
 **Move on when:** I can speak Bangla/Banglish into the browser, see the raw text
 live, see a corrected version beside it, and the raw text is stored unchanged.
 (Also: ~50 real sample utterances collected for later testing.)
-**Build steps (6):** 1 scaffolding ✅ · 2 backend skeleton ✅ · 3 correction service ⬜
-· 4 API routes + static serving ⬜ · 5 frontend (mic + boxes + fallback) ⬜
-· 6 end-to-end verification + collect samples ⬜.
+**Build steps (6):** 1 scaffolding ✅ · 2 backend skeleton ✅ · 3 correction service ✅
+· 4 API routes + static serving ✅ · 5 frontend (mic + boxes + fallback) ✅
+· 6 end-to-end live test + collect ~50 samples ⬜ (human-driven, next).
 
 ### Phase 1 — Robust local core
 **Goal:** FastAPI + WebSocket backend streaming live mic audio to faster-whisper

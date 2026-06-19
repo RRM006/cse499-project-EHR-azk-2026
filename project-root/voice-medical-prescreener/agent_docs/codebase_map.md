@@ -4,7 +4,7 @@
 > re-exploring the whole project each session. Update it whenever you add or move
 > a folder/file. Keep each note to one line.
 
-**Last updated:** 2026-06-19 (Session 1 — scaffolding + backend skeleton added)
+**Last updated:** 2026-06-19 (Session 2 — correction service + API + frontend added)
 
 ---
 
@@ -16,30 +16,38 @@ voice-medical-prescreener/
 ├── requirements.txt              # single cross-platform dep list (Py 3.14 needs SQLAlchemy>=2.0.51)
 ├── .gitignore                    # ignores .env, .venv/, *.db, data/, audio/, models/
 ├── .venv/                        # local virtualenv (gitignored)
-├── agent_docs/                   # the project's shared brain (living docs)
-│   ├── constitution.md           # stable rules + 15-module architecture
-│   ├── milestone_log.md          # status of all 15 modules + roadmap phases
-│   ├── current_task.md           # what we are doing right now (overwritten each session)
-│   ├── changelog.md              # session-by-session history (newest first)
-│   ├── test_log.md               # what was tested + results (WER, accuracy...)
-│   ├── decisions.md              # dated design decisions (ADR style)
-│   ├── codebase_map.md           # THIS file
-│   └── session_protocol.md       # copy-paste prompts to start/end a session
-└── backend/                      # FastAPI app (foundation for the full app)
-    ├── .env                      # REAL config — gitignored, placeholder key (FILL IN)
-    ├── .env.example              # committed template (key names only)
-    ├── app/
-    │   ├── core/config.py        # pydantic-settings: loads backend/.env
-    │   └── db/
-    │       ├── database.py        # SQLAlchemy engine/session, init_db(), get_db()
-    │       ├── models.py          # Utterance: raw_text (write-once) + separate corrected_text
-    │       └── repository.py      # create_raw() / set_correction() — NO raw mutator
-    └── tests/test_raw_immutable.py  # guard for constitution rule #1 (3 tests, passing)
+├── .claude/launch.json           # dev-server config for the preview tool (uvicorn; Windows venv path)
+├── agent_docs/                   # the project's shared brain (living docs) — unchanged set
+│   └── ... (constitution, milestone_log, current_task, changelog, test_log,
+│           decisions, codebase_map, session_protocol)
+├── backend/                      # FastAPI app (foundation for the full app)
+│   ├── .env                      # REAL config — gitignored (FILL IN the GEMINI_API_KEY)
+│   ├── .env.example              # committed template (key names only)
+│   ├── prescreener.db            # SQLite, created at runtime (gitignored)
+│   ├── app/
+│   │   ├── main.py               # FastAPI entry: lifespan init_db, /health, serves frontend
+│   │   ├── core/config.py        # pydantic-settings: loads backend/.env
+│   │   ├── api/routes_transcripts.py  # POST /api/correct, GET /api/transcripts
+│   │   ├── schemas/transcript.py # CorrectRequest / TranscriptOut (Pydantic)
+│   │   ├── services/correction/
+│   │   │   ├── base.py            # Corrector ABC
+│   │   │   └── openai_compatible.py  # OpenAICompatibleCorrector + build_corrector() + __main__ live check
+│   │   └── db/
+│   │       ├── database.py        # engine/session, init_db(), get_db()
+│   │       ├── models.py          # Utterance: raw_text (write-once) + separate corrected_text
+│   │       └── repository.py      # create_raw() / set_correction() — NO raw mutator
+│   └── tests/
+│       ├── test_raw_immutable.py  # rule #1 guard (3 tests)
+│       └── test_corrector.py      # corrector guards, offline (4 tests)
+└── frontend/                     # plain HTML/JS (served by FastAPI at /)
+    ├── index.html                # mic controls, RAW box, CORRECTED box, manual fallback, recent list
+    ├── app.js                    # Web Speech API (bn-BD); interim grey / final verbatim; POST /api/correct
+    └── styles.css                # two-column layout; raw=amber, corrected=green
 ```
 
-Not built yet: `backend/app/{api,schemas,services}`, `backend/app/main.py`,
-`frontend/`. (See "Planned structure" below.) `backend/prescreener.db` is created
-at runtime once the app runs (gitignored).
+Run from the project root. App: `python -m uvicorn backend.app.main:app --reload --port 8000`
+(use the venv's Python). Tests: `pytest backend/tests/` (7 passing).
+All 6 Phase-0 build files exist; only the human-driven live test (step 6) remains.
 
 ---
 

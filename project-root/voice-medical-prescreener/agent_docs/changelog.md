@@ -16,6 +16,28 @@
 
 ---
 
+## Session 2 — 2026-06-19 — Phase 0 Steps 3–5: correction service + API + frontend
+- Did: Built the correction service (Step 3): `services/correction/base.py`
+  (`Corrector` ABC) + `openai_compatible.py` (`OpenAICompatibleCorrector` +
+  `build_corrector()` + strict prompt + manual `__main__` live check) and
+  `test_corrector.py` (4 offline guards). Built the API (Step 4):
+  `schemas/transcript.py`, `api/routes_transcripts.py` (`POST /api/correct`,
+  `GET /api/transcripts`), and `main.py` (lifespan `init_db`, `/health`, serves
+  frontend or a placeholder). Built the frontend (Step 5): `frontend/index.html`,
+  `app.js` (Web Speech API bn-BD, interim grey / final verbatim), `styles.css`.
+  Fixed `.claude/launch.json` to use the venv Python. Ran the server via the
+  preview tool and verified the page renders with no console errors.
+- Decided: `POST /api/correct` persists RAW *before* calling the LLM, so raw
+  survives a correction failure (502 with raw kept); misconfig fails fast (500).
+  Recorded as ADR-0013.
+- Broke / problem: `launch.json` first used system `python` (no uvicorn) → fixed to
+  `.venv/Scripts/python.exe` (Windows-specific; Arch needs `.venv/bin/python`).
+- Deferred: Live Gemini call NOT auto-run (spends free-tier quota) — left as a
+  manual check for the human. No automated test for `/api/correct` (would hit the
+  network). Groq/OpenRouter still interface-only. Frontend = plain HTML/JS (React later).
+- Next: Step 6 — human runs the end-to-end live mic test in Chrome on both
+  machines and collects ~50 sample utterances. See `current_task.md`.
+
 ## Session 1 — 2026-06-19 — Phase 0 scaffolding + backend skeleton (Steps 1–2)
 - Did: Approved the Phase 0 plan, then built the foundation (not a throwaway
   demo folder): `requirements.txt`, `.gitignore`, `backend/.env` + `.env.example`,

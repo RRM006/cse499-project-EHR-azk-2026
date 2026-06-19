@@ -11,39 +11,46 @@
 **Module:** Module 1 — Speech-to-Text (+ the correction step)
 
 ## Where we are right now
-Scaffolding (Step 1) and the backend skeleton (Step 2) are DONE and verified:
-- `requirements.txt`, `.gitignore`, `backend/.env` + `.env.example` exist.
-- Backend skeleton built: `backend/app/core/config.py`, `backend/app/db/`
-  (database.py, models.py `Utterance`, repository.py), `backend/tests/`.
-- `.venv` created, deps installed (Python 3.14.4, Windows), `pytest` = 3 passed.
-- Raw-immutability guard is in place and passing (constitution rule #1).
+The full Phase 0 stack is BUILT and the server runs end to end:
+- Steps 1–5 of the 6-step build are done (scaffolding → backend skeleton →
+  correction service → API + static serving → frontend).
+- Backend: FastAPI `main.py` serves the frontend + JSON API. Endpoints:
+  `POST /api/correct`, `GET /api/transcripts`, `/health`, `/docs`.
+- Frontend: `frontend/index.html` + `app.js` (Web Speech API `bn-BD`, interim grey
+  / final committed verbatim, RAW box, manual fallback) + `styles.css`.
+- Correction: `build_corrector()` → Gemini via OpenAI-compatible client (swappable).
+- Storage: SQLite; raw stored verbatim, corrected in a separate column.
+- Tests: `pytest backend/tests/` = **7 passed**. Server verified rendering via the
+  preview tool (no console errors, all assets 200). Live Gemini call NOT yet run.
 
-We follow a 6-step build order and STOP for review between each step. Steps 1–2
-are complete. **No Gemini code, no API routes, no frontend yet.**
+How the mic works (important): live transcription is 100% browser↔Google (Web
+Speech API). Our backend is hit ONLY when the user clicks "Correct" (one Gemini
+request per click; free tier ≈ 15/min, ~1,500/day).
 
 ## The one thing we are doing next
-**Step 3 — the correction service (no API routes yet).** Build:
-- `backend/app/services/correction/base.py` — `Corrector` ABC: `correct(raw_text) -> str`.
-- `backend/app/services/correction/openai_compatible.py` — `OpenAICompatibleCorrector`
-  using the `openai` SDK pointed at Gemini's OpenAI-compatible base URL (from config).
-  Strict prompt: "Correct spelling/grammar of this Bangla / Banglish / Roman-Bangla
-  medical utterance. Do NOT add, remove, translate away, or infer any symptom or
-  meaning. Return only the corrected text." Raw is sent; raw is never overwritten.
-
-This is the FIRST step that can hit the network, so the real key-using call stays
-behind a tiny manual check the human runs themselves — do not auto-call Gemini.
+**Step 6 — end-to-end live test + collect samples (human-driven).**
+1. Run the server and open http://localhost:8000 in Chrome/Edge (see run commands
+   in Reminders). Needs a valid `GEMINI_API_KEY` in `backend/.env`.
+2. Speak Bangla / Banglish / Roman Bangla → confirm RAW appears verbatim, click
+   Correct → corrected appears separately, RAW unchanged; check the recent list.
+3. Try the manual fallback box too.
+4. Start collecting ~50 real sample utterances (the Phase 0 "move on" gate).
+5. Record findings (rough latency, does correction preserve meaning?) in test_log.
 
 ## Exact next step for Claude Code
-Show the plan for the two files above, then wait for "go" before writing them.
+Wait for the human to report their live-test results. If they hit issues (mic,
+Gemini errors, latency), help debug. If they want automated coverage of
+`/api/correct`, propose mocking the corrector (no real network) — plan first.
 
-## BLOCKER / action for the human
-- **REGENERATE the Gemini key** (the one pasted in chat is compromised) and put the
-  new value in `backend/.env` (replace `PASTE_YOUR_REGENERATED_KEY_HERE`).
-  Step 3 code can be written without it, but testing the live call needs it.
+## Open / optional improvements (discuss, don't assume)
+- Add a mocked test for `POST /api/correct` so CI covers the route offline.
+- Add run commands to `CLAUDE.md` COMMANDS section (still says TBD).
+- `.claude/launch.json` uses the Windows venv path; Arch needs `.venv/bin/python`.
 
 ## Reminders
-- Raw words are never edited (constitution rule #1). Correction is a separate field.
+- Raw words are never edited (rule #1). Correction is a separate field/column.
 - Plan first, code second, one small step at a time. Do not assume. (CLAUDE.md)
-- Cross-platform (Windows + Linux). Run commands from the project root.
-  Run app:  `uvicorn backend.app.main:app --reload`   Test:  `pytest backend/tests/`
-- Python 3.14 needs SQLAlchemy >= 2.0.51 (older pins crash).
+- Synthetic/consented data only — free LLM tiers may train on input (rule #4).
+- Run app (Windows): `.venv\Scripts\python.exe -m uvicorn backend.app.main:app --reload --port 8000`
+- Run app (Arch):    `.venv/bin/python -m uvicorn backend.app.main:app --reload --port 8000`
+- Run tests:         `pytest backend/tests/`   ·   Python 3.14 needs SQLAlchemy >= 2.0.51.
