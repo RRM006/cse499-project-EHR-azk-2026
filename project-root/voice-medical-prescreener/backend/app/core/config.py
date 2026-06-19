@@ -32,9 +32,26 @@ class Settings(BaseSettings):
     gemini_api_key: str = ""
     gemini_base_url: str = "https://generativelanguage.googleapis.com/v1beta/openai/"
 
-    # --- fallback providers (Phase 0: unused, wired up later) ---
-    groq_api_key: str = ""
+    # --- correction fallback providers (Phase 0: unused, wired up later) ---
     openrouter_api_key: str = ""
+
+    # --- STT (speech-to-text) providers ---
+    # Which provider the frontend dropdown selects by default.
+    stt_default_provider: str = "browser_webspeech"
+    # Language hint passed to server-side STT engines.
+    stt_language: str = "bn"
+
+    # Groq Whisper (OpenAI-compatible audio/transcriptions endpoint).
+    # groq_api_key is shared with correction fallback above.
+    groq_api_key: str = ""
+    groq_base_url: str = "https://api.groq.com/openai/v1"
+    groq_stt_model: str = "whisper-large-v3"
+
+    # Local engines (installed via the optional requirements-*.txt files).
+    whisper_model_size: str = "base"          # faster-whisper: tiny|base|small|medium
+    banglaspeech_model_size: str = "base"     # shhossain/whisper-{size}-bn: tiny|base|small
+    banglaspeech_model: str = ""              # full HF id override; empty -> derive from size
+    qwen_asr_model_dir: str = ""              # local Qwen3-ASR dir; empty -> auto-download from HF
 
     # --- persistence ---
     # Leave empty to use the default local SQLite file. Set a full SQLAlchemy URL

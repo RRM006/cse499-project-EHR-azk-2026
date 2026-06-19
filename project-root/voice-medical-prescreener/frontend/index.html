@@ -10,47 +10,71 @@
   <header>
     <h1>Voice Medical Pre-Screener <small>— Phase 0 demo</small></h1>
     <p class="note">
-      Speak in Bangla, Banglish, Roman Bangla, or a dialect. The <strong>RAW</strong>
-      text is kept exactly as recognized and never changed. Correction is shown
-      separately on the right.
-    </p>
-    <p id="browserWarn" class="warn" hidden>
-      ⚠ This browser has no live speech recognition. Use <strong>Chrome</strong> or
-      <strong>Edge</strong> for the mic, or type into the manual box below.
+      Pick an STT provider, record, and the <strong>RAW</strong> transcript is kept
+      exactly as recognized — never changed. Correction (Gemini) is shown separately.
     </p>
   </header>
 
   <main>
+    <!-- Provider + recording controls -->
+    <section class="panel full">
+      <div class="row">
+        <label for="provider"><strong>STT Provider</strong></label>
+        <select id="provider"></select>
+        <span id="providerStatus" class="badge"></span>
+      </div>
+
+      <div class="row controls">
+        <button id="startBtn" class="primary">● Start Recording</button>
+        <button id="stopBtn" disabled>■ Stop</button>
+        <span id="recStatus" class="status-pill idle">Idle</span>
+        <span id="timer" class="timer">00:00 / 05:00</span>
+        <span id="remaining" class="note">remaining 05:00</span>
+      </div>
+
+      <p id="errorBanner" class="error-banner" hidden></p>
+    </section>
+
+    <!-- Raw + Corrected side by side -->
     <section class="panel">
       <div class="panel-head">
-        <h2>1 · Live microphone</h2>
+        <h2>RAW transcript</h2>
         <div class="controls">
-          <button id="micToggle" class="primary">🎤 Start mic</button>
+          <button id="copyRaw">Copy</button>
           <button id="clearRaw">Clear</button>
         </div>
       </div>
-      <p id="status" class="status">Idle.</p>
-
-      <h3>RAW — exactly as recognized (never changed)</h3>
-      <div id="rawBox" class="box raw">
+      <h3>exactly as recognized — read-only, never modified</h3>
+      <div id="rawBox" class="box raw" aria-readonly="true">
         <span id="rawText"></span><span id="interim" class="interim"></span>
       </div>
-      <button id="correctMic" class="primary wide">Correct this raw text →</button>
     </section>
 
     <section class="panel">
-      <div class="panel-head"><h2>2 · Corrected (separate)</h2></div>
-      <h3>CORRECTED — produced by the LLM, stored apart from RAW</h3>
-      <div id="correctedBox" class="box corrected"><em>No correction yet.</em></div>
+      <div class="panel-head">
+        <h2>Corrected transcript</h2>
+        <div class="controls">
+          <button id="correctBtn" class="primary">Correct →</button>
+          <button id="copyCorrected">Copy</button>
+          <button id="clearCorrected">Clear</button>
+        </div>
+      </div>
+      <h3>produced by Gemini — stored separately from RAW</h3>
+      <div id="correctedBox" class="box corrected">
+        <em>No correction yet.</em>
+      </div>
+      <p id="correctMeta" class="note"></p>
     </section>
 
+    <!-- Manual fallback -->
     <section class="panel full">
       <div class="panel-head"><h2>Manual text fallback</h2></div>
-      <p class="note">Use this if speech quality is poor or the browser has no mic support.</p>
+      <p class="note">Use this if the mic fails or a provider is unavailable.</p>
       <textarea id="manualText" rows="3" placeholder="Type a Bangla / Banglish / Roman-Bangla utterance…"></textarea>
-      <button id="correctManual" class="primary">Correct typed text →</button>
+      <button id="manualBtn" class="primary">Use this text as RAW</button>
     </section>
 
+    <!-- Recent -->
     <section class="panel full">
       <div class="panel-head">
         <h2>Recently saved (raw → corrected)</h2>

@@ -16,9 +16,11 @@ from sqlalchemy.orm import Session
 from backend.app.db.models import Utterance
 
 
-def create_raw(db: Session, *, raw_text: str, source: str = "mic") -> Utterance:
+def create_raw(
+    db: Session, *, raw_text: str, source: str = "mic", stt_provider: str | None = None
+) -> Utterance:
     """Persist the RAW transcript exactly as given (no trimming/normalizing)."""
-    utterance = Utterance(raw_text=raw_text, source=source)
+    utterance = Utterance(raw_text=raw_text, source=source, stt_provider=stt_provider)
     db.add(utterance)
     db.commit()
     db.refresh(utterance)
@@ -48,6 +50,10 @@ def set_correction(
     db.commit()
     db.refresh(utterance)
     return utterance
+
+
+def get_by_id(db: Session, utterance_id: int) -> Utterance | None:
+    return db.get(Utterance, utterance_id)
 
 
 def get_recent(db: Session, *, limit: int = 50) -> list[Utterance]:

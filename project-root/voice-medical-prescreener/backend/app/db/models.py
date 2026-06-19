@@ -28,8 +28,11 @@ class Utterance(Base):
     # CORRECTED — a SEPARATE field, filled in later by the correction service. May be null.
     corrected_text: Mapped[str | None] = mapped_column(Text, nullable=True)
 
-    # Where the raw text came from: 'mic' (Web Speech API) or 'manual' (typed fallback).
+    # Where the raw text came from: 'mic' or 'manual' (typed fallback).
     source: Mapped[str] = mapped_column(String(16), nullable=False, default="mic")
+
+    # Which STT engine produced the raw text (e.g. browser_webspeech, groq_whisper).
+    stt_provider: Mapped[str | None] = mapped_column(String(32), nullable=True)
 
     # Audit trail: which provider/model produced the correction.
     correction_provider: Mapped[str | None] = mapped_column(String(32), nullable=True)

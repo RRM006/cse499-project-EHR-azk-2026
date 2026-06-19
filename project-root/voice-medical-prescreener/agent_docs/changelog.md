@@ -16,6 +16,36 @@
 
 ---
 
+## Session 3 — 2026-06-19 — Multi-provider STT (5 providers) + provider health + installs
+- Did: Re-planned Phase 0 to support 5 swappable STT providers with frontend
+  switching. Built `backend/app/services/stt/` (STTProvider ABC + ProviderInfo
+  health + registry + audio.py decode + 5 providers: browser_webspeech,
+  groq_whisper, local_whisper, banglaspeech2text, qwen_asr). Added endpoints
+  `GET /api/stt/providers`, `POST /api/transcribe`, `POST /api/transcripts`;
+  refactored `/api/correct` to correct by utterance_id; added `Utterance.stt_provider`.
+  Rewrote the frontend (provider dropdown + status badges, Start/Stop, MM:SS timer
+  with 5-min auto-stop, raw/corrected copy+clear, manual fallback, error banner).
+  Added a startup STT health log. Then FIXED 5 issues the human reported: documented
+  QWEN_ASR_MODEL_DIR (optional, auto-download); rich provider health
+  (available/missing_api_key/missing_package/missing_model/unsupported_platform/error)
+  shown in the UI; resolved the huggingface-hub dependency conflict; split installs
+  into per-provider requirements files; wrote INSTALL.md. INSTALLED all engines and
+  verified the local transcribe paths.
+- Decided: Drop the unmaintained `banglaspeech2text` pip package (pins
+  huggingface-hub==0.11.1) and run shhossain/whisper-*-bn via `transformers`
+  instead. Per-provider optional requirements files. Server STT = record→upload→
+  transcribe; browser stays live. (ADR-0015 to ADR-0018.)
+- Broke / problem: `requirements-local.txt` had a real conflict (fixed by the split).
+  `torch==2.5.1` pin had no Python-3.14 wheel → unpinned (got torch 2.12.1).
+  `qwen-asr` is INVASIVE: it bumped fastapi 0.115→0.137, starlette→1.3, transformers
+  5→4.57, huggingface_hub→0.36 and pulled gradio/flask. App still works (13 tests
+  pass, server boots) but Qwen may warrant its own venv.
+- Deferred: Live Groq STT test (would spend the human's free quota). Qwen live run
+  (3.4 GB download + very slow on CPU) — installed/ready but unverified. WER/latency
+  on real Bangla speech. Regenerating the exposed Groq key (human action).
+- Next: Human runs the live mic test for each provider in Chrome, collects ~50
+  samples, and records real latency/WER. See `current_task.md`.
+
 ## Session 2 — 2026-06-19 — Phase 0 Steps 3–5: correction service + API + frontend
 - Did: Built the correction service (Step 3): `services/correction/base.py`
   (`Corrector` ABC) + `openai_compatible.py` (`OpenAICompatibleCorrector` +

@@ -35,6 +35,28 @@ transcribed by hand (the "ground truth"). Record the model + machine each time.
 
 ## Test entries (newest first)
 
+## 2026-06-19 — Module 1 (infra) — Multi-provider STT: installs, health, transcribe paths
+- Setup: Python 3.14.4 on Windows; `.venv`. Installed faster-whisper 1.1.0
+  (requirements-whisper.txt), transformers 5.12.1→4.57.6 + torch 2.12.1 (banglaspeech),
+  qwen-asr 0.0.6 (qwen). Synthetic 2-second 16 kHz WAV used to exercise the code path.
+- Metric(s): test pass/fail; dependency resolution; transcribe-path success; provider health.
+- Result:
+  * `pytest backend/tests/` → **13 passed** (immutability + corrector + STT registry).
+  * Dependency conflict RESOLVED: requirements-whisper.txt installed cleanly with
+    huggingface-hub 1.20.1 (the old banglaspeech2text==0.0.7 / hub==0.11.1 pin is gone).
+  * `torch==2.5.1` had NO Python-3.14 wheel; unpinned → torch 2.12.1 installed.
+  * After all installs, `GET /api/stt/providers` → all 5 status=available, ready=True;
+    app boots under fastapi 0.137.2 / starlette 1.3.1 (only a TestClient deprecation warning).
+  * Transcribe code path validated on the synthetic clip (no crash, returns a str;
+    empty text expected for a pure tone): local_whisper (faster-whisper base, int8)
+    and banglaspeech2text (shhossain/whisper-base-bn via transformers).
+- Notes: `qwen-asr` install was invasive (bumped fastapi/starlette/transformers/
+  huggingface_hub, pulled gradio/flask) — app still works. NOT yet tested live:
+  Groq STT (would spend free quota) and Qwen (3.4 GB download + very slow on CPU).
+  No WER/latency on real Bangla speech yet — that is the human's next step. Rough
+  latency ESTIMATES (10 s clip, CPU): Browser ~live; Groq ~1–3 s; local_whisper base
+  ~2–5 s; banglaspeech base-bn ~10–25 s; Qwen ~30 s–minutes. Gemini correction +1–3 s.
+
 ## 2026-06-19 — Module 1 (infra) — Correction guards + API/frontend smoke test
 - Setup: Python 3.14.4 on Windows; `.venv`. Backend served via the preview tool
   (uvicorn on port 8000). Browser checks via preview_eval / console logs.

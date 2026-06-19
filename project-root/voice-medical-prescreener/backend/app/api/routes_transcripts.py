@@ -1,9 +1,10 @@
 """Transcript routes: store raw verbatim, correct into a separate field, list.
 
-Flow for POST /api/correct (the core Phase 0 loop):
-  1. persist the RAW text exactly as received (never lost, even if step 2 fails),
-  2. run the swappable corrector,
-  3. store the correction in a SEPARATE field and return both.
+The pipeline is two explicit steps so raw is created once and never re-touched:
+  1. transcription stores RAW (here via POST /api/transcripts for browser/manual
+     text, or via POST /api/transcribe for server STT in routes_stt.py),
+  2. POST /api/correct corrects an existing utterance by id, filling ONLY the
+     separate corrected field.
 """
 
 from fastapi import APIRouter, Depends, HTTPException
@@ -11,42 +12,46 @@ from sqlalchemy.orm import Session
 
 from backend.app.db import repository as repo
 from backend.app.db.database import get_db
-from backend.app.schemas.transcript import CorrectRequest, TranscriptOut
+from backend.app.schemas.transcript import CorrectRequest, StoreRawRequest, TranscriptOut
 from backend.app.services.correction import build_corrector
 
 router = APIRouter(prefix="/api", tags=["transcripts"])
 
 
+@router.post("/transcripts", response_model=TranscriptOut)
+def store_raw(payload: StoreRawRequest, db: Session = Depends(get_db)) -> TranscriptOut:
+    """Persist a client-produced raw transcript (browser STT or manual typing)."""
+    return repo.create_raw(
+        db,
+        raw_text=payload.raw_text,
+        source=payload.source,
+        stt_provider=payload.stt_provider,
+    )
+
+
 @router.post("/correct", response_model=TranscriptOut)
 def correct_transcript(payload: CorrectRequest, db: Session = Depends(get_db)) -> TranscriptOut:
-    # Fail fast on misconfiguration (missing key / bad provider) before storing.
+    utterance = repo.get_by_id(db, payload.utterance_id)
+    if utterance is None:
+        raise HTTPException(status_code=404, detail=f"Utterance {payload.utterance_id} not found")
+
     try:
         corrector = build_corrector()
     except (ValueError, RuntimeError) as exc:
         raise HTTPException(status_code=500, detail=f"Corrector not configured: {exc}")
 
-    # 1. RAW is persisted verbatim first — it survives even if correction fails.
-    utterance = repo.create_raw(db, raw_text=payload.raw_text, source=payload.source)
-
-    # 2. Correction (separate field).
     try:
-        corrected = corrector.correct(payload.raw_text)
+        corrected = corrector.correct(utterance.raw_text)  # raw is read-only here
     except Exception as exc:  # network / quota / provider errors
-        # Raw is already saved; surface the failure but don't lose the record.
-        raise HTTPException(
-            status_code=502,
-            detail=f"Correction failed (raw saved as id={utterance.id}): {exc}",
-        )
+        raise HTTPException(status_code=502, detail=f"Correction failed: {exc}")
 
-    # 3. Store the correction alongside the untouched raw.
-    utterance = repo.set_correction(
+    return repo.set_correction(
         db,
         utterance_id=utterance.id,
         corrected_text=corrected,
         provider=corrector.provider,
         model=corrector.model,
     )
-    return utterance
 
 
 @router.get("/transcripts", response_model=list[TranscriptOut])

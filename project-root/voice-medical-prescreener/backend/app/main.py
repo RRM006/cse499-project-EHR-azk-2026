@@ -6,6 +6,7 @@ Run from the project root:
 Serves the JSON API under /api and (once it exists) the static frontend at /.
 """
 
+import logging
 from contextlib import asynccontextmanager
 from pathlib import Path
 
@@ -13,8 +14,12 @@ from fastapi import FastAPI
 from fastapi.responses import HTMLResponse
 from fastapi.staticfiles import StaticFiles
 
+from backend.app.api.routes_stt import router as stt_router
 from backend.app.api.routes_transcripts import router as transcripts_router
 from backend.app.db.database import init_db
+from backend.app.services.stt import list_providers
+
+logger = logging.getLogger("uvicorn.error")
 
 # backend/app/main.py -> parents[2] == project root, then /frontend
 FRONTEND_DIR = Path(__file__).resolve().parents[2] / "frontend"
@@ -23,6 +28,16 @@ FRONTEND_DIR = Path(__file__).resolve().parents[2] / "frontend"
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     init_db()  # create SQLite tables if missing
+
+    # STT provider health check — logged at startup so unavailability is obvious.
+    logger.info("STT provider health:")
+    for p in list_providers():
+        mark = "OK " if p.ready else "-- "
+        logger.info(
+            "  [%s] %-22s status=%-16s installed=%s configured=%s%s",
+            mark, p.id, p.status, p.installed, p.configured,
+            f"  ({p.detail})" if p.detail else "",
+        )
     yield
 
 
@@ -30,6 +45,7 @@ app = FastAPI(title="Voice Medical Pre-Screener", version="0.0.1", lifespan=life
 
 # API routes are registered BEFORE the catch-all static mount so /api and /health win.
 app.include_router(transcripts_router)
+app.include_router(stt_router)
 
 
 @app.get("/health", tags=["meta"])

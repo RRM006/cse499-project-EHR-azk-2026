@@ -149,6 +149,51 @@
   faster-whisper over WebSocket, not needed for the demo).
 - Status: Accepted (Phase 0 only; Phase 1 moves STT server-side)
 
+## ADR-0015 — 2026-06-19 — Multi-provider STT behind a plugin layer; frontend switching
+- Decision: Support 5 swappable STT providers (browser_webspeech, groq_whisper,
+  local_whisper, banglaspeech2text, qwen_asr) behind an `STTProvider` ABC + registry
+  in `backend/app/services/stt/`, chosen from a frontend dropdown. Two data paths:
+  browser providers transcribe client-side (live); server providers record audio
+  (MediaRecorder, ≤5 min) and upload to `POST /api/transcribe`.
+- Why: The human wants provider flexibility from the start; the plugin layer means
+  adding an engine is one new class. Mirrors the existing Corrector pattern (ADR-0003).
+- Rejected: Browser-only STT; true live streaming for all engines (WebSocket+VAD
+  chunking — too complex/slow on CPU for Phase 0).
+- Status: Accepted
+
+## ADR-0016 — 2026-06-19 — Drop the banglaspeech2text package; use transformers directly
+- Decision: Do NOT install the `banglaspeech2text` PyPI package. Run the same models
+  (`shhossain/whisper-*-bn`) via `transformers` instead.
+- Why: The package is unmaintained and pins `huggingface-hub==0.11.1`, which conflicts
+  with faster-whisper and breaks installation. transformers shares a modern
+  huggingface-hub with the other engines — same models, no dependency hell.
+- Rejected: Pinning old huggingface-hub (breaks faster-whisper); separate venv just
+  for banglaspeech (unnecessary once we drop the package).
+- Status: Accepted
+
+## ADR-0017 — 2026-06-19 — Per-provider optional requirements files; rich provider health
+- Decision: Core install (requirements.txt) = Browser + Groq + Gemini. Each local
+  engine has its own optional file: requirements-whisper.txt,
+  requirements-banglaspeech.txt, requirements-qwen.txt (torch left unpinned so pip
+  picks a Python-compatible build). Providers report installed/configured/ready +
+  a status code (available | missing_api_key | missing_package | missing_model |
+  unsupported_platform | error) surfaced in the dropdown, `GET /api/stt/providers`,
+  and a startup log. Documented in INSTALL.md.
+- Why: Avoid dependency conflicts and make "why is this disabled?" obvious. Keep the
+  core light and cross-platform.
+- Rejected: One monolithic requirements-local.txt (caused the conflict); disabling
+  providers without explaining why.
+- Status: Accepted
+
+## ADR-0018 — 2026-06-19 — Persist raw at transcription; /api/correct works by utterance_id
+- Decision: Raw is created at the transcription step (`/api/transcribe` for server
+  providers, `/api/transcripts` for browser/manual), tagged with `stt_provider`.
+  `/api/correct` takes `{utterance_id}` and only fills the separate corrected field.
+- Why: Matches the immutable pipeline (one utterance flows through both stages) and
+  keeps raw write-once (rule #1). Breaking change to the old `/api/correct {raw_text}`,
+  acceptable in Phase 0; frontend updated in lockstep.
+- Status: Accepted
+
 ## ADR-0008 — 2026-06-18 — Default Whisper model is small/base; upgrade to a Bangla fine-tune later
 - Decision: Start with Whisper `small` (or `base` if we need a snappier live feel)
   for streaming on CPU. Upgrade to a Bangla-fine-tuned model (e.g.

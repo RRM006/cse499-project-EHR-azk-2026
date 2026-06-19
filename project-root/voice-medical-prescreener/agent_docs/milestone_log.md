@@ -6,12 +6,13 @@
 
 **Status keys:** ⬜ Not started · 🟨 In progress · 🟦 Blocked · ✅ Done
 
-**Last updated:** 2026-06-19 (Session 2 — Phase 0 correction service + API + frontend)
-**Current phase:** Phase 0 (quick demo) → see "Roadmap phases" below.
+**Last updated:** 2026-06-19 (Session 3 — multi-provider STT + provider health + installs)
+**Current phase:** Phase 0 (quick demo), expanded to multi-provider STT.
 **Module in focus:** Module 1 — Speech-to-Text.
-**Progress:** Build steps 1–5 of 6 done (full stack built; server runs end to end,
-7 tests pass). Next: step 6 (human runs live mic test in Chrome + collects ~50
-sample utterances). Module 1 stays 🟨 until the live test + samples are recorded.
+**Progress:** Full stack built with **5 swappable STT providers** + frontend dropdown
++ provider health reporting. All engines installed on the Windows box (13 tests pass;
+local transcribe paths validated). Next: human live-tests each provider in Chrome,
+collects ~50 samples, records latency/WER. Module 1 stays 🟨 until that's done.
 
 ---
 
@@ -50,6 +51,10 @@ live, see a corrected version beside it, and the raw text is stored unchanged.
 **Build steps (6):** 1 scaffolding ✅ · 2 backend skeleton ✅ · 3 correction service ✅
 · 4 API routes + static serving ✅ · 5 frontend (mic + boxes + fallback) ✅
 · 6 end-to-end live test + collect ~50 samples ⬜ (human-driven, next).
+
+**Multi-provider STT (Session 3):** provider/plugin layer ✅ · 5 providers wired ✅
+· frontend dropdown + health badges ✅ · all engines installed + local paths
+validated ✅ · live test of each provider on real speech ⬜ (next).
 
 ### Phase 1 — Robust local core
 **Goal:** FastAPI + WebSocket backend streaming live mic audio to faster-whisper

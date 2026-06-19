@@ -1,0 +1,14 @@
+# OPTIONAL — BanglaSpeech2Text provider (offline Bangla Whisper).
+#   pip install -r requirements-banglaspeech.txt
+#
+# We deliberately do NOT install the `banglaspeech2text` PyPI package: it is
+# unmaintained and pins huggingface-hub==0.11.1, which conflicts with
+# faster-whisper. Instead we run the same models (shhossain/whisper-*-bn) via
+# transformers, which shares a modern huggingface-hub with the other engines.
+#
+# Pulls PyTorch (CPU). Models auto-download to the Hugging Face cache on first use.
+# Left unpinned so pip selects a build matching your Python/OS (e.g. torch has no
+# 2.5.x wheel for Python 3.14 — it needs 2.9+). Pin once verified on your machine.
+
+transformers
+torch
