@@ -16,6 +16,33 @@
 
 ---
 
+## Session 4 — 2026-06-20 — Simplify to browser-only STT + Mintlify UI + scrollable panels
+- Did: (A) REMOVED the multi-provider STT architecture per the human's new plan —
+  deleted `backend/app/services/stt/`, `api/routes_stt.py`, `test_stt_registry.py`,
+  the three `requirements-*.txt`, all STT config + the `.env` STT block,
+  `python-multipart`, and the startup health log. Recreated the venv from
+  requirements.txt (clean core: fastapi 0.115.6, starlette 0.41.3; torch/
+  transformers/qwen gone). Module 1 STT is now ONLY the browser Web Speech API.
+  Rewrote the frontend for continuous recording: no cap, append-only verbatim
+  transcript, brief pauses keep going (restart on `onend`), auto-stop after ~10s
+  of silence. (B) Restyled the whole frontend to `DESIGN-mintlify.md` (Inter font,
+  black pill buttons, mint-green accent for Start + active, 12px cards, hairline
+  borders) and made the 3 transcript panels (Raw/Corrected/Manual) fixed-height,
+  scrollable, with stick-to-bottom auto-scroll. Added the Frontend/Transcript-UI
+  rules to CLAUDE.md.
+- Decided: Browser Web Speech API is the only Module 1 STT (others return later);
+  keep a clean seam (the `stt_provider` column stays). Drop the banglaspeech2text
+  package permanently. Frontend follows DESIGN-mintlify.md. (ADR-0019, ADR-0020.)
+- Broke / problem: A previous session left an ORPHANED socket holding port 8000
+  (process dead, leaked handle keeps it LISTENING; clears on reboot). Worked around
+  by switching `.claude/launch.json` to **port 8001**.
+- Deferred: Live mic test of the continuous-recording + 10s-silence behavior (the
+  human's manual check in Chrome). Collecting ~50 samples + WER/latency. Switching
+  launch.json back to 8000 after a reboot. Regenerating the (now-removed) Groq key
+  is moot since Groq STT was removed.
+- Next: Human does the live mic test (speak, pause briefly, then go silent ~10s to
+  confirm auto-stop) and collects samples. See `current_task.md`.
+
 ## Session 3 — 2026-06-19 — Multi-provider STT (5 providers) + provider health + installs
 - Did: Re-planned Phase 0 to support 5 swappable STT providers with frontend
   switching. Built `backend/app/services/stt/` (STTProvider ABC + ProviderInfo

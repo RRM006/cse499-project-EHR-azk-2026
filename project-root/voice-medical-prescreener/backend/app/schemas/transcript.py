@@ -15,7 +15,8 @@ class StoreRawRequest(BaseModel):
 
     raw_text: str = Field(..., description="Exact recognized/typed text. Stored unchanged.")
     stt_provider: str = Field(
-        ..., description="Which provider produced it, e.g. browser_webspeech / manual."
+        "browser_webspeech",
+        description="Which source produced it (browser_webspeech | manual).",
     )
     source: Literal["mic", "manual"] = Field("mic", description="Where the raw text came from.")
 
@@ -24,19 +25,6 @@ class CorrectRequest(BaseModel):
     """Correct an already-stored raw utterance (raw stays immutable)."""
 
     utterance_id: int = Field(..., description="ID of the stored raw utterance to correct.")
-
-
-class ProviderOut(BaseModel):
-    """An STT provider's metadata + health, for the frontend dropdown + debugging."""
-
-    id: str
-    label: str
-    kind: str
-    status: str        # available | missing_api_key | missing_package | missing_model | unsupported_platform | error
-    installed: bool
-    configured: bool
-    ready: bool
-    detail: str = ""
 
 
 class TranscriptOut(BaseModel):

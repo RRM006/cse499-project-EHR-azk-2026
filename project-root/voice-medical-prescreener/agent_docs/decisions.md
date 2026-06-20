@@ -194,6 +194,35 @@
   acceptable in Phase 0; frontend updated in lockstep.
 - Status: Accepted
 
+## ADR-0019 — 2026-06-20 — Module 1 STT = browser Web Speech API only (remove multi-provider layer)
+- Decision: Revert the 5-provider STT architecture. Module 1 uses ONLY the browser
+  Web Speech API (Chrome/Edge, bn-BD). Delete the STT plugin/registry/health code,
+  Groq/local/Qwen/BanglaSpeech providers, their requirements files, STT config, and
+  python-multipart. Keep a clean seam (the `Utterance.stt_provider` string column)
+  so providers can return in a later module.
+- Why: The human judged the multi-provider system too much for Module 1; it added
+  heavy, invasive dependencies (qwen-asr bumped fastapi/starlette) and complexity.
+  Get the browser pipeline stable first.
+- Rejected: Keeping all 5 providers; keeping the plugin layer "just in case"
+  (dead code). Recreate the venv to restore a clean core instead.
+- Status: Accepted (supersedes ADR-0015, ADR-0017 for now; those may be revisited
+  when offline STT returns in a later module)
+
+## ADR-0020 — 2026-06-20 — Continuous recording UX + Mintlify frontend + scrollable panels
+- Decision: Recording is continuous: no max duration, append-only verbatim
+  transcript, brief pauses keep going (restart recognition on `onend`), auto-stop
+  only after ~10s of continuous silence or on user Stop. The frontend follows
+  `DESIGN-mintlify.md` (Inter, black pill buttons, mint-green accent, 12px cards).
+  The three transcript panels (Raw/Corrected/Manual) share one behavior:
+  fixed-height, scrollable, stick-to-bottom auto-scroll that pauses when the user
+  scrolls up and resumes at the bottom. Transcript text uses Inter + Noto Sans
+  Bengali (NOT Geist Mono — mono breaks Bangla rendering).
+- Why: Matches a real doctor–patient conversation; keeps long transcripts usable
+  without breaking layout; gives the project a consistent, documented visual system.
+- Rejected: 5-minute cap; clearing/replacing transcript on pause; Geist Mono for
+  Bangla transcript content.
+- Status: Accepted
+
 ## ADR-0008 — 2026-06-18 — Default Whisper model is small/base; upgrade to a Bangla fine-tune later
 - Decision: Start with Whisper `small` (or `base` if we need a snappier live feel)
   for streaming on CPU. Upgrade to a Bangla-fine-tuned model (e.g.

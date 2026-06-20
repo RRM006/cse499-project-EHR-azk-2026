@@ -6,53 +6,58 @@
 
 ---
 
-**Date:** 2026-06-19
-**Phase:** Phase 0 — Quick working demo (now multi-provider STT)
+**Date:** 2026-06-20
+**Phase:** Phase 0 — Quick working demo (browser-only STT)
 **Module:** Module 1 — Speech-to-Text (+ the correction step)
 
 ## Where we are right now
-The app supports **5 swappable STT providers** with a frontend dropdown, all
-installed and reporting "available" on the Windows dev box:
-- browser_webspeech (live, Chrome/Edge) · groq_whisper (cloud) ·
-  local_whisper (faster-whisper) · banglaspeech2text (transformers, shhossain/
-  whisper-*-bn) · qwen_asr (Qwen3-ASR-1.7B, local).
-- Pipeline unchanged: mic → STT provider → RAW (immutable, stored) → Gemini → corrected.
-- Backend: `backend/app/services/stt/` (ABC + registry + health + audio decode + 5
-  providers). Endpoints: `GET /api/stt/providers`, `POST /api/transcribe`,
-  `POST /api/transcripts`, `POST /api/correct` (by utterance_id), `GET /api/transcripts`.
-- Frontend: provider dropdown + status badges, Start/Stop, MM:SS timer + 5-min
-  auto-stop, raw/corrected panels (copy/clear), manual fallback, error banner.
-- Tests: `pytest backend/tests/` = **13 passed**. Verified the decode→transcribe
-  code path for local_whisper and banglaspeech2text with a synthetic clip.
+Module 1 is now **simplified to ONE STT path: the browser Web Speech API**
+(Chrome/Edge, `bn-BD`). The multi-provider architecture was removed. Pipeline:
+**mic → Chrome Web Speech API → RAW (immutable, stored) → Gemini → corrected.**
 
-Install layout: core = requirements.txt; optional engines = requirements-whisper.txt,
-requirements-banglaspeech.txt, requirements-qwen.txt. Full guide in INSTALL.md.
+- Backend (clean core, fastapi 0.115.6): endpoints `POST /api/transcripts` (store
+  raw), `POST /api/correct` (by utterance_id), `GET /api/transcripts`, `/health`.
+  Serves the frontend. `services/correction/` (Gemini) unchanged. The
+  `Utterance.stt_provider` column stays as a clean seam for future providers.
+- Frontend (Mintlify-styled per DESIGN-mintlify.md): continuous recording — Start/
+  Stop, ● Recording, count-up MM:SS (no cap), append-only verbatim transcript,
+  brief pauses keep going (restart on `onend`), auto-stop after ~10s of silence.
+  Raw/Corrected/Manual panels are fixed-height, scrollable, with stick-to-bottom
+  auto-scroll. Manual fallback kept.
+- Tests: `pytest backend/tests/` = **7 passed** (test_raw_immutable + test_corrector;
+  registry test removed). UI verified live (fonts, pill buttons, scroll behavior,
+  mobile no-overflow); one store→correct round-trip worked end to end.
 
-## Known caveats to carry forward
-- `qwen-asr` is INVASIVE: installing it bumped fastapi→0.137, starlette→1.3,
-  transformers→4.57, huggingface_hub→0.36 (+gradio/flask). App still works, but if it
-  destabilizes, run Qwen in its OWN venv.
-- Live Groq STT and a live Qwen run were NOT done (quota / 3.4 GB + slow CPU).
-- The Groq key was pasted in chat earlier — human should REGENERATE it.
+## Important environment notes
+- **Server now runs on port 8001** (`.claude/launch.json`). Port 8000 has an
+  orphaned LISTENING socket from a dead process — it clears on reboot, after which
+  you can switch launch.json back to 8000 if you want.
 - `.env` changes need a server RESTART (uvicorn --reload only watches .py).
+- Fonts load from Google Fonts CDN (Inter + Noto Sans Bengali) with system
+  fallbacks — fine offline, just falls back to system fonts.
 
 ## The one thing we are doing next
-**Human-driven live testing of all providers + sample collection.**
-1. Run server, open http://localhost:8000 in Chrome (keys in backend/.env).
-2. For each provider: record Bangla/Banglish/Roman Bangla → confirm RAW is verbatim,
-   Correct works, raw never changes. Note rough latency + did correction preserve meaning.
-3. First Qwen click downloads ~3.4 GB and is slow — expect a long wait.
-4. Collect ~50 sample utterances (Phase 0 "move on" gate); record latency/WER in test_log.
+**Human-driven live mic test + sample collection.**
+1. Run server (port 8001), open http://localhost:8001 in Chrome. GEMINI_API_KEY
+   must be set in backend/.env.
+2. Click Start, speak Bangla/Banglish/Roman Bangla; confirm the transcript appends
+   live and verbatim; PAUSE briefly and keep talking (should NOT stop); then go
+   SILENT ~10s and confirm it auto-stops.
+3. Click Correct → corrected appears in its panel; RAW unchanged.
+4. Collect ~50 sample utterances; record rough latency + did correction preserve
+   meaning, in test_log.md.
 
 ## Exact next step for Claude Code
-Wait for the human's live-test results. Then: help debug any provider failures,
-record numbers in `test_log.md`, and (optional) add a mocked test for
-`POST /api/transcribe` / `/api/correct` so CI covers the routes offline.
+Wait for the human's live-test results, then help debug or log numbers. Optional:
+add mocked offline tests for `POST /api/transcripts` and `/api/correct` so CI
+covers the routes without the network.
 
 ## Reminders
 - Raw words are never edited (rule #1). Correction is a separate field/column.
-- Synthetic/consented data only — cloud STT (Groq) + Gemini may log input (rule #4).
+- Synthetic/consented data only — Gemini may log input (rule #4).
 - Plan first, one small step at a time. Do not assume. (CLAUDE.md)
-- Run (Windows): `.venv\Scripts\python.exe -m uvicorn backend.app.main:app --reload --port 8000`
-- Run (Arch):    `.venv/bin/python -m uvicorn backend.app.main:app --reload --port 8000`
-- Tests: `pytest backend/tests/`  ·  Python 3.14 needs SQLAlchemy>=2.0.51 & torch>=2.9.
+- Frontend follows DESIGN-mintlify.md; the 3 transcript panels share the
+  fixed-height + scroll + stick-to-bottom behavior (see CLAUDE.md).
+- Run (Windows): `.venv\Scripts\python.exe -m uvicorn backend.app.main:app --reload --port 8001`
+- Run (Arch):    `.venv/bin/python -m uvicorn backend.app.main:app --reload --port 8001`
+- Tests: `pytest backend/tests/`  ·  Python 3.14 needs SQLAlchemy>=2.0.51.

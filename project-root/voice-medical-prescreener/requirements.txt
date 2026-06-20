@@ -1,15 +1,13 @@
-# Voice Medical Pre-Screener — single cross-platform CORE dependency list (Windows + Arch Linux).
+# Voice Medical Pre-Screener — single cross-platform dependency list (Windows + Arch Linux).
 # All pure-Python wheels; install with:  pip install -r requirements.txt
-# Core covers Web Speech API (browser) + Groq Whisper (cloud) + Gemini correction.
-# Heavy LOCAL STT engines (faster-whisper, banglaspeech2text, qwen-asr) live in
-# requirements-local.txt and are optional — install only if you want offline STT.
+# Module 1: STT is the browser Web Speech API (client-side); the backend stores the
+# raw transcript and calls Gemini for correction. No ML deps needed.
 
 fastapi==0.115.6          # web framework + API
 uvicorn[standard]==0.34.0 # ASGI server (run the app)
 pydantic-settings==2.7.1  # load config/keys from backend/.env
 SQLAlchemy==2.0.51        # SQLite persistence (foundation for future EHR); 2.0.51+ needed for Python 3.14
-openai==1.59.6            # OpenAI-compatible client; Gemini correction + Groq Whisper STT
-python-multipart==0.0.20  # multipart/form-data parsing for audio file uploads (/api/transcribe)
+openai==1.59.6            # OpenAI-compatible client for Gemini correction
 
 # --- dev / test ---
 pytest==8.3.4             # raw-immutability guard + future tests

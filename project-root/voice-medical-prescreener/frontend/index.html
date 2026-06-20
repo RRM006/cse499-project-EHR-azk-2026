@@ -4,38 +4,41 @@
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <title>Voice Medical Pre-Screener — Phase 0</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link
+    href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&family=Noto+Sans+Bengali:wght@400;500;600&display=swap"
+    rel="stylesheet" />
   <link rel="stylesheet" href="/styles.css" />
 </head>
 <body>
   <header>
     <h1>Voice Medical Pre-Screener <small>— Phase 0 demo</small></h1>
     <p class="note">
-      Pick an STT provider, record, and the <strong>RAW</strong> transcript is kept
-      exactly as recognized — never changed. Correction (Gemini) is shown separately.
+      Speak naturally in Bangla, Banglish, or Roman Bangla (Chrome/Edge). The
+      <strong>RAW</strong> transcript appears live and is kept exactly as recognized
+      — never changed. Correction (Gemini) is shown separately.
+    </p>
+    <p id="browserWarn" class="error-banner" hidden>
+      ⚠ This browser has no Web Speech API. Use <strong>Chrome</strong> or
+      <strong>Edge</strong>, or type into the manual box below.
     </p>
   </header>
 
   <main>
-    <!-- Provider + recording controls -->
+    <!-- Recording controls -->
     <section class="panel full">
-      <div class="row">
-        <label for="provider"><strong>STT Provider</strong></label>
-        <select id="provider"></select>
-        <span id="providerStatus" class="badge"></span>
-      </div>
-
       <div class="row controls">
-        <button id="startBtn" class="primary">● Start Recording</button>
+        <button id="startBtn" class="accent">● Start Recording</button>
         <button id="stopBtn" disabled>■ Stop</button>
         <span id="recStatus" class="status-pill idle">Idle</span>
-        <span id="timer" class="timer">00:00 / 05:00</span>
-        <span id="remaining" class="note">remaining 05:00</span>
+        <span id="timer" class="timer">00:00</span>
+        <span class="note">auto-stops after ~10s of silence</span>
       </div>
-
       <p id="errorBanner" class="error-banner" hidden></p>
     </section>
 
-    <!-- Raw + Corrected side by side -->
+    <!-- Raw + Corrected -->
     <section class="panel">
       <div class="panel-head">
         <h2>RAW transcript</h2>
@@ -60,16 +63,14 @@
         </div>
       </div>
       <h3>produced by Gemini — stored separately from RAW</h3>
-      <div id="correctedBox" class="box corrected">
-        <em>No correction yet.</em>
-      </div>
+      <div id="correctedBox" class="box corrected"><em>No correction yet.</em></div>
       <p id="correctMeta" class="note"></p>
     </section>
 
     <!-- Manual fallback -->
     <section class="panel full">
       <div class="panel-head"><h2>Manual text fallback</h2></div>
-      <p class="note">Use this if the mic fails or a provider is unavailable.</p>
+      <p class="note">Use this if the mic fails or speech quality is poor.</p>
       <textarea id="manualText" rows="3" placeholder="Type a Bangla / Banglish / Roman-Bangla utterance…"></textarea>
       <button id="manualBtn" class="primary">Use this text as RAW</button>
     </section>

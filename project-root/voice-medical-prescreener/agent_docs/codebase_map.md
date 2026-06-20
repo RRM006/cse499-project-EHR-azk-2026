@@ -12,57 +12,44 @@
 
 ```
 voice-medical-prescreener/
-├── CLAUDE.md                     # lean hub; Claude Code reads this every session
-├── INSTALL.md                    # install guide: which file installs which provider, models, disk, time
-├── requirements.txt              # CORE deps (Browser + Groq + Gemini); + python-multipart
-├── requirements-whisper.txt      # OPTIONAL: Local Whisper (faster-whisper, no torch)
-├── requirements-banglaspeech.txt # OPTIONAL: BanglaSpeech2Text (transformers + torch)
-├── requirements-qwen.txt         # OPTIONAL: Qwen3-ASR (qwen-asr + onnxruntime + torch) — invasive
+├── CLAUDE.md                     # lean hub; includes the Frontend/Transcript-UI rules
+├── DESIGN-mintlify.md            # frontend design system the UI follows
+├── INSTALL.md                    # install + run guide (browser-only Module 1)
+├── requirements.txt              # CORE deps only (FastAPI, uvicorn, pydantic-settings, SQLAlchemy, openai, pytest)
 ├── .gitignore                    # ignores .env, .venv/, *.db, data/, audio/, models/
 ├── .venv/                        # local virtualenv (gitignored)
-├── .claude/launch.json           # dev-server config for the preview tool (uvicorn; Windows venv path)
-├── agent_docs/                   # the project's shared brain (living docs) — unchanged set
+├── .claude/launch.json           # preview dev-server config (uvicorn; venv python; PORT 8001)
+├── agent_docs/                   # the project's shared brain (living docs)
 │   └── ... (constitution, milestone_log, current_task, changelog, test_log,
 │           decisions, codebase_map, session_protocol)
-├── backend/                      # FastAPI app (foundation for the full app)
-│   ├── .env / .env.example       # config (gitignored real / committed template): keys + STT settings
+├── backend/                      # FastAPI app
+│   ├── .env / .env.example       # config (gitignored real / committed template): Gemini correction keys
 │   ├── prescreener.db            # SQLite, created at runtime (gitignored); has stt_provider column
 │   ├── app/
-│   │   ├── main.py               # FastAPI entry: lifespan init_db + STT health log; serves frontend
-│   │   ├── core/config.py        # pydantic-settings: keys, STT provider + model settings
-│   │   ├── api/
-│   │   │   ├── routes_transcripts.py  # POST /api/transcripts (store raw), /api/correct (by id), GET list
-│   │   │   └── routes_stt.py     # GET /api/stt/providers, POST /api/transcribe (audio upload)
-│   │   ├── schemas/transcript.py # StoreRawRequest / CorrectRequest / TranscriptOut / ProviderOut
-│   │   ├── services/
-│   │   │   ├── correction/       # Corrector ABC + OpenAICompatibleCorrector (Gemini)
-│   │   │   └── stt/              # STT provider plugin layer:
-│   │   │       ├── base.py        #   STTProvider ABC + ProviderInfo (health) + status codes
-│   │   │       ├── registry.py    #   list_providers() / get_provider(); add a class here = new provider
-│   │   │       ├── audio.py       #   decode webm/opus -> 16k mono float32 (PyAV); for local engines
-│   │   │       ├── browser_webspeech.py  # kind=browser (client-side)
-│   │   │       ├── groq_whisper.py        # kind=server, cloud (openai SDK @ Groq)
-│   │   │       ├── local_whisper.py       # kind=server, faster-whisper int8 CPU
-│   │   │       ├── banglaspeech.py        # kind=server, shhossain/whisper-*-bn via transformers
-│   │   │       └── qwen_asr.py            # kind=server, Qwen3-ASR-1.7B (local, CPU)
+│   │   ├── main.py               # FastAPI entry: lifespan init_db; serves frontend (+ placeholder)
+│   │   ├── core/config.py        # pydantic-settings: correction (Gemini) + db settings
+│   │   ├── api/routes_transcripts.py  # POST /api/transcripts (store raw), /api/correct (by id), GET list
+│   │   ├── schemas/transcript.py # StoreRawRequest / CorrectRequest / TranscriptOut
+│   │   ├── services/correction/  # Corrector ABC + OpenAICompatibleCorrector (Gemini)  [STT layer REMOVED]
 │   │   └── db/
-│   │       ├── database.py / get_db()      # engine/session, init_db()
+│   │       ├── database.py        # engine/session, init_db(), get_db()
 │   │       ├── models.py          # Utterance: raw_text (write-once) + corrected_text + stt_provider
 │   │       └── repository.py      # create_raw(stt_provider=) / set_correction() / get_by_id — NO raw mutator
 │   └── tests/
 │       ├── test_raw_immutable.py  # rule #1 guard (3 tests)
-│       ├── test_corrector.py      # corrector guards, offline (4 tests)
-│       └── test_stt_registry.py   # provider listing + health logic, lazy-import safety (6 tests)
-└── frontend/                     # plain HTML/JS (served by FastAPI at /)
-    ├── index.html                # provider dropdown, Start/Stop+timer, RAW + CORRECTED panels, manual fallback
-    ├── app.js                    # provider switching; browser=live vs server=record→upload; copy/clear; errors
-    └── styles.css                # status badges, recording pill, spinner; raw=amber, corrected=green
+│       └── test_corrector.py      # corrector guards, offline (4 tests)
+└── frontend/                     # plain HTML/JS (served by FastAPI at /), Mintlify-styled
+    ├── index.html                # Start/Stop + ● Recording + count-up timer; RAW / CORRECTED / Manual panels
+    ├── app.js                    # Web Speech API continuous recording; ~10s-silence auto-stop; stick-to-bottom auto-scroll
+    └── styles.css                # DESIGN-mintlify tokens; fixed-height scrollable panels; pill buttons
 ```
 
-Run from the project root. App: `python -m uvicorn backend.app.main:app --reload --port 8000`
-(use the venv's Python). Tests: `pytest backend/tests/` (**13 passing**).
-Core + all 3 optional local engines are installed on the Windows box; only the
-human-driven live test of each provider on real speech remains. See INSTALL.md.
+REMOVED in Session 4 (browser-only simplification): `services/stt/**`,
+`api/routes_stt.py`, `tests/test_stt_registry.py`, `requirements-{whisper,
+banglaspeech,qwen}.txt`, and the STT config/.env block.
+
+Run from the project root. App: `python -m uvicorn backend.app.main:app --reload --port 8001`
+(use the venv's Python). Tests: `pytest backend/tests/` (**7 passing**).
 
 ---
 

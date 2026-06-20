@@ -1,6 +1,0 @@
-# OPTIONAL — Local Whisper provider (faster-whisper, CTranslate2, int8 CPU).
-#   pip install -r requirements-whisper.txt
-# No PyTorch needed (uses CTranslate2). Models auto-download to the Hugging Face
-# cache on first use. Works on Windows + Arch Linux.
-
-faster-whisper==1.1.0

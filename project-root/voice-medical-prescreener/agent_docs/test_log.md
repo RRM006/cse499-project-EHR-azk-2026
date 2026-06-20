@@ -35,6 +35,30 @@ transcribed by hand (the "ground truth"). Record the model + machine each time.
 
 ## Test entries (newest first)
 
+## 2026-06-20 — Module 1 — Browser-only simplification + Mintlify UI + scroll behavior
+- Setup: Python 3.14.4 on Windows; venv RECREATED from requirements.txt (clean core:
+  fastapi 0.115.6, starlette 0.41.3 — torch/transformers/qwen removed). Server run on
+  port 8001 via the preview tool (port 8000 had an orphaned socket). Browser checks
+  via preview_eval / console logs.
+- Metric(s): test pass/fail; endpoint presence; CSS/JS behavior (fonts, scroll).
+- Result:
+  * `pytest backend/tests/` → **7 passed** (test_raw_immutable + test_corrector;
+    test_stt_registry removed). 0 console errors on the page.
+  * Routes now exactly: `/api/correct`, `/api/transcripts`, `/health` (+ static).
+    `/api/stt/providers` → 404, `/api/transcribe` → gone. STT endpoints removed.
+  * UI: Inter font loaded; Start button mint-green pill (rgb(0,212,164), radius
+    9999px); transcript panels fixed-height 280px (220px mobile), overflow-y auto,
+    scrollable.
+  * Auto-scroll: sticks to bottom on append; scroll-up sets stick=false and append
+    does NOT yank down; returning to bottom sets stick=true and append follows.
+    Verified all four conditions true.
+  * Mobile (375px): single-column grid, 220px panels, no horizontal overflow
+    (bodyScrollWidth == viewport).
+  * One live store→correct round-trip succeeded earlier this day (raw immutable,
+    corrected separate).
+- Notes: Live mic continuous-recording + ~10s-silence auto-stop is the human's
+  manual Chrome check (can't automate the mic). No WER/latency on real speech yet.
+
 ## 2026-06-19 — Module 1 (infra) — Multi-provider STT: installs, health, transcribe paths
 - Setup: Python 3.14.4 on Windows; `.venv`. Installed faster-whisper 1.1.0
   (requirements-whisper.txt), transformers 5.12.1→4.57.6 + torch 2.12.1 (banglaspeech),

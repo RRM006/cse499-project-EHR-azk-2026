@@ -6,13 +6,14 @@
 
 **Status keys:** ⬜ Not started · 🟨 In progress · 🟦 Blocked · ✅ Done
 
-**Last updated:** 2026-06-19 (Session 3 — multi-provider STT + provider health + installs)
-**Current phase:** Phase 0 (quick demo), expanded to multi-provider STT.
+**Last updated:** 2026-06-20 (Session 4 — simplified to browser-only STT + Mintlify UI)
+**Current phase:** Phase 0 (quick demo) — browser-only STT.
 **Module in focus:** Module 1 — Speech-to-Text.
-**Progress:** Full stack built with **5 swappable STT providers** + frontend dropdown
-+ provider health reporting. All engines installed on the Windows box (13 tests pass;
-local transcribe paths validated). Next: human live-tests each provider in Chrome,
-collects ~50 samples, records latency/WER. Module 1 stays 🟨 until that's done.
+**Progress:** SIMPLIFIED back to a single STT path (browser Web Speech API); the
+multi-provider layer was removed (clean seam kept). Continuous recording (no cap,
+append-only, ~10s-silence auto-stop) + Mintlify-styled UI with fixed-height
+scrollable transcript panels. 7 tests pass; UI verified live. Next: human live mic
+test + ~50 samples + latency/WER. Module 1 stays 🟨 until that's recorded.
 
 ---
 
@@ -52,9 +53,12 @@ live, see a corrected version beside it, and the raw text is stored unchanged.
 · 4 API routes + static serving ✅ · 5 frontend (mic + boxes + fallback) ✅
 · 6 end-to-end live test + collect ~50 samples ⬜ (human-driven, next).
 
-**Multi-provider STT (Session 3):** provider/plugin layer ✅ · 5 providers wired ✅
-· frontend dropdown + health badges ✅ · all engines installed + local paths
-validated ✅ · live test of each provider on real speech ⬜ (next).
+**Multi-provider STT (Session 3):** built — then REMOVED in Session 4 (scope
+simplified to browser-only for Module 1; may return in a later module).
+
+**Browser-only STT (Session 4):** continuous recording (no cap, append-only,
+~10s-silence auto-stop) ✅ · Mintlify UI + scrollable stick-to-bottom panels ✅
+· live mic test on real speech + ~50 samples ⬜ (next, human).
 
 ### Phase 1 — Robust local core
 **Goal:** FastAPI + WebSocket backend streaming live mic audio to faster-whisper

@@ -1,15 +1,14 @@
 "use strict";
 
 // ---------- elements ----------
-const providerSel = document.getElementById("provider");
-const providerStatus = document.getElementById("providerStatus");
 const startBtn = document.getElementById("startBtn");
 const stopBtn = document.getElementById("stopBtn");
 const recStatus = document.getElementById("recStatus");
 const timerEl = document.getElementById("timer");
-const remainingEl = document.getElementById("remaining");
 const errorBanner = document.getElementById("errorBanner");
+const browserWarn = document.getElementById("browserWarn");
 
+const rawBox = document.getElementById("rawBox");
 const rawTextEl = document.getElementById("rawText");
 const interimEl = document.getElementById("interim");
 const copyRawBtn = document.getElementById("copyRaw");
@@ -26,47 +25,26 @@ const manualBtn = document.getElementById("manualBtn");
 const refreshRecentBtn = document.getElementById("refreshRecent");
 const recentList = document.getElementById("recentList");
 
-// ---------- state ----------
-const MAX_SECONDS = 300; // 5-minute cap
+// ---------- config / state ----------
+const SILENCE_MS = 10000;          // auto-stop after ~10s of continuous silence
 const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
 
-// Map backend status codes -> friendly labels shown in the dropdown + badge.
-const STATUS_LABELS = {
-  available: "✅ Available",
-  missing_api_key: "❌ Missing API Key",
-  missing_package: "❌ Missing Python Package",
-  missing_model: "❌ Missing Model",
-  unsupported_platform: "❌ Unsupported Platform",
-  error: "❌ Initialization Error",
-};
-const statusLabel = (s) => STATUS_LABELS[s] || s;
-
-let providers = {};        // id -> info
-let recording = false;
-let timerId = null;
-let startedAt = 0;
-
-let committedRaw = "";      // browser-path final text, appended verbatim
-let currentUtteranceId = null; // id of the raw row that Correct will correct
-
-// server-path (MediaRecorder)
-let mediaRecorder = null;
-let mediaStream = null;
-let audioChunks = [];
-
-// browser-path (Web Speech API)
 let recognition = null;
+let recording = false;       // true between Start and Stop/auto-stop
+let stopping = false;        // user Stop or silence auto-stop → don't auto-restart
+let committedRaw = "";       // append-only final text; NEVER cleared mid-session
+let startedAt = 0;
+let timerId = null;
+let lastResultAt = 0;        // timestamp of the most recent speech result
+let silenceId = null;
 
 // ---------- helpers ----------
-function showError(msg) {
-  errorBanner.textContent = msg;
-  errorBanner.hidden = !msg;
-}
+function showError(msg) { errorBanner.textContent = msg; errorBanner.hidden = !msg; }
 function clearError() { showError(""); }
 
 function setRecStatus(state) {
-  recStatus.textContent = state;
-  recStatus.className = "status-pill " + state.toLowerCase();
+  recStatus.textContent = state === "recording" ? "● Recording" : (state === "processing" ? "Processing" : "Idle");
+  recStatus.className = "status-pill " + state;
 }
 
 function fmt(sec) {
@@ -75,240 +53,141 @@ function fmt(sec) {
   return `${m}:${s}`;
 }
 
-function selectedProvider() {
-  return providers[providerSel.value];
-}
-
 async function copyText(text) {
   if (!text) return;
   try { await navigator.clipboard.writeText(text); } catch (_) { /* ignore */ }
 }
 
-// ---------- provider dropdown ----------
-async function loadProviders() {
-  const resp = await fetch("/api/stt/providers");
-  const list = await resp.json();
-  providers = {};
-  providerSel.innerHTML = "";
-  for (const info of list) {
-    // The browser provider also needs the API present in THIS browser.
-    if (info.id === "browser_webspeech" && !SpeechRecognition) {
-      info.status = "unsupported_platform";
-      info.ready = false;
-      info.detail = "This browser has no Web Speech API (use Chrome/Edge).";
-    }
-    providers[info.id] = info;
-    const opt = document.createElement("option");
-    opt.value = info.id;
-    // Show the reason right in the dropdown so disabled options aren't a mystery.
-    opt.textContent = info.status === "available"
-      ? info.label
-      : `${info.label} — ${statusLabel(info.status)}`;
-    opt.disabled = info.status !== "available";
-    opt.title = info.detail || "";
-    providerSel.appendChild(opt);
-  }
-  // pick the first available option
-  const firstAvail = list.find((i) => providers[i.id].status === "available");
-  if (firstAvail) providerSel.value = firstAvail.id;
-  onProviderChange();
+// ---------- auto-scroll (shared by Raw / Corrected / Manual panels) ----------
+// Each panel "sticks" to the bottom as new text arrives, UNLESS the user has
+// scrolled up; it resumes sticking once they scroll back to the bottom.
+function nearBottom(el) { return el.scrollHeight - el.scrollTop - el.clientHeight < 24; }
+function trackStick(el) {
+  el.dataset.stick = "true";
+  el.addEventListener("scroll", () => { el.dataset.stick = nearBottom(el) ? "true" : "false"; });
 }
+function autoScroll(el) { if (el.dataset.stick !== "false") el.scrollTop = el.scrollHeight; }
 
-function onProviderChange() {
-  const info = selectedProvider();
-  if (!info) return;
-  providerStatus.textContent = statusLabel(info.status);
-  providerStatus.className = "badge " + (info.status === "available" ? "available" : "unavailable");
-  providerStatus.title = info.detail || "";
-  startBtn.disabled = recording || info.status !== "available";
-  // Surface the reason (and any error detail) when a provider can't be used.
-  if (info.status !== "available") {
-    showError(`${info.label}: ${statusLabel(info.status)}${info.detail ? " — " + info.detail : ""}`);
-  } else {
-    clearError();
-  }
-}
-
-// ---------- recording lifecycle ----------
+// ---------- timers ----------
 function startTimer() {
   startedAt = Date.now();
-  timerEl.textContent = `00:00 / ${fmt(MAX_SECONDS)}`;
-  remainingEl.textContent = `remaining ${fmt(MAX_SECONDS)}`;
+  timerEl.textContent = "00:00";
   timerId = setInterval(() => {
-    const elapsed = Math.floor((Date.now() - startedAt) / 1000);
-    timerEl.textContent = `${fmt(elapsed)} / ${fmt(MAX_SECONDS)}`;
-    remainingEl.textContent = `remaining ${fmt(Math.max(0, MAX_SECONDS - elapsed))}`;
-    if (elapsed >= MAX_SECONDS) stopRecording(); // auto-stop at 5:00
+    timerEl.textContent = fmt(Math.floor((Date.now() - startedAt) / 1000)); // counts up, no cap
   }, 250);
 }
-function stopTimer() {
-  if (timerId) clearInterval(timerId);
-  timerId = null;
-}
+function stopTimer() { if (timerId) clearInterval(timerId); timerId = null; }
 
-async function startRecording() {
-  const info = selectedProvider();
-  if (!info || info.status !== "available") {
-    showError(`Provider "${info ? info.label : "?"}" is not available.`);
-    return;
-  }
+function startSilenceWatch() {
+  lastResultAt = Date.now();
+  silenceId = setInterval(() => {
+    if (recording && Date.now() - lastResultAt >= SILENCE_MS) {
+      stopRecording("silence"); // ~10s of continuous silence
+    }
+  }, 500);
+}
+function stopSilenceWatch() { if (silenceId) clearInterval(silenceId); silenceId = null; }
+
+// ---------- recording ----------
+function startRecording() {
+  if (!SpeechRecognition) { browserWarn.hidden = false; return; }
   clearError();
-  committedRaw = "";
-  rawTextEl.textContent = "";
-  interimEl.textContent = "";
-  currentUtteranceId = null;
 
-  recording = true;
-  startBtn.disabled = true;
-  stopBtn.disabled = false;
-  providerSel.disabled = true;
-  setRecStatus("Recording");
-  startTimer();
-
-  if (info.kind === "browser") {
-    startBrowserRecognition();
-  } else {
-    await startMediaRecorder(); // server provider
-  }
-}
-
-async function stopRecording() {
-  if (!recording) return;
-  recording = false;
-  stopBtn.disabled = true;
-  stopTimer();
-
-  const info = selectedProvider();
-  if (info && info.kind === "browser") {
-    if (recognition) recognition.stop(); // onend will finalize + persist
-  } else if (mediaRecorder && mediaRecorder.state !== "inactive") {
-    mediaRecorder.stop(); // onstop will upload
-  }
-}
-
-function finishUI() {
-  providerSel.disabled = false;
-  onProviderChange(); // re-enable Start if provider still available
-}
-
-// ---------- browser path (Web Speech API) ----------
-function startBrowserRecognition() {
   recognition = new SpeechRecognition();
   recognition.lang = "bn-BD";
   recognition.continuous = true;
   recognition.interimResults = true;
 
   recognition.onresult = (event) => {
+    lastResultAt = Date.now(); // any speech (interim or final) resets the silence clock
     let interim = "";
     for (let i = event.resultIndex; i < event.results.length; i++) {
       const r = event.results[i];
-      if (r.isFinal) committedRaw += r[0].transcript; // verbatim append
+      if (r.isFinal) committedRaw += r[0].transcript; // append verbatim; never clear/replace
       else interim += r[0].transcript;
     }
     rawTextEl.textContent = committedRaw;
     interimEl.textContent = interim;
+    autoScroll(rawBox); // keep newest line visible unless the user scrolled up
   };
+
   recognition.onerror = (e) => {
     if (e.error === "not-allowed" || e.error === "service-not-allowed") {
       showError("Microphone permission denied. Allow mic access and try again.");
+      stopRecording("error");
+    } else if (e.error === "no-speech") {
+      // ignore — the silence watcher decides when to actually stop
     } else {
       showError("Speech recognition error: " + e.error);
     }
   };
-  recognition.onend = async () => {
+
+  // Chrome ends recognition after short pauses. If the user hasn't stopped and we
+  // haven't hit the 10s silence limit, restart so brief pauses don't end the session.
+  recognition.onend = () => {
+    if (recording && !stopping) {
+      try { recognition.start(); } catch (_) { /* will retry on next tick if needed */ }
+      return;
+    }
     interimEl.textContent = "";
-    setRecStatus("Processing");
-    await persistRaw(committedRaw, "browser_webspeech", "mic");
-    setRecStatus("Idle");
-    finishUI();
+    setRecStatus("idle");
   };
 
+  recording = true;
+  stopping = false;
+  startBtn.disabled = true;
+  stopBtn.disabled = false;
+  setRecStatus("recording");
+  startTimer();
+  startSilenceWatch();
   try {
     recognition.start();
   } catch (err) {
-    showError("Could not start recognition: " + err);
-    setRecStatus("Idle");
-    recording = false;
-    stopTimer();
-    finishUI();
+    showError("Could not start recording: " + err);
+    stopRecording("error");
   }
 }
 
-// ---------- server path (MediaRecorder → /api/transcribe) ----------
-async function startMediaRecorder() {
-  try {
-    mediaStream = await navigator.mediaDevices.getUserMedia({ audio: true });
-  } catch (err) {
-    showError("Microphone permission denied or unavailable.");
-    recording = false;
-    stopTimer();
-    setRecStatus("Idle");
-    finishUI();
-    return;
-  }
-  audioChunks = [];
-  mediaRecorder = new MediaRecorder(mediaStream);
-  mediaRecorder.ondataavailable = (e) => { if (e.data.size) audioChunks.push(e.data); };
-  mediaRecorder.onstop = async () => {
-    mediaStream.getTracks().forEach((t) => t.stop());
-    setRecStatus("Processing");
-    const blob = new Blob(audioChunks, { type: mediaRecorder.mimeType || "audio/webm" });
-    await transcribeBlob(blob);
-    setRecStatus("Idle");
-    finishUI();
-  };
-  mediaRecorder.start();
+function stopRecording(reason) {
+  if (!recording) return;
+  recording = false;
+  stopping = true;
+  stopBtn.disabled = true;
+  startBtn.disabled = false;
+  stopTimer();
+  stopSilenceWatch();
+  if (recognition) { try { recognition.stop(); } catch (_) { /* ignore */ } }
+  setRecStatus("idle");
+  if (reason === "silence") showError("Auto-stopped after ~10s of silence. Your transcript is kept below.");
 }
 
-async function transcribeBlob(blob) {
-  const form = new FormData();
-  form.append("provider", providerSel.value);
-  form.append("audio", blob, "recording.webm");
-  try {
-    const resp = await fetch("/api/transcribe", { method: "POST", body: form });
-    const data = await resp.json().catch(() => ({}));
-    if (!resp.ok) { showError(`Transcription failed (${resp.status}): ${data.detail || ""}`); return; }
-    committedRaw = data.raw_text;
-    currentUtteranceId = data.id;
-    rawTextEl.textContent = data.raw_text;
-    loadRecent();
-  } catch (err) {
-    showError("Network error during transcription: " + err);
-  }
-}
-
-// ---------- persist raw (browser/manual) ----------
-async function persistRaw(rawText, provider, source) {
-  if (!rawText.trim()) return;
-  try {
-    const resp = await fetch("/api/transcripts", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ raw_text: rawText, stt_provider: provider, source }),
-    });
-    const data = await resp.json().catch(() => ({}));
-    if (!resp.ok) { showError(`Saving raw failed (${resp.status}): ${data.detail || ""}`); return; }
-    currentUtteranceId = data.id;
-    rawTextEl.textContent = data.raw_text;
-    loadRecent();
-  } catch (err) {
-    showError("Network error saving raw: " + err);
-  }
-}
-
-// ---------- correction ----------
+// ---------- correction (store raw first, then correct) ----------
 async function correct() {
-  if (currentUtteranceId == null) {
-    showError("Nothing to correct yet — record or enter text first.");
-    return;
-  }
+  const raw = committedRaw.trim();
+  if (!raw) { showError("Nothing to correct yet — record or type something first."); return; }
+  await runCorrection(committedRaw, "browser_webspeech", "mic");
+}
+
+async function runCorrection(rawText, sttProvider, source) {
   correctedBox.innerHTML = '<span class="spinner"></span> Correcting…';
   correctMeta.textContent = "";
   try {
+    // 1) store the RAW transcript first (immutable record)
+    const storeResp = await fetch("/api/transcripts", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ raw_text: rawText, stt_provider: sttProvider, source }),
+    });
+    const stored = await storeResp.json().catch(() => ({}));
+    if (!storeResp.ok) {
+      correctedBox.innerHTML = `<span class="error">Save failed (${storeResp.status}): ${stored.detail || ""}</span>`;
+      return;
+    }
+    // 2) correct it by id (raw stays untouched)
     const resp = await fetch("/api/correct", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ utterance_id: currentUtteranceId }),
+      body: JSON.stringify({ utterance_id: stored.id }),
     });
     const data = await resp.json().catch(() => ({}));
     if (!resp.ok) {
@@ -316,6 +195,7 @@ async function correct() {
       return;
     }
     correctedBox.textContent = data.corrected_text != null ? data.corrected_text : "(no correction)";
+    autoScroll(correctedBox);
     correctMeta.textContent = `#${data.id} · ${data.correction_provider}/${data.correction_model}`;
     loadRecent();
   } catch (err) {
@@ -348,13 +228,15 @@ async function loadRecent() {
 }
 
 // ---------- wire up ----------
-providerSel.addEventListener("change", onProviderChange);
+if (!SpeechRecognition) { browserWarn.hidden = false; startBtn.disabled = true; }
+
 startBtn.addEventListener("click", startRecording);
-stopBtn.addEventListener("click", stopRecording);
+stopBtn.addEventListener("click", () => stopRecording("user"));
 correctBtn.addEventListener("click", correct);
 copyRawBtn.addEventListener("click", () => copyText(rawTextEl.textContent));
 clearRawBtn.addEventListener("click", () => {
-  // UI-only clear (does NOT delete stored data)
+  // UI-only clear (does not delete stored data); only when not recording
+  if (recording) return;
   committedRaw = "";
   rawTextEl.textContent = "";
   interimEl.textContent = "";
@@ -364,8 +246,15 @@ clearCorrectedBtn.addEventListener("click", () => {
   correctedBox.innerHTML = "<em>No correction yet.</em>";
   correctMeta.textContent = "";
 });
-manualBtn.addEventListener("click", () => persistRaw(manualText.value, "manual", "manual"));
+manualBtn.addEventListener("click", () => {
+  if (manualText.value.trim()) runCorrection(manualText.value, "manual", "manual");
+});
+manualText.addEventListener("input", () => autoScroll(manualText));
 refreshRecentBtn.addEventListener("click", loadRecent);
 
-loadProviders();
+// enable stick-to-bottom auto-scroll on all three panels
+trackStick(rawBox);
+trackStick(correctedBox);
+trackStick(manualText);
+
 loadRecent();
