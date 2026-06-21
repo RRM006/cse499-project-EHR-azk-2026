@@ -2,7 +2,7 @@
 
 from datetime import datetime
 
-from pydantic import BaseModel, ConfigDict
+from pydantic import BaseModel, ConfigDict, computed_field
 
 
 class DocumentOut(BaseModel):
@@ -12,6 +12,12 @@ class DocumentOut(BaseModel):
 
     id: str
     utterance_id: int
+    kind: str  # "raw" | "corrected" (or "combined" for legacy rows)
     format: str
     filename: str
     created_at: datetime
+
+    @computed_field  # included in the JSON response so the UI can link directly
+    @property
+    def download_url(self) -> str:
+        return f"/api/documents/{self.id}/download"

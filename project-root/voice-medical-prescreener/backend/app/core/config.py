@@ -8,6 +8,7 @@ deployment (Docker/host env) without code changes. Nothing here is hardcoded.
 from functools import lru_cache
 from pathlib import Path
 
+from pydantic import AliasChoices, Field
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 # This file is backend/app/core/config.py -> parents[2] == the `backend/` dir.
@@ -24,6 +25,9 @@ class Settings(BaseSettings):
         case_sensitive=False,
         extra="ignore",
     )
+
+    # --- speech-to-text source (Module 1 = browser Web Speech API; future-swappable) ---
+    stt_provider: str = "browser_webspeech"
 
     # --- correction provider (swappable: gemini | groq | openrouter) ---
     correction_provider: str = "gemini"
@@ -45,7 +49,10 @@ class Settings(BaseSettings):
     # Where generated .docx (and later PDF) session exports are written. Leave empty
     # to use the default under backend/data/documents. Point this at any path (or a
     # mounted volume) in deployment without code changes — never hardcoded.
-    documents_dir: str = ""
+    # Accepts either env var: DOCUMENT_OUTPUT_PATH (canonical) or DOCUMENTS_DIR (legacy).
+    documents_dir: str = Field(
+        "", validation_alias=AliasChoices("document_output_path", "documents_dir")
+    )
 
     @property
     def resolved_database_url(self) -> str:

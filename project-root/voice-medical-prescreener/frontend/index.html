@@ -45,9 +45,10 @@
         <div class="controls">
           <button id="copyRaw">Copy</button>
           <button id="clearRaw">Clear</button>
+          <a id="downloadRaw" class="download-btn raw is-disabled" download>⬇ Raw .docx</a>
         </div>
       </div>
-      <h3>exactly as recognized — read-only, never modified</h3>
+      <h3>exactly as recognized — read-only, never modified · saved + exported when you Stop</h3>
       <div id="rawBox" class="box raw" aria-readonly="true">
         <span id="rawText"></span><span id="interim" class="interim"></span>
       </div>
@@ -57,12 +58,13 @@
       <div class="panel-head">
         <h2>Corrected transcript</h2>
         <div class="controls">
-          <button id="correctBtn" class="primary">Correct →</button>
+          <button id="correctBtn" class="primary">Correct with Gemini</button>
           <button id="copyCorrected">Copy</button>
           <button id="clearCorrected">Clear</button>
+          <a id="downloadCorrected" class="download-btn corrected is-disabled" download>⬇ Corrected .docx</a>
         </div>
       </div>
-      <h3>produced by Gemini — stored separately from RAW</h3>
+      <h3>produced by Gemini — stored + exported separately from RAW</h3>
       <div id="correctedBox" class="box corrected"><em>No correction yet.</em></div>
       <p id="correctMeta" class="note"></p>
     </section>
@@ -90,7 +92,7 @@
         <h2>Saved documents (.docx)</h2>
         <button id="refreshDocs">Refresh</button>
       </div>
-      <h3>auto-generated when you Correct a session — download to open in Word / LibreOffice</h3>
+      <h3>raw .docx on Stop, corrected .docx on Correct — download to open in Word / LibreOffice</h3>
       <ul id="docsList" class="recent docs"></ul>
     </section>
   </main>

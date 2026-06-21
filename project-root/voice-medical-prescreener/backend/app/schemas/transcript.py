@@ -9,6 +9,8 @@ from typing import Literal
 
 from pydantic import BaseModel, ConfigDict, Field
 
+from backend.app.schemas.document import DocumentOut
+
 
 class StoreRawRequest(BaseModel):
     """Persist a raw transcript produced client-side (browser STT or manual typing)."""
@@ -41,3 +43,15 @@ class TranscriptOut(BaseModel):
     correction_model: str | None
     created_at: datetime
     corrected_at: datetime | None
+
+
+class TranscriptDetailOut(TranscriptOut):
+    """A transcript plus its latest generated documents (raw / corrected).
+
+    Each document carries a ``download_url``; either may be null until the matching
+    .docx has been generated. Used by GET /api/transcripts/{id} and returned by
+    /api/correct so the UI can enable the download buttons immediately.
+    """
+
+    raw_document: DocumentOut | None = None
+    corrected_document: DocumentOut | None = None

@@ -75,16 +75,22 @@ def create_document(
     utterance_id: int,
     filename: str,
     rel_path: str,
+    kind: str,
     doc_format: str = "docx",
     doc_id: str | None = None,
 ) -> Document:
     """Record a generated export file for a session. The file itself is written by
-    the documents service; this only persists the metadata row."""
+    the documents service; this only persists the metadata row.
+
+    ``kind`` is "raw" or "corrected" — the two are tracked as separate rows so they
+    can be regenerated and downloaded independently.
+    """
     document = Document(
         utterance_id=utterance_id,
         filename=filename,
         rel_path=rel_path,
         format=doc_format,
+        kind=kind,
     )
     if doc_id is not None:
         document.id = doc_id
@@ -96,6 +102,16 @@ def create_document(
 
 def get_document(db: Session, document_id: str) -> Document | None:
     return db.get(Document, document_id)
+
+
+def get_latest_document(db: Session, *, utterance_id: int, kind: str) -> Document | None:
+    """Most recent document of ``kind`` for a session (newest version wins)."""
+    return (
+        db.query(Document)
+        .filter(Document.utterance_id == utterance_id, Document.kind == kind)
+        .order_by(Document.created_at.desc())
+        .first()
+    )
 
 
 def list_documents(db: Session, *, limit: int = 50) -> list[Document]:

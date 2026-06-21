@@ -35,6 +35,40 @@ transcribed by hand (the "ground truth"). Record the model + machine each time.
 
 ## Test entries (newest first)
 
+## 2026-06-21 — Module 1 (+ doc export) — Two separate raw/corrected .docx + Alembic migration
+- Setup: Python 3.14.3 on **Arch Linux**; `.venv`. Added `alembic==1.14.0`. Server run on
+  port 8001 via the preview tool (`backend-linux` launch config). Unit tests on in-memory
+  SQLite (StaticPool for the route test) + temp-dir storage + a fake corrector; migration
+  tests on throwaway SQLite FILES; end-to-end checks via preview_eval against the real DB/FS.
+- Metric(s): test pass/fail; migration correctness + data preservation; file validity
+  (bytes, Word content-type); HTTP status/headers.
+- Result:
+  * `pytest backend/tests/` → **19 passed in ~1.2s** (raw_immutable 3 + corrector 4 +
+    docx_writer 5 + documents_repo 4 + migration 2 + routes_documents 2). The docx_writer
+    tests assert raw doc holds RAW verbatim and NOT the correction, and vice-versa (rule #1).
+  * **DB bug FIXED & verified.** Before: live `utterances` had columns up to `corrected_at`
+    but NO `stt_provider`. After `run_migrations()` on the real DB: `stt_provider` +
+    `documents.kind` present, `alembic_version = 0002_add_stt_provider_and_doc_kind`, and
+    **both original utterance rows preserved (count = 2)**. Fresh-DB path (0001→0002) builds
+    the full schema from scratch; a second `upgrade head` is a no-op. Migration unit tests
+    (legacy-DB-keeps-rows + fresh-DB-full-schema) pass. Pre-migration DB backed up to
+    `backend/data/prescreener.db.pre-alembic.bak`.
+  * End-to-end in the browser (manual-text path; no Gemini): typing a Banglish utterance +
+    "Use this text as RAW" → raw saved, **raw .docx generated**, "Download Raw .docx" button
+    enabled, `GET /api/documents` lists kind=`raw` filename `raw-session-3-20260621.docx`,
+    and downloading it → HTTP 200, Content-Type
+    `application/vnd.openxmlformats-officedocument.wordprocessingml.document`, **36,913 bytes**.
+    Both download buttons start disabled (is-disabled, no href). Startup logs: 0 errors.
+  * Route integration test (TestClient, fake corrector): save → raw .docx → GET detail →
+    400 on corrected-before-correction → correct (RAW unchanged, corrected stored) →
+    corrected .docx → both files download as Word docs; unknown ids → 404.
+- Notes: The LIVE Gemini correction in-browser + opening both .docx in Word/LibreOffice to
+  confirm real Bangla rendering is still the human's manual check (not auto-run — saves free
+  quota). The preview screenshot tool timed out (renderer); preview_eval gave conclusive
+  functional proof. On Arch, launch the preview via the **`backend-linux`** config — the
+  default Windows config fails with `spawn .venv/Scripts/python.exe ENOENT`. No WER/latency
+  on real speech yet — still the human's next step.
+
 ## 2026-06-21 — Module 1 (+ doc export) — Auto .docx generation + list/download
 - Setup: Python 3.14.4 on Windows; `.venv`. Added `python-docx==1.1.2`. Server run on
   port 8001 via the preview tool. Unit tests on in-memory SQLite + temp-dir storage;

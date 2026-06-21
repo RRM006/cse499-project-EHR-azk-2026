@@ -6,15 +6,17 @@
 
 **Status keys:** ⬜ Not started · 🟨 In progress · 🟦 Blocked · ✅ Done
 
-**Last updated:** 2026-06-21 (Session 5 — auto-generate & store .docx per session)
+**Last updated:** 2026-06-21 (Session 6 — two separate raw/corrected .docx + Alembic migration)
 **Current phase:** Phase 0 (quick demo) — browser-only STT.
-**Module in focus:** Module 1 — Speech-to-Text (+ early document-export groundwork).
+**Module in focus:** Module 1 — Speech-to-Text (+ document-export groundwork).
 **Progress:** Single STT path (browser Web Speech API) + Mintlify UI with fixed-height
-scrollable panels. NEW this session: every completed session auto-saves a Word `.docx`
-(derived artifact; DB stays source of truth) via python-docx, behind a swappable
-writer + storage seam; frontend lists docs with download links. 13 tests pass;
-end-to-end download verified via HTTP. Module 1 stays 🟨 until the human live mic
-test + ~50 samples + latency/WER are recorded.
+scrollable panels. NEW this session: RAW and CORRECTED are now exported as TWO separate,
+independently downloadable Word `.docx` files (raw on Stop, corrected on Correct) via a
+`documents.kind` column behind the existing writer/storage/format seams; and the DB schema
+is now managed by **Alembic** (auto-migrate at startup), which FIXED the live
+`no column named stt_provider` error in place without deleting the DB (2 real rows preserved).
+**19 tests pass**; the manual-text → raw-.docx flow verified end-to-end in the browser.
+Module 1 stays 🟨 until the human live mic test + ~50 samples + latency/WER are recorded.
 
 ---
 
@@ -66,6 +68,13 @@ simplified to browser-only for Module 1; may return in a later module).
 list + `/download` ✅ · Saved-documents frontend panel ✅. Early groundwork toward
 Module 12 (Structured Clinical Report) and Module 13 (EHR storage) — those modules
 stay ⬜ (no clinical content/extraction yet; this only exports raw + corrected).
+
+**Two-file export + Alembic (Session 6):** RAW and CORRECTED exported as SEPARATE,
+independently downloadable `.docx` (raw on Stop, corrected on Correct) via a
+`documents.kind` column ✅ · routes `GET /api/transcripts/{id}`,
+`POST /api/transcripts/{id}/documents/{raw,corrected}` ✅ · per-panel download buttons +
+loading/error states ✅ · **Alembic** schema migrations, auto-run at startup, fixing the
+`no column named stt_provider` bug in place (data preserved) ✅. 19 tests pass.
 
 ### Phase 1 — Robust local core
 **Goal:** FastAPI + WebSocket backend streaming live mic audio to faster-whisper

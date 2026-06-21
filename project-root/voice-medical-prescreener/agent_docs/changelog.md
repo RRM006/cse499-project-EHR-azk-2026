@@ -16,6 +16,49 @@
 
 ---
 
+## Session 6 — 2026-06-21 — Two separate raw/corrected .docx + Alembic migration (fix stt_provider bug)
+- Did: (A) FIXED the live `sqlite3.OperationalError: table utterances has no column named
+  stt_provider` by adopting **Alembic**. New `backend/alembic.ini` + `backend/migrations/`
+  (env.py reads the URL from app settings, `render_as_batch=True` for SQLite) with two
+  revisions: `0001_baseline` (original schema) and `0002` (adds `utterances.stt_provider` +
+  `documents.kind`). `init_db()` now runs `run_migrations()` — stamps the baseline on a
+  legacy DB, then `upgrade head`; fresh DBs build from scratch; re-runs no-op. Verified on
+  the REAL db (2 rows preserved) + a fresh db; backed up the pre-migration db to
+  `backend/data/prescreener.db.pre-alembic.bak`. (B) Split document export into TWO separate,
+  independently downloadable files: added `documents.kind` ("raw"|"corrected"; legacy
+  "combined"); `DocumentWriter.render(utterance, *, kind)` → DocxWriter renders raw-only
+  ("Transcript") or corrected-only ("Corrected Transcript"); `generate_session_document(kind=…)`;
+  repo `create_document(kind=…)` + `get_latest_document`. New routes (kept `/api/*`):
+  `GET /api/transcripts/{id}` (TranscriptDetailOut: raw+corrected text + both doc links),
+  `POST /api/transcripts/{id}/documents/raw`, `…/documents/corrected`; `/api/correct` now
+  best-effort generates the CORRECTED doc and returns the detail. (C) Frontend: raw is now
+  saved + a raw .docx generated when recording STOPS (not only on Correct); added per-panel
+  "Download Raw/Corrected .docx" buttons (enabled when each file exists), loading states
+  (Saving…/Generating document…/Correcting text…), and the exact spec error strings.
+  (D) Config: added `STT_PROVIDER` + `DOCUMENT_OUTPUT_PATH` (alias of DOCUMENTS_DIR) +
+  documented `DATABASE_URL`; updated `.env.example` and `.env`. Added a `backend-linux`
+  launch.json config (the existing one is Windows-only `.venv/Scripts/python.exe`).
+- Decided: Alembic + auto-migrate-at-startup with legacy baseline-stamp (ADR-0022); raw and
+  corrected exported as SEPARATE docs via a `documents.kind` column, dedicated documents
+  table kept over flat path columns, `/api/*` prefix kept (ADR-0023, decided with the human).
+- Broke / problem: One real issue surfaced at END of session — `preview_start` failed with
+  `spawn .venv/Scripts/python.exe ENOENT`: the DEFAULT `.claude/launch.json` config uses the
+  WINDOWS venv path, which doesn't exist on Arch. Workaround: launch the new `backend-linux`
+  config (`.venv/bin/python`) explicitly — that starts cleanly (earlier this session the
+  server ran fine that way). NOT yet OS-robust (no single launch.json default works on both
+  machines; the preview panel picks the first config). Test gotchas fixed during dev:
+  TestClient runs sync endpoints in a threadpool, so the route test needed `StaticPool` to
+  share the in-memory SQLite across threads; the preview screenshot tool timed out (renderer),
+  but functional verification via preview_eval was conclusive. A synthetic session #3 raw doc
+  was created in the dev DB during verification (harmless; gitignored, like S5's session #5).
+- Deferred: LIVE Gemini correction in-browser + opening both .docx in Word/LibreOffice to
+  confirm Bangla renders (human's manual check — not auto-run to save free quota). PDF /
+  Markdown writers (format seam ready), version-history UI, auth, cloud storage, Patient/Visit
+  tables. Still deferred from S4/S5: the human live mic test + ~50 samples + WER/latency.
+- Next: Human live test in Chrome — record → Stop (raw .docx auto-saves + downloads) →
+  Correct (corrected .docx) → open both, confirm Bangla renders + RAW unchanged; collect
+  samples. See `current_task.md`.
+
 ## Session 5 — 2026-06-21 — Auto-generate & store .docx per session + Saved Documents UI
 - Did: Added automatic Word-document export for completed sessions (additive, nothing
   existing broken). New `Document` SQLAlchemy model (UUID PK, FK → Utterance, format,

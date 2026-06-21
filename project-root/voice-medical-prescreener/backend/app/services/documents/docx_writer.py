@@ -1,8 +1,9 @@
 """DOCX writer (python-docx).
 
-Builds a Word document for one completed session: a metadata header, the verbatim
-RAW transcript, and the SEPARATE corrected transcript. Pure Python, so it runs the
-same on the Windows desktop and the Arch laptop with no Word/LibreOffice installed.
+Builds a Word document for ONE side of a session — either the verbatim RAW
+transcript or the SEPARATE corrected transcript (chosen via ``kind``). Pure Python,
+so it runs the same on the Windows desktop and the Arch laptop with no Word /
+LibreOffice installed.
 
 Bangla note: Bengali is a *complex script*, so we set the font on both the Latin
 (``w:ascii``/``w:hAscii``) and complex-script (``w:cs``) slots of the Normal style.
@@ -20,7 +21,7 @@ from docx.oxml.ns import qn
 from docx.shared import Pt
 
 from backend.app.db.models import Utterance
-from backend.app.services.documents.base import DocumentWriter
+from backend.app.services.documents.base import DocumentKind, DocumentWriter
 
 # First name is the primary request; readers fall back to whatever Bengali font
 # they have. All are common on Windows/Linux or free to install.
@@ -44,43 +45,51 @@ def _fmt_dt(value) -> str:
     return value.strftime("%Y-%m-%d %H:%M:%S UTC") if value else "—"
 
 
+# Per kind: the document title and the metadata rows that belong with it. Raw and
+# corrected files are independent, so each carries only its own provenance.
+_TITLES: dict[str, str] = {"raw": "Transcript", "corrected": "Corrected Transcript"}
+
+
 class DocxWriter(DocumentWriter):
     format = "docx"
 
-    def render(self, utterance: Utterance) -> bytes:
+    def render(self, utterance: Utterance, *, kind: DocumentKind) -> bytes:
+        if kind not in _TITLES:
+            raise ValueError(f"Unknown document kind '{kind}'. Expected 'raw' or 'corrected'.")
+
         doc = DocxDocument()
         _apply_bengali_font(doc.styles["Normal"])
 
-        doc.add_heading("Voice Medical Pre-Screener — Session Transcript", level=1)
+        # --- title + separator rule (matches the requested DOCX layout) ---
+        doc.add_heading(_TITLES[kind], level=1)
+        rule = doc.add_paragraph("_" * 48)
+        rule.runs[0].font.color.rgb = None  # keep default; just a visual divider
 
-        # --- metadata header ---
-        meta = [
-            ("Session ID", str(utterance.id)),
-            ("Source", utterance.source or "—"),
-            ("STT provider", utterance.stt_provider or "—"),
-            ("Correction", f"{utterance.correction_provider or '—'} / {utterance.correction_model or '—'}"),
-            ("Recorded at", _fmt_dt(utterance.created_at)),
-            ("Corrected at", _fmt_dt(utterance.corrected_at)),
-        ]
+        # --- metadata: only what is relevant to THIS document ---
+        meta = [("Session ID", str(utterance.id)), ("Source", utterance.source or "—")]
+        if kind == "raw":
+            meta += [
+                ("STT provider", utterance.stt_provider or "—"),
+                ("Recorded at", _fmt_dt(utterance.created_at)),
+            ]
+            body = utterance.raw_text  # verbatim, never edited (rule #1)
+        else:  # corrected
+            meta += [
+                ("Correction", f"{utterance.correction_provider or '—'} / {utterance.correction_model or '—'}"),
+                ("Corrected at", _fmt_dt(utterance.corrected_at)),
+            ]
+            body = utterance.corrected_text or ""
+
         table = doc.add_table(rows=0, cols=2)
         table.style = "Light List Accent 1"
         for label, value in meta:
-            row = table.add_row().cells
-            row[0].text = label
-            row[1].text = value
+            cells = table.add_row().cells
+            cells[0].text = label
+            cells[1].text = value
 
-        # --- RAW (verbatim, never edited — rule #1) ---
-        doc.add_heading("Raw transcript (verbatim)", level=2)
-        doc.add_paragraph(utterance.raw_text)
-
-        # --- CORRECTED (separate field) ---
-        doc.add_heading("Corrected transcript", level=2)
-        corrected = utterance.corrected_text
-        if corrected:
-            doc.add_paragraph(corrected)
-        else:
-            note = doc.add_paragraph("(not corrected)")
-            note.runs[0].italic = True
+        # --- the transcript text itself ---
+        doc.add_paragraph("")  # spacer
+        doc.add_paragraph(body)
 
         buffer = BytesIO()
         doc.save(buffer)

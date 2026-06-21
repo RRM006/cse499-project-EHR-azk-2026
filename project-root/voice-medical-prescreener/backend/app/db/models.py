@@ -75,6 +75,11 @@ class Document(Base):
     # Export format: "docx" today; "pdf" later — distinguishes multiple artifacts.
     format: Mapped[str] = mapped_column(String(8), nullable=False, default="docx")
 
+    # Which transcript content this file holds: "raw" or "corrected" (raw and
+    # corrected are exported as SEPARATE, independently downloadable files). Legacy
+    # rows generated before this split are labelled "combined" via the server default.
+    kind: Mapped[str] = mapped_column(String(16), nullable=False, server_default="combined")
+
     # Human-facing download name (e.g. "session-12-20260621.docx").
     filename: Mapped[str] = mapped_column(String(255), nullable=False)
 

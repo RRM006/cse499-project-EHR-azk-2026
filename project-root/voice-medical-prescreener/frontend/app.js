@@ -13,12 +13,14 @@ const rawTextEl = document.getElementById("rawText");
 const interimEl = document.getElementById("interim");
 const copyRawBtn = document.getElementById("copyRaw");
 const clearRawBtn = document.getElementById("clearRaw");
+const downloadRawLink = document.getElementById("downloadRaw");
 
 const correctBtn = document.getElementById("correctBtn");
 const correctedBox = document.getElementById("correctedBox");
 const correctMeta = document.getElementById("correctMeta");
 const copyCorrectedBtn = document.getElementById("copyCorrected");
 const clearCorrectedBtn = document.getElementById("clearCorrected");
+const downloadCorrectedLink = document.getElementById("downloadCorrected");
 
 const manualText = document.getElementById("manualText");
 const manualBtn = document.getElementById("manualBtn");
@@ -35,6 +37,7 @@ let recognition = null;
 let recording = false;       // true between Start and Stop/auto-stop
 let stopping = false;        // user Stop or silence auto-stop → don't auto-restart
 let committedRaw = "";       // append-only final text; NEVER cleared mid-session
+let currentUtteranceId = null; // id of the saved RAW utterance for this session
 let startedAt = 0;
 let timerId = null;
 let lastResultAt = 0;        // timestamp of the most recent speech result
@@ -44,9 +47,30 @@ let silenceId = null;
 function showError(msg) { errorBanner.textContent = msg; errorBanner.hidden = !msg; }
 function clearError() { showError(""); }
 
-function setRecStatus(state) {
-  recStatus.textContent = state === "recording" ? "● Recording" : (state === "processing" ? "Processing" : "Idle");
-  recStatus.className = "status-pill " + state;
+// One place for every transient status the UI reports (spec loading states).
+const STATUS = {
+  idle: ["Idle", "idle"],
+  recording: ["● Recording", "recording"],
+  saving: ["Saving…", "processing"],
+  generating: ["Generating document…", "processing"],
+  correcting: ["Correcting text…", "processing"],
+};
+function setStatus(state) {
+  const [text, cls] = STATUS[state] || STATUS.idle;
+  recStatus.textContent = text;
+  recStatus.className = "status-pill " + cls;
+}
+
+function enableDownload(link, doc) {
+  if (!doc) return;
+  link.href = doc.download_url || `/api/documents/${doc.id}/download`;
+  link.classList.remove("is-disabled");
+  link.title = doc.filename || "";
+}
+function disableDownload(link) {
+  link.removeAttribute("href");
+  link.classList.add("is-disabled");
+  link.removeAttribute("title");
 }
 
 function fmt(sec) {
@@ -95,6 +119,12 @@ function startRecording() {
   if (!SpeechRecognition) { browserWarn.hidden = false; return; }
   clearError();
 
+  // A fresh session: the next Stop saves a NEW raw utterance, and the download
+  // buttons are off until that session's documents exist.
+  currentUtteranceId = null;
+  disableDownload(downloadRawLink);
+  disableDownload(downloadCorrectedLink);
+
   recognition = new SpeechRecognition();
   recognition.lang = "bn-BD";
   recognition.continuous = true;
@@ -120,7 +150,7 @@ function startRecording() {
     } else if (e.error === "no-speech") {
       // ignore — the silence watcher decides when to actually stop
     } else {
-      showError("Speech recognition error: " + e.error);
+      showError("Speech recognition failed.");
     }
   };
 
@@ -132,20 +162,19 @@ function startRecording() {
       return;
     }
     interimEl.textContent = "";
-    setRecStatus("idle");
   };
 
   recording = true;
   stopping = false;
   startBtn.disabled = true;
   stopBtn.disabled = false;
-  setRecStatus("recording");
+  setStatus("recording");
   startTimer();
   startSilenceWatch();
   try {
     recognition.start();
   } catch (err) {
-    showError("Could not start recording: " + err);
+    showError("Speech recognition failed.");
     stopRecording("error");
   }
 }
@@ -159,51 +188,122 @@ function stopRecording(reason) {
   stopTimer();
   stopSilenceWatch();
   if (recognition) { try { recognition.stop(); } catch (_) { /* ignore */ } }
-  setRecStatus("idle");
+  setStatus("idle");
   if (reason === "silence") showError("Auto-stopped after ~10s of silence. Your transcript is kept below.");
+
+  // On a real stop, persist the RAW transcript and auto-generate its .docx.
+  if (reason === "user" || reason === "silence") finalizeRawSession();
 }
 
-// ---------- correction (store raw first, then correct) ----------
-async function correct() {
-  const raw = committedRaw.trim();
-  if (!raw) { showError("Nothing to correct yet — record or type something first."); return; }
-  await runCorrection(committedRaw, "browser_webspeech", "mic");
+// ---------- persistence helpers ----------
+// Save the RAW transcript exactly as captured. Returns the new utterance id.
+async function saveRaw(rawText, sttProvider, source) {
+  const resp = await fetch("/api/transcripts", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ raw_text: rawText, stt_provider: sttProvider, source }),
+  });
+  if (!resp.ok) throw new Error("save");
+  const stored = await resp.json();
+  return stored.id;
 }
 
-async function runCorrection(rawText, sttProvider, source) {
-  correctedBox.innerHTML = '<span class="spinner"></span> Correcting…';
-  correctMeta.textContent = "";
+// Generate the RAW .docx for a saved utterance and enable its download button.
+async function generateRawDoc(id) {
+  const resp = await fetch(`/api/transcripts/${id}/documents/raw`, { method: "POST" });
+  if (!resp.ok) throw new Error("doc");
+  enableDownload(downloadRawLink, await resp.json());
+}
+
+// Stop → save raw → generate raw .docx. Errors surface with the spec messages.
+async function finalizeRawSession() {
+  if (!committedRaw.trim()) return; // nothing was recognized
   try {
-    // 1) store the RAW transcript first (immutable record)
-    const storeResp = await fetch("/api/transcripts", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ raw_text: rawText, stt_provider: sttProvider, source }),
-    });
-    const stored = await storeResp.json().catch(() => ({}));
-    if (!storeResp.ok) {
-      correctedBox.innerHTML = `<span class="error">Save failed (${storeResp.status}): ${stored.detail || ""}</span>`;
-      return;
-    }
-    // 2) correct it by id (raw stays untouched)
+    setStatus("saving");
+    currentUtteranceId = await saveRaw(committedRaw, "browser_webspeech", "mic");
+  } catch (_) {
+    showError("Failed to save transcript.");
+    setStatus("idle");
+    return;
+  }
+  try {
+    setStatus("generating");
+    await generateRawDoc(currentUtteranceId);
+  } catch (_) {
+    showError("Failed to generate document.");
+  } finally {
+    setStatus("idle");
+    loadRecent();
+    loadDocuments();
+  }
+}
+
+// ---------- correction (raw must already be saved; raw stays immutable) ----------
+async function correct() {
+  // If the user clicks Correct without a saved session (e.g. they never stopped, or
+  // typed manually), save the raw first so correction has an id to attach to.
+  if (currentUtteranceId == null) {
+    const raw = committedRaw;
+    if (!raw.trim()) { showError("Nothing to correct yet — record or type something first."); return; }
+    try {
+      setStatus("saving");
+      currentUtteranceId = await saveRaw(raw, "browser_webspeech", "mic");
+    } catch (_) { showError("Failed to save transcript."); setStatus("idle"); return; }
+    try { setStatus("generating"); await generateRawDoc(currentUtteranceId); }
+    catch (_) { showError("Failed to generate document."); }
+  }
+  await runCorrection(currentUtteranceId);
+}
+
+async function runCorrection(id) {
+  clearError();
+  correctedBox.innerHTML = '<span class="spinner"></span> Correcting text…';
+  correctMeta.textContent = "";
+  setStatus("correcting");
+  try {
     const resp = await fetch("/api/correct", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ utterance_id: stored.id }),
+      body: JSON.stringify({ utterance_id: id }),
     });
     const data = await resp.json().catch(() => ({}));
     if (!resp.ok) {
-      correctedBox.innerHTML = `<span class="error">Error ${resp.status}: ${data.detail || "failed"}</span>`;
+      correctedBox.innerHTML = '<span class="error">Gemini correction failed.</span>';
+      showError("Gemini correction failed.");
       return;
     }
     correctedBox.textContent = data.corrected_text != null ? data.corrected_text : "(no correction)";
     autoScroll(correctedBox);
     correctMeta.textContent = `#${data.id} · ${data.correction_provider}/${data.correction_model}`;
+    enableDownload(downloadCorrectedLink, data.corrected_document); // corrected .docx
     loadRecent();
-    loadDocuments(); // a .docx is auto-generated server-side on a successful correction
+    loadDocuments();
   } catch (err) {
-    correctedBox.innerHTML = `<span class="error">Network error: ${err}</span>`;
+    correctedBox.innerHTML = '<span class="error">Gemini correction failed.</span>';
+    showError("Gemini correction failed.");
+  } finally {
+    setStatus("idle");
   }
+}
+
+// ---------- manual fallback (type → save as RAW → export) ----------
+async function useManualText() {
+  const txt = manualText.value;
+  if (!txt.trim()) return;
+  clearError();
+  // Mirror into the RAW display and treat it as the active session.
+  committedRaw = txt;
+  rawTextEl.textContent = txt;
+  currentUtteranceId = null;
+  disableDownload(downloadRawLink);
+  disableDownload(downloadCorrectedLink);
+  try {
+    setStatus("saving");
+    currentUtteranceId = await saveRaw(txt, "manual", "manual");
+  } catch (_) { showError("Failed to save transcript."); setStatus("idle"); return; }
+  try { setStatus("generating"); await generateRawDoc(currentUtteranceId); }
+  catch (_) { showError("Failed to generate document."); }
+  finally { setStatus("idle"); loadRecent(); loadDocuments(); }
 }
 
 // ---------- recent list ----------
@@ -240,7 +340,7 @@ async function loadDocuments() {
     if (rows.length === 0) {
       const li = document.createElement("li");
       li.className = "empty";
-      li.textContent = "No documents yet — Correct a session to generate one.";
+      li.textContent = "No documents yet — Stop a recording or Correct to generate one.";
       docsList.appendChild(li);
       return;
     }
@@ -249,10 +349,10 @@ async function loadDocuments() {
       const meta = document.createElement("span");
       meta.className = "rid";
       const when = new Date(d.created_at).toLocaleString();
-      meta.textContent = `session #${d.utterance_id} · ${d.format} · ${when} `;
+      meta.textContent = `session #${d.utterance_id} · ${d.kind} · ${d.format} · ${when} `;
       const link = document.createElement("a");
       link.className = "doc-link";
-      link.href = `/api/documents/${d.id}/download`;
+      link.href = d.download_url || `/api/documents/${d.id}/download`;
       link.textContent = `⬇ ${d.filename}`;
       li.append(meta, link);
       docsList.appendChild(li);
@@ -279,9 +379,7 @@ clearCorrectedBtn.addEventListener("click", () => {
   correctedBox.innerHTML = "<em>No correction yet.</em>";
   correctMeta.textContent = "";
 });
-manualBtn.addEventListener("click", () => {
-  if (manualText.value.trim()) runCorrection(manualText.value, "manual", "manual");
-});
+manualBtn.addEventListener("click", useManualText);
 manualText.addEventListener("input", () => autoScroll(manualText));
 refreshRecentBtn.addEventListener("click", loadRecent);
 refreshDocsBtn.addEventListener("click", loadDocuments);

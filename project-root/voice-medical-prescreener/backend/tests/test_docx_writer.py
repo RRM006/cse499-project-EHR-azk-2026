@@ -1,13 +1,15 @@
 """Offline checks for the .docx export writer.
 
 These never touch the network or a real DB: they build a writer over a plain
-in-memory ``Utterance`` and inspect the produced bytes with python-docx. The key
-guard is rule #1 — the RAW text must appear in the document verbatim.
+in-memory ``Utterance`` and inspect the produced bytes with python-docx. Raw and
+corrected are now SEPARATE documents, so each is checked independently. The key
+guard is rule #1 — the RAW text must appear in the raw document verbatim.
 """
 
 from datetime import datetime, timezone
 from io import BytesIO
 
+import pytest
 from docx import Document as DocxDocument
 
 from backend.app.db.models import Utterance
@@ -45,29 +47,31 @@ def test_build_writer_returns_docx_writer():
     assert writer.format == "docx"
 
 
-def test_render_produces_a_valid_docx_with_raw_and_corrected():
+def test_raw_document_holds_raw_verbatim_and_not_the_correction():
     utt = _sample_utterance()
-    data = DocxWriter().render(utt)
-
-    # Valid enough that python-docx can re-open it.
-    text = _all_text(data)
+    text = _all_text(DocxWriter().render(utt, kind="raw"))
 
     assert utt.raw_text in text  # RAW verbatim (rule #1), spaces and all
-    assert utt.corrected_text in text  # the separate corrected field
-    assert str(utt.id) in text  # session id in the metadata header
+    assert str(utt.id) in text  # session id in the metadata
     assert "browser_webspeech" in text
+    assert "Corrected Transcript" not in text  # raw doc is titled just "Transcript"
+    assert utt.corrected_text not in text  # the correction is a SEPARATE file
 
 
-def test_render_handles_missing_correction():
+def test_corrected_document_holds_the_correction_only():
     utt = _sample_utterance()
-    utt.corrected_text = None
-    text = _all_text(DocxWriter().render(utt))
-    assert utt.raw_text in text
-    assert "(not corrected)" in text
+    text = _all_text(DocxWriter().render(utt, kind="corrected"))
+
+    assert "Corrected Transcript" in text
+    assert utt.corrected_text in text
+    assert utt.raw_text not in text  # raw lives in its own file
+
+
+def test_render_rejects_unknown_kind():
+    with pytest.raises(ValueError):
+        DocxWriter().render(_sample_utterance(), kind="combined")
 
 
 def test_build_writer_rejects_unknown_format():
-    import pytest
-
     with pytest.raises(ValueError):
         build_writer("xlsx")

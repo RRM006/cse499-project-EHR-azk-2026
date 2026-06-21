@@ -247,6 +247,47 @@
   shipping PDF in this step (deferred behind the format seam).
 - Status: Accepted
 
+## ADR-0022 — 2026-06-21 — Alembic for schema migrations; auto-run at startup with baseline-stamp for legacy DBs
+- Decision: Manage the DB schema with Alembic instead of `Base.metadata.create_all`.
+  Scaffolding lives under `backend/` (`alembic.ini` with `script_location=%(here)s/migrations`,
+  blank `sqlalchemy.url`; `migrations/env.py` pulls the URL from app settings and uses
+  `render_as_batch=True` for SQLite ALTER). Two hand-authored revisions: `0001_baseline`
+  recreates the ORIGINAL schema (utterances WITHOUT `stt_provider`, documents WITHOUT
+  `kind`); `0002` adds `utterances.stt_provider` + `documents.kind`. `init_db()` now calls
+  `run_migrations()`, which: stamps `0001_baseline` when it finds a legacy DB (tables exist
+  but no `alembic_version`), then `upgrade head`. Fresh DBs run 0001+0002; migrated DBs no-op.
+- Why: Fixes the live `sqlite3.OperationalError: table utterances has no column named
+  stt_provider` (the column was added to the model in Session 3 but create_all never alters
+  an existing table). Alembic adds columns in place, preserving data — no DB deletion — and
+  is the right tool for the future EHR (Module 13) and production deployment. Verified on the
+  real DB (2 rows preserved) and a fresh DB; idempotent re-run is a no-op.
+- Rejected: Deleting/recreating the DB (loses data, unacceptable for an EHR foundation);
+  a hand-rolled PRAGMA `ALTER TABLE ADD COLUMN` at startup (works but reinvents migration
+  tooling the human explicitly asked to use properly); `alembic stamp head` only (would not
+  actually add the missing column).
+- Status: Accepted
+
+## ADR-0023 — 2026-06-21 — Raw and corrected are exported as TWO separate, independent documents (documents.kind)
+- Decision: Export the RAW transcript and the CORRECTED transcript as SEPARATE .docx
+  files, each independently downloadable, rather than one combined file. Add a
+  `documents.kind` column ("raw" | "corrected"; legacy rows "combined"). The raw .docx is
+  generated when recording stops (frontend: save raw → POST /documents/raw); the corrected
+  .docx on /api/correct (best-effort) and re-creatable via POST /documents/corrected.
+  `DocumentWriter.render(utterance, *, kind)` renders one side (raw → title "Transcript";
+  corrected → "Corrected Transcript"). New routes keep the `/api/*` prefix:
+  GET /api/transcripts/{id} (returns raw+corrected text + both document links via
+  `TranscriptDetailOut`), POST /api/transcripts/{id}/documents/{raw,corrected}.
+- Why: Matches the requested workflow (download either version on its own; raw never
+  overwritten by corrected — rule #1). Keeping the dedicated `documents` table + a `kind`
+  column (instead of flat `raw_doc_path`/`corrected_doc_path` on the utterance) preserves
+  version history and the future PDF/Markdown/multi-format path. Decided with the human
+  (3 forks: documents-table+kind, Alembic, keep /api/* prefix).
+- Rejected: Flat doc-path columns on `utterances` (one path each, no versions, metadata
+  split across tables); a single combined doc (can't download the two independently);
+  a parallel bare `/transcript/*` route set (mixes two conventions, static-mount edge cases).
+- Status: Accepted (supersedes the single-combined-doc part of ADR-0021; the
+  derived-artifact + DB-as-source-of-truth + storage/format seams of ADR-0021 still hold)
+
 ## ADR-0008 — 2026-06-18 — Default Whisper model is small/base; upgrade to a Bangla fine-tune later
 - Decision: Start with Whisper `small` (or `base` if we need a snappier live feel)
   for streaming on CPU. Upgrade to a Bangla-fine-tuned model (e.g.
