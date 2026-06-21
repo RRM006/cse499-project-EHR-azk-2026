@@ -160,6 +160,14 @@ textarea:focus { outline: none; border: 2px solid var(--brand-green); padding: 1
 .recent .rid { color: var(--muted); font-variant-numeric: tabular-nums; }
 .recent .raw { color: var(--raw-accent); }
 .recent .cor { color: var(--corrected-accent); }
+.recent.docs li { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
+.recent .empty { color: var(--muted); }
+.doc-link {
+  color: var(--corrected-accent); font-weight: 500; text-decoration: none;
+  white-space: nowrap; padding: 4px 10px; border: 1px solid var(--hairline);
+  border-radius: var(--radius-full); transition: background 150ms ease;
+}
+.doc-link:hover { background: var(--surface); }
 
 /* scrollbar polish */
 .box::-webkit-scrollbar, textarea::-webkit-scrollbar, .recent::-webkit-scrollbar { width: 10px; }

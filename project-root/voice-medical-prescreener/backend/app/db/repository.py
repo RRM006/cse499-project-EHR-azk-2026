@@ -13,7 +13,7 @@ from datetime import datetime, timezone
 
 from sqlalchemy.orm import Session
 
-from backend.app.db.models import Utterance
+from backend.app.db.models import Document, Utterance
 
 
 def create_raw(
@@ -61,6 +61,48 @@ def get_recent(db: Session, *, limit: int = 50) -> list[Utterance]:
     return (
         db.query(Utterance)
         .order_by(Utterance.created_at.desc())
+        .limit(limit)
+        .all()
+    )
+
+
+# --- documents (derived export artifacts; never hold the canonical words) ---
+
+
+def create_document(
+    db: Session,
+    *,
+    utterance_id: int,
+    filename: str,
+    rel_path: str,
+    doc_format: str = "docx",
+    doc_id: str | None = None,
+) -> Document:
+    """Record a generated export file for a session. The file itself is written by
+    the documents service; this only persists the metadata row."""
+    document = Document(
+        utterance_id=utterance_id,
+        filename=filename,
+        rel_path=rel_path,
+        format=doc_format,
+    )
+    if doc_id is not None:
+        document.id = doc_id
+    db.add(document)
+    db.commit()
+    db.refresh(document)
+    return document
+
+
+def get_document(db: Session, document_id: str) -> Document | None:
+    return db.get(Document, document_id)
+
+
+def list_documents(db: Session, *, limit: int = 50) -> list[Document]:
+    """Most recently generated documents first (for the Saved Documents panel)."""
+    return (
+        db.query(Document)
+        .order_by(Document.created_at.desc())
         .limit(limit)
         .all()
     )

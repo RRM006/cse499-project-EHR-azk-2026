@@ -13,6 +13,7 @@ from fastapi import FastAPI
 from fastapi.responses import HTMLResponse
 from fastapi.staticfiles import StaticFiles
 
+from backend.app.api.routes_documents import router as documents_router
 from backend.app.api.routes_transcripts import router as transcripts_router
 from backend.app.db.database import init_db
 
@@ -30,6 +31,7 @@ app = FastAPI(title="Voice Medical Pre-Screener", version="0.0.1", lifespan=life
 
 # API routes are registered BEFORE the catch-all static mount so /api and /health win.
 app.include_router(transcripts_router)
+app.include_router(documents_router)
 
 
 @app.get("/health", tags=["meta"])

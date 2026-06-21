@@ -35,6 +35,30 @@ transcribed by hand (the "ground truth"). Record the model + machine each time.
 
 ## Test entries (newest first)
 
+## 2026-06-21 — Module 1 (+ doc export) — Auto .docx generation + list/download
+- Setup: Python 3.14.4 on Windows; `.venv`. Added `python-docx==1.1.2`. Server run on
+  port 8001 via the preview tool. Unit tests on in-memory SQLite + temp-dir storage;
+  end-to-end checks via preview_eval (browser fetch) against the real DB/filesystem.
+- Metric(s): test pass/fail; file validity (size, zip magic); HTTP status/headers.
+- Result:
+  * `pytest backend/tests/` → **13 passed in 1.78s** (3 raw_immutable + 4 corrector +
+    4 docx_writer + 2 documents_repo). The 6 new tests include a rule-#1 guard at the
+    export layer (RAW text appears verbatim in the rendered .docx).
+  * End-to-end (no Gemini; correction inserted directly): generated a real **35,799-byte**
+    `.docx`; file written under `documents_dir` named by UUID; `EXISTS=True`.
+  * `GET /api/documents` → 200, lists the doc (id, utterance_id, format, filename,
+    created_at). `GET /api/documents/{id}/download` → 200, Content-Type
+    `application/vnd.openxmlformats-officedocument.wordprocessingml.document`,
+    Content-Disposition `attachment; filename="session-5-20260621.docx"`, body 35,799
+    bytes, first 2 bytes = `PK` (valid .docx/zip magic).
+  * Frontend "Saved documents (.docx)" panel renders the row + mint-green download
+    pill link (`/api/documents/{id}/download`); empty-state message shown when none.
+    Server booted with 0 errors in logs.
+- Notes: The LIVE Gemini correction + the .docx opened in Word/LibreOffice with real
+  Bangla rendering is still the human's manual check (Bengali font set on Latin AND
+  complex-script slots; needs a Bengali-capable font installed to render). No WER/
+  latency on real speech yet — still the human's next step.
+
 ## 2026-06-20 — Module 1 — Browser-only simplification + Mintlify UI + scroll behavior
 - Setup: Python 3.14.4 on Windows; venv RECREATED from requirements.txt (clean core:
   fastapi 0.115.6, starlette 0.41.3 — torch/transformers/qwen removed). Server run on

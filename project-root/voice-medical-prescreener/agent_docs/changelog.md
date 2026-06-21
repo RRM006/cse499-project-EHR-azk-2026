@@ -16,6 +16,34 @@
 
 ---
 
+## Session 5 — 2026-06-21 — Auto-generate & store .docx per session + Saved Documents UI
+- Did: Added automatic Word-document export for completed sessions (additive, nothing
+  existing broken). New `Document` SQLAlchemy model (UUID PK, FK → Utterance, format,
+  filename, rel_path, created_at) + repo `create_document`/`get_document`/
+  `list_documents`. New `services/documents/` layer: `DocumentWriter` ABC, `DocxWriter`
+  (python-docx; renders Raw verbatim + Corrected + metadata; Bengali font set on Latin
+  AND complex-script slots), `storage.py` filesystem abstraction (S3-swappable), and a
+  `build_writer()` seam + `generate_session_document()` orchestrator. New routes
+  `GET /api/documents` (list) and `GET /api/documents/{id}/download` (FileResponse, Word
+  media type). `/api/correct` now best-effort generates the .docx after a successful
+  correction (a docx failure logs but never fails the correction). Added `documents_dir`
+  config (env-overridable, default `backend/data/documents`, no hardcoded paths) and
+  `python-docx==1.1.2` to requirements.txt. Frontend: "Saved documents (.docx)" panel
+  (Mintlify-styled) listing docs with download links, auto-refreshed after correction.
+- Decided: A `.docx` is a DERIVED export artifact; the DB stays the source of truth
+  (regenerable, preserves rule #1, avoids Bangla round-trip loss). python-docx (pure
+  Python, cross-platform). Filesystem storage now, behind a swappable interface.
+  Document grain = one Utterance/session; NO Patient/Visit tables yet. DOCX now, PDF
+  later (clean `format` seam). (ADR-0021.)
+- Broke / problem: Nothing broke. Note: passing a multi-line python `-c` with Bangla
+  string literals through PowerShell mangled the quotes — used a temp script file
+  instead (deleted after). Port-8000 orphaned-socket workaround (port 8001) still stands.
+- Deferred: PDF generation + in-browser preview; Patient/Visit data model; auth on the
+  document routes; cloud (S3/MinIO) storage. All have seams left in place. Still
+  deferred from S4: the human live mic test + ~50 samples + WER/latency.
+- Next: Human live test — record/correct in Chrome, confirm a .docx auto-saves and
+  downloads + opens correctly (Bangla renders), alongside the mic/sample collection.
+
 ## Session 4 — 2026-06-20 — Simplify to browser-only STT + Mintlify UI + scrollable panels
 - Did: (A) REMOVED the multi-provider STT architecture per the human's new plan —
   deleted `backend/app/services/stt/`, `api/routes_stt.py`, `test_stt_registry.py`,

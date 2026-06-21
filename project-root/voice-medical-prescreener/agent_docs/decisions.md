@@ -223,6 +223,30 @@
   Bangla transcript content.
 - Status: Accepted
 
+## ADR-0021 — 2026-06-21 — Session .docx is a derived export; DB stays source of truth (python-docx)
+- Decision: On a successful `/api/correct`, auto-generate a Word `.docx` for the
+  completed session. The DB remains the single source of truth; the `.docx` (and
+  later PDF) is a DERIVED, regenerable artifact, never the system of record. Generate
+  with `python-docx` (pure Python). Store files on the local filesystem behind a
+  swappable `DocumentStorage` interface, under a configurable `documents_dir`
+  (env-overridable, default `backend/data/documents/`, no hardcoded paths), named by
+  a UUID. Record metadata in a new `Document` table (UUID PK, FK → Utterance, format,
+  filename, rel_path, created_at). Generation is BEST-EFFORT: a docx failure logs but
+  never fails the correction response. Document grain = one Utterance/session.
+- Why: Treating Word as a presentation/export format (not the record) preserves rule
+  #1 — the verbatim raw stays canonical in the DB and the file is always regenerable —
+  and avoids lossy Bangla round-tripping through a zip-of-XML. python-docx needs no
+  Word/LibreOffice/external binary, so it satisfies the one-requirements.txt
+  cross-platform (Windows + Arch), CPU-only, free/OSS constraints. The storage seam +
+  `format` seam + `build_writer()` registry mirror the existing Corrector pattern and
+  leave clean paths for PDF, cloud (S3/MinIO), auth, and Patient/Visit grouping later.
+- Rejected: DOCX as the source of truth (fragile, unqueryable, encoding risk);
+  HTML→DOCX via pandoc or LibreOffice/Word COM (external binary / Windows-only —
+  breaks cross-platform); generating during live transcription (raw still changing,
+  pointless churn); building Patient/Visit tables now (over-engineering Phase 0);
+  shipping PDF in this step (deferred behind the format seam).
+- Status: Accepted
+
 ## ADR-0008 — 2026-06-18 — Default Whisper model is small/base; upgrade to a Bangla fine-tune later
 - Decision: Start with Whisper `small` (or `base` if we need a snappier live feel)
   for streaming on CPU. Upgrade to a Bangla-fine-tuned model (e.g.

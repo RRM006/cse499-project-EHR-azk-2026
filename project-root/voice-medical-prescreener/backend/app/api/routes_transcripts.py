@@ -7,6 +7,8 @@ The pipeline is two explicit steps so raw is created once and never re-touched:
      separate corrected field.
 """
 
+import logging
+
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session
 
@@ -14,6 +16,9 @@ from backend.app.db import repository as repo
 from backend.app.db.database import get_db
 from backend.app.schemas.transcript import CorrectRequest, StoreRawRequest, TranscriptOut
 from backend.app.services.correction import build_corrector
+from backend.app.services.documents import generate_session_document
+
+logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/api", tags=["transcripts"])
 
@@ -45,13 +50,23 @@ def correct_transcript(payload: CorrectRequest, db: Session = Depends(get_db)) -
     except Exception as exc:  # network / quota / provider errors
         raise HTTPException(status_code=502, detail=f"Correction failed: {exc}")
 
-    return repo.set_correction(
+    updated = repo.set_correction(
         db,
         utterance_id=utterance.id,
         corrected_text=corrected,
         provider=corrector.provider,
         model=corrector.model,
     )
+
+    # The session is now complete (raw + corrected) — save a .docx export.
+    # Best-effort: a document failure must never fail the correction response, and
+    # the file is always regenerable from the DB (the source of truth).
+    try:
+        generate_session_document(db, updated, doc_format="docx")
+    except Exception:  # noqa: BLE001 - non-critical side effect
+        logger.exception("Failed to generate session document for utterance %s", updated.id)
+
+    return updated
 
 
 @router.get("/transcripts", response_model=list[TranscriptOut])

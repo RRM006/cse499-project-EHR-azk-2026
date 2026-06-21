@@ -24,6 +24,8 @@ const manualText = document.getElementById("manualText");
 const manualBtn = document.getElementById("manualBtn");
 const refreshRecentBtn = document.getElementById("refreshRecent");
 const recentList = document.getElementById("recentList");
+const refreshDocsBtn = document.getElementById("refreshDocs");
+const docsList = document.getElementById("docsList");
 
 // ---------- config / state ----------
 const SILENCE_MS = 10000;          // auto-stop after ~10s of continuous silence
@@ -198,6 +200,7 @@ async function runCorrection(rawText, sttProvider, source) {
     autoScroll(correctedBox);
     correctMeta.textContent = `#${data.id} · ${data.correction_provider}/${data.correction_model}`;
     loadRecent();
+    loadDocuments(); // a .docx is auto-generated server-side on a successful correction
   } catch (err) {
     correctedBox.innerHTML = `<span class="error">Network error: ${err}</span>`;
   }
@@ -227,6 +230,36 @@ async function loadRecent() {
   } catch (_) { /* non-critical */ }
 }
 
+// ---------- saved documents ----------
+async function loadDocuments() {
+  try {
+    const resp = await fetch("/api/documents?limit=20");
+    if (!resp.ok) return;
+    const rows = await resp.json();
+    docsList.innerHTML = "";
+    if (rows.length === 0) {
+      const li = document.createElement("li");
+      li.className = "empty";
+      li.textContent = "No documents yet — Correct a session to generate one.";
+      docsList.appendChild(li);
+      return;
+    }
+    for (const d of rows) {
+      const li = document.createElement("li");
+      const meta = document.createElement("span");
+      meta.className = "rid";
+      const when = new Date(d.created_at).toLocaleString();
+      meta.textContent = `session #${d.utterance_id} · ${d.format} · ${when} `;
+      const link = document.createElement("a");
+      link.className = "doc-link";
+      link.href = `/api/documents/${d.id}/download`;
+      link.textContent = `⬇ ${d.filename}`;
+      li.append(meta, link);
+      docsList.appendChild(li);
+    }
+  } catch (_) { /* non-critical */ }
+}
+
 // ---------- wire up ----------
 if (!SpeechRecognition) { browserWarn.hidden = false; startBtn.disabled = true; }
 
@@ -251,6 +284,7 @@ manualBtn.addEventListener("click", () => {
 });
 manualText.addEventListener("input", () => autoScroll(manualText));
 refreshRecentBtn.addEventListener("click", loadRecent);
+refreshDocsBtn.addEventListener("click", loadDocuments);
 
 // enable stick-to-bottom auto-scroll on all three panels
 trackStick(rawBox);
@@ -258,3 +292,4 @@ trackStick(correctedBox);
 trackStick(manualText);
 
 loadRecent();
+loadDocuments();

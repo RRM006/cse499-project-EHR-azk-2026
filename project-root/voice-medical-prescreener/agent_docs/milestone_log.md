@@ -6,14 +6,15 @@
 
 **Status keys:** ⬜ Not started · 🟨 In progress · 🟦 Blocked · ✅ Done
 
-**Last updated:** 2026-06-20 (Session 4 — simplified to browser-only STT + Mintlify UI)
+**Last updated:** 2026-06-21 (Session 5 — auto-generate & store .docx per session)
 **Current phase:** Phase 0 (quick demo) — browser-only STT.
-**Module in focus:** Module 1 — Speech-to-Text.
-**Progress:** SIMPLIFIED back to a single STT path (browser Web Speech API); the
-multi-provider layer was removed (clean seam kept). Continuous recording (no cap,
-append-only, ~10s-silence auto-stop) + Mintlify-styled UI with fixed-height
-scrollable transcript panels. 7 tests pass; UI verified live. Next: human live mic
-test + ~50 samples + latency/WER. Module 1 stays 🟨 until that's recorded.
+**Module in focus:** Module 1 — Speech-to-Text (+ early document-export groundwork).
+**Progress:** Single STT path (browser Web Speech API) + Mintlify UI with fixed-height
+scrollable panels. NEW this session: every completed session auto-saves a Word `.docx`
+(derived artifact; DB stays source of truth) via python-docx, behind a swappable
+writer + storage seam; frontend lists docs with download links. 13 tests pass;
+end-to-end download verified via HTTP. Module 1 stays 🟨 until the human live mic
+test + ~50 samples + latency/WER are recorded.
 
 ---
 
@@ -59,6 +60,12 @@ simplified to browser-only for Module 1; may return in a later module).
 **Browser-only STT (Session 4):** continuous recording (no cap, append-only,
 ~10s-silence auto-stop) ✅ · Mintlify UI + scrollable stick-to-bottom panels ✅
 · live mic test on real speech + ~50 samples ⬜ (next, human).
+
+**Document export (Session 5):** every completed session auto-saves a `.docx`
+(python-docx; derived artifact, DB is source of truth) ✅ · `GET /api/documents`
+list + `/download` ✅ · Saved-documents frontend panel ✅. Early groundwork toward
+Module 12 (Structured Clinical Report) and Module 13 (EHR storage) — those modules
+stay ⬜ (no clinical content/extraction yet; this only exports raw + corrected).
 
 ### Phase 1 — Robust local core
 **Goal:** FastAPI + WebSocket backend streaming live mic audio to faster-whisper

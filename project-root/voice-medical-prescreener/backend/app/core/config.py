@@ -14,6 +14,7 @@ from pydantic_settings import BaseSettings, SettingsConfigDict
 BACKEND_DIR = Path(__file__).resolve().parents[2]
 ENV_FILE = BACKEND_DIR / ".env"
 DEFAULT_SQLITE_PATH = BACKEND_DIR / "prescreener.db"
+DEFAULT_DOCUMENTS_DIR = BACKEND_DIR / "data" / "documents"
 
 
 class Settings(BaseSettings):
@@ -41,12 +42,21 @@ class Settings(BaseSettings):
     # (e.g. postgresql+psycopg://...) later to move to Postgres without code changes.
     database_url: str = ""
 
+    # Where generated .docx (and later PDF) session exports are written. Leave empty
+    # to use the default under backend/data/documents. Point this at any path (or a
+    # mounted volume) in deployment without code changes — never hardcoded.
+    documents_dir: str = ""
+
     @property
     def resolved_database_url(self) -> str:
         if self.database_url:
             return self.database_url
         # as_posix() keeps the URL valid on Windows (forward slashes).
         return f"sqlite:///{DEFAULT_SQLITE_PATH.as_posix()}"
+
+    @property
+    def resolved_documents_dir(self) -> Path:
+        return Path(self.documents_dir) if self.documents_dir else DEFAULT_DOCUMENTS_DIR
 
 
 @lru_cache

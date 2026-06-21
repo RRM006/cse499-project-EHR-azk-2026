@@ -5,9 +5,10 @@ CONSTITUTION RULE #1 — the raw transcript is permanent and is never modified.
 column (``corrected_text``) and never overwrites the raw words.
 """
 
+import uuid
 from datetime import datetime, timezone
 
-from sqlalchemy import DateTime, Integer, String, Text
+from sqlalchemy import DateTime, ForeignKey, Integer, String, Text
 from sqlalchemy.orm import Mapped, mapped_column
 
 from backend.app.db.database import Base
@@ -15,6 +16,10 @@ from backend.app.db.database import Base
 
 def _utcnow() -> datetime:
     return datetime.now(timezone.utc)
+
+
+def _new_uuid() -> str:
+    return str(uuid.uuid4())
 
 
 class Utterance(Base):
@@ -43,3 +48,41 @@ class Utterance(Base):
 
     def __repr__(self) -> str:  # pragma: no cover - debug aid only
         return f"<Utterance id={self.id} source={self.source!r} corrected={self.corrected_text is not None}>"
+
+
+class Document(Base):
+    """A generated export artifact (.docx now, PDF later) for a completed session.
+
+    The DB stays the source of truth (the Utterance holds the verbatim raw + the
+    correction). A Document is a *derived* file, regenerable from the Utterance, so
+    it never holds the canonical words — it just records what was exported and where.
+
+    ``utterance_id`` is the session grain today. Future Patient/Visit tables can add
+    their own columns/foreign keys here without disturbing this one.
+    """
+
+    __tablename__ = "documents"
+
+    # Non-guessable string id (UUID). Doubles as the on-disk filename stem, so file
+    # names leak nothing patient-identifying and are safe to expose in URLs.
+    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=_new_uuid)
+
+    # Which session (utterance) this document was generated from.
+    utterance_id: Mapped[int] = mapped_column(
+        ForeignKey("utterances.id"), nullable=False, index=True
+    )
+
+    # Export format: "docx" today; "pdf" later — distinguishes multiple artifacts.
+    format: Mapped[str] = mapped_column(String(8), nullable=False, default="docx")
+
+    # Human-facing download name (e.g. "session-12-20260621.docx").
+    filename: Mapped[str] = mapped_column(String(255), nullable=False)
+
+    # Path RELATIVE to the configured documents_dir; resolved at read time so the
+    # base directory can move (volume, object store) without rewriting rows.
+    rel_path: Mapped[str] = mapped_column(String(512), nullable=False)
+
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=_utcnow)
+
+    def __repr__(self) -> str:  # pragma: no cover - debug aid only
+        return f"<Document id={self.id!r} utterance_id={self.utterance_id} format={self.format!r}>"
