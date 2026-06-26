@@ -1,0 +1,3037 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>UI/UX Mockups — AI-Powered Medical Pre-Screening System</title>
+  <!-- Google Fonts: Inter -->
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+  <!-- Font Awesome for Clinical Icons -->
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+  
+  <style>
+    /* Reset & CSS variables */
+    :root {
+      --primary-color: #0F4C81;     /* Classic clinical blue */
+      --primary-hover: #0a365c;
+      --secondary-color: #2A75D3;   /* Bright brand blue */
+      --accent-color: #10B981;      /* Reassuring green */
+      --accent-hover: #059669;
+      --danger-color: #EF4444;      /* Red Flag color */
+      --warning-color: #F59E0B;     /* Alert color */
+      --text-main: #1E293B;         /* Slate 800 */
+      --text-muted: #64748B;        /* Slate 500 */
+      --bg-main: #F8FAFC;           /* Slate 50 */
+      --bg-white: #FFFFFF;
+      --border-color: #E2E8F0;      /* Slate 200 */
+      --border-focus: #3B82F6;
+      --shadow-sm: 0 1px 3px rgba(0,0,0,0.05);
+      --shadow-md: 0 4px 6px -1px rgba(0,0,0,0.1), 0 2px 4px -1px rgba(0,0,0,0.06);
+      --shadow-lg: 0 10px 15px -3px rgba(0,0,0,0.1), 0 4px 6px -2px rgba(0,0,0,0.05);
+      --radius: 8px;
+    }
+
+    * {
+      box-sizing: border-box;
+      margin: 0;
+      padding: 0;
+    }
+
+    body {
+      font-family: 'Inter', system-ui, -apple-system, sans-serif;
+      background-color: #0B132B; /* Dark modern outer wrapper */
+      color: var(--text-main);
+      padding: 20px;
+      min-height: 100vh;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+    }
+
+    /* Mockup Controller/Tabs Header */
+    .mockup-controller {
+      width: 100%;
+      max-width: 1280px;
+      background: rgba(255, 255, 255, 0.08);
+      backdrop-filter: blur(10px);
+      border: 1px solid rgba(255, 255, 255, 0.1);
+      border-radius: 12px;
+      padding: 15px 25px;
+      margin-bottom: 20px;
+      display: flex;
+      flex-direction: column;
+      gap: 15px;
+    }
+
+    .controller-title-bar {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      color: #fff;
+    }
+
+    .controller-title-bar h1 {
+      font-size: 1.25rem;
+      font-weight: 600;
+      display: flex;
+      align-items: center;
+      gap: 10px;
+    }
+
+    .controller-title-bar .badge {
+      background: var(--secondary-color);
+      color: #fff;
+      font-size: 0.75rem;
+      padding: 4px 8px;
+      border-radius: 99px;
+      font-weight: 500;
+    }
+
+    .portal-tabs {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 10px;
+    }
+
+    .portal-tab-btn {
+      background: rgba(255, 255, 255, 0.05);
+      border: 1px solid rgba(255, 255, 255, 0.1);
+      color: #CBD5E1;
+      padding: 10px 18px;
+      border-radius: var(--radius);
+      cursor: pointer;
+      font-weight: 500;
+      font-size: 0.9rem;
+      transition: all 0.2s ease;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+
+    .portal-tab-btn:hover {
+      background: rgba(255, 255, 255, 0.15);
+      color: #FFF;
+    }
+
+    .portal-tab-btn.active {
+      background: var(--secondary-color);
+      color: #FFF;
+      border-color: var(--secondary-color);
+      box-shadow: 0 0 15px rgba(42, 117, 211, 0.4);
+    }
+
+    /* Screen Selector Sub-Tabs */
+    .screen-tabs-container {
+      border-top: 1px solid rgba(255, 255, 255, 0.1);
+      padding-top: 12px;
+      display: flex;
+      gap: 8px;
+      overflow-x: auto;
+    }
+
+    .screen-tab-btn {
+      background: transparent;
+      border: 1px dashed rgba(255, 255, 255, 0.2);
+      color: #94A3B8;
+      padding: 6px 14px;
+      border-radius: 20px;
+      cursor: pointer;
+      font-size: 0.8rem;
+      transition: all 0.2s ease;
+      white-space: nowrap;
+    }
+
+    .screen-tab-btn:hover {
+      color: #FFF;
+      border-color: #FFF;
+    }
+
+    .screen-tab-btn.active {
+      background: rgba(255, 255, 255, 0.15);
+      color: #FFF;
+      border-color: #FFF;
+      border-style: solid;
+    }
+
+    /* Device Container / Frame */
+    .device-viewport {
+      width: 100%;
+      max-width: 1200px;
+      background-color: var(--bg-main);
+      border-radius: 16px;
+      box-shadow: var(--shadow-lg), 0 25px 50px -12px rgba(0,0,0,0.5);
+      overflow: hidden;
+      display: flex;
+      flex-direction: column;
+      aspect-ratio: 16/10.5; /* Tablet Landscape proportion */
+      min-height: 700px;
+      border: 8px solid #334155; /* Neutral framing border */
+      position: relative;
+    }
+
+    /* Target Portal Header */
+    .portal-header {
+      background-color: var(--bg-white);
+      border-bottom: 1px solid var(--border-color);
+      padding: 15px 30px;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      z-index: 10;
+    }
+
+    .portal-branding {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+    }
+
+    .portal-logo-icon {
+      color: var(--primary-color);
+      font-size: 1.5rem;
+    }
+
+    .portal-title {
+      font-weight: 700;
+      color: var(--primary-color);
+      font-size: 1.15rem;
+      letter-spacing: -0.02em;
+    }
+
+    .portal-subtitle {
+      font-size: 0.8rem;
+      color: var(--text-muted);
+      margin-left: 8px;
+      padding-left: 8px;
+      border-left: 1px solid var(--border-color);
+    }
+
+    .portal-header-actions {
+      display: flex;
+      align-items: center;
+      gap: 15px;
+    }
+
+    /* Bilingual Toggle Switch */
+    .lang-toggle-container {
+      display: flex;
+      background: #F1F5F9;
+      border: 1px solid var(--border-color);
+      padding: 3px;
+      border-radius: 30px;
+    }
+
+    .lang-btn {
+      background: transparent;
+      border: none;
+      padding: 6px 14px;
+      border-radius: 20px;
+      cursor: pointer;
+      font-weight: 600;
+      font-size: 0.75rem;
+      color: var(--text-muted);
+      transition: all 0.15s ease;
+    }
+
+    .lang-btn.active {
+      background: var(--bg-white);
+      color: var(--primary-color);
+      box-shadow: var(--shadow-sm);
+    }
+
+    /* Primary Device Canvas Workspace */
+    .device-canvas {
+      flex: 1;
+      overflow-y: auto;
+      display: flex;
+      flex-direction: column;
+      position: relative;
+    }
+
+    /* Button and form defaults inside mockups */
+    .btn {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      gap: 8px;
+      padding: 10px 20px;
+      border-radius: var(--radius);
+      font-weight: 500;
+      font-size: 0.9rem;
+      cursor: pointer;
+      transition: all 0.2s ease;
+      border: 1px solid transparent;
+      text-decoration: none;
+    }
+
+    .btn-primary {
+      background-color: var(--primary-color);
+      color: #fff;
+    }
+
+    .btn-primary:hover {
+      background-color: var(--primary-hover);
+    }
+
+    .btn-secondary {
+      background-color: var(--bg-white);
+      border-color: var(--border-color);
+      color: var(--text-main);
+    }
+
+    .btn-secondary:hover {
+      background-color: #F1F5F9;
+    }
+
+    .btn-accent {
+      background-color: var(--accent-color);
+      color: white;
+    }
+
+    .btn-accent:hover {
+      background-color: var(--accent-hover);
+    }
+
+    .btn-danger {
+      background-color: var(--danger-color);
+      color: white;
+    }
+
+    .btn-danger:hover {
+      background-color: #DC2626;
+    }
+
+    .input-field {
+      width: 100%;
+      padding: 12px 16px;
+      border: 1px solid var(--border-color);
+      border-radius: var(--radius);
+      font-size: 0.95rem;
+      color: var(--text-main);
+      transition: all 0.2s ease;
+      outline: none;
+    }
+
+    .input-field:focus {
+      border-color: var(--border-focus);
+      box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.15);
+    }
+
+    /* Layout Screens Classes */
+    .screen-content {
+      display: none;
+      flex-direction: column;
+      flex: 1;
+      animation: fadeIn 0.25s ease-out;
+    }
+
+    .screen-content.active-screen {
+      display: flex;
+    }
+
+    @keyframes fadeIn {
+      from { opacity: 0; transform: translateY(8px); }
+      to { opacity: 1; transform: translateY(0); }
+    }
+
+    /* ---------------------------------------------------- */
+    /* PATIENT PORTAL STYLE LAYOUTS                         */
+    /* ---------------------------------------------------- */
+
+    /* Login Screen style */
+    .patient-login-grid {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      flex: 1;
+      padding: 40px;
+      max-width: 450px;
+      margin: auto;
+      text-align: center;
+    }
+
+    .patient-welcome-icon {
+      font-size: 3rem;
+      color: var(--secondary-color);
+      margin-bottom: 20px;
+    }
+
+    .patient-card {
+      background: var(--bg-white);
+      border: 1px solid var(--border-color);
+      border-radius: 12px;
+      padding: 30px;
+      width: 100%;
+      box-shadow: var(--shadow-md);
+      text-align: left;
+    }
+
+    .otp-digits-container {
+      display: flex;
+      justify-content: space-between;
+      margin: 15px 0;
+      gap: 10px;
+    }
+
+    .otp-input {
+      width: 48px;
+      height: 48px;
+      text-align: center;
+      font-size: 1.25rem;
+      font-weight: 600;
+      border: 1px solid var(--border-color);
+      border-radius: var(--radius);
+      outline: none;
+      transition: all 0.2s;
+    }
+
+    .otp-input:focus {
+      border-color: var(--border-focus);
+      box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.15);
+    }
+
+    /* Voice Interaction Screen style */
+    .voice-interface-layout {
+      flex: 1;
+      display: flex;
+      flex-direction: column;
+      padding: 30px;
+      justify-content: space-between;
+    }
+
+    .progress-bar-container {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-bottom: 20px;
+    }
+
+    .progress-track {
+      flex: 1;
+      height: 6px;
+      background: #E2E8F0;
+      border-radius: 3px;
+      margin: 0 15px;
+      position: relative;
+      overflow: hidden;
+    }
+
+    .progress-fill {
+      position: absolute;
+      left: 0;
+      top: 0;
+      bottom: 0;
+      width: 50%;
+      background: var(--secondary-color);
+      border-radius: 3px;
+      transition: width 0.3s ease;
+    }
+
+    .voice-main-content {
+      flex: 1;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      text-align: center;
+      max-width: 800px;
+      margin: auto;
+      gap: 30px;
+    }
+
+    .ai-voice-prompt {
+      font-size: 1.8rem;
+      font-weight: 600;
+      color: var(--primary-color);
+      line-height: 1.4;
+    }
+
+    /* Circular Pulse Mic Indicator */
+    .mic-button-wrapper {
+      position: relative;
+      display: inline-block;
+    }
+
+    .mic-btn-pulse {
+      position: absolute;
+      top: 50%;
+      left: 50%;
+      transform: translate(-50%, -50%);
+      width: 90px;
+      height: 90px;
+      background: rgba(42, 117, 211, 0.2);
+      border-radius: 50%;
+      animation: pulseAnimation 2s infinite ease-out;
+      z-index: 1;
+    }
+
+    .mic-btn-pulse-inner {
+      position: absolute;
+      top: 50%;
+      left: 50%;
+      transform: translate(-50%, -50%);
+      width: 120px;
+      height: 120px;
+      background: rgba(42, 117, 211, 0.1);
+      border-radius: 50%;
+      animation: pulseAnimation 2s infinite ease-out 0.6s;
+      z-index: 1;
+    }
+
+    .mic-main-btn {
+      width: 70px;
+      height: 70px;
+      border-radius: 50%;
+      background-color: var(--secondary-color);
+      border: none;
+      color: white;
+      font-size: 1.8rem;
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      position: relative;
+      z-index: 2;
+      box-shadow: var(--shadow-md);
+      transition: transform 0.2s;
+    }
+
+    .mic-main-btn:active {
+      transform: scale(0.95);
+    }
+
+    .mic-main-btn.listening {
+      background-color: var(--danger-color);
+    }
+
+    .mic-main-btn.listening + .mic-btn-pulse {
+      background: rgba(239, 68, 68, 0.2);
+    }
+
+    .mic-main-btn.listening + .mic-btn-pulse + .mic-btn-pulse-inner {
+      background: rgba(239, 68, 68, 0.1);
+    }
+
+    @keyframes pulseAnimation {
+      0% { transform: translate(-50%, -50%) scale(0.6); opacity: 1; }
+      100% { transform: translate(-50%, -50%) scale(1.3); opacity: 0; }
+    }
+
+    .live-transcript-box {
+      width: 100%;
+      min-height: 80px;
+      border-radius: var(--radius);
+      border: 1px solid var(--border-color);
+      background-color: #F8FAFC;
+      padding: 15px 20px;
+      font-style: italic;
+      color: var(--text-muted);
+      line-height: 1.5;
+      text-align: left;
+    }
+
+    .mic-trouble-fallback {
+      display: none;
+      width: 100%;
+      margin-top: 15px;
+      animation: slideUp 0.3s ease-out;
+    }
+
+    .mic-trouble-trigger {
+      background: none;
+      border: none;
+      color: var(--secondary-color);
+      text-decoration: underline;
+      cursor: pointer;
+      font-size: 0.85rem;
+    }
+
+    @keyframes slideUp {
+      from { opacity: 0; transform: translateY(15px); }
+      to { opacity: 1; transform: translateY(0); }
+    }
+
+    /* Patient Summary Screen layout */
+    .patient-summary-layout {
+      flex: 1;
+      padding: 30px;
+      display: flex;
+      flex-direction: column;
+      gap: 20px;
+    }
+
+    .patient-summary-grid {
+      display: grid;
+      grid-template-columns: 1fr;
+      gap: 20px;
+    }
+
+    .patient-summary-card {
+      background: var(--bg-white);
+      border: 1px solid var(--border-color);
+      border-radius: 12px;
+      padding: 24px;
+      box-shadow: var(--shadow-sm);
+    }
+
+    .summary-heading {
+      border-bottom: 2px solid var(--bg-main);
+      padding-bottom: 12px;
+      margin-bottom: 15px;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      color: var(--primary-color);
+      font-weight: 600;
+    }
+
+    .summary-item-row {
+      margin-bottom: 12px;
+    }
+
+    .summary-item-label {
+      font-size: 0.75rem;
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+      color: var(--text-muted);
+      margin-bottom: 4px;
+    }
+
+    .summary-item-val {
+      font-size: 0.95rem;
+      line-height: 1.5;
+    }
+
+    /* Custom range indicator for Patient pain level */
+    .pain-range-bar {
+      height: 8px;
+      background: #E2E8F0;
+      border-radius: 4px;
+      position: relative;
+      margin: 10px 0;
+    }
+
+    .pain-range-indicator {
+      position: absolute;
+      top: 50%;
+      transform: translateY(-50%);
+      width: 16px;
+      height: 16px;
+      border-radius: 50%;
+      background: var(--secondary-color);
+      box-shadow: 0 0 6px rgba(42,117,211,0.5);
+    }
+
+    .pain-range-labels {
+      display: flex;
+      justify-content: space-between;
+      font-size: 0.75rem;
+      color: var(--text-muted);
+    }
+
+    .summary-action-panel {
+      display: flex;
+      justify-content: flex-end;
+      gap: 15px;
+      align-items: center;
+      margin-top: 10px;
+      background: var(--bg-white);
+      padding: 20px;
+      border: 1px solid var(--border-color);
+      border-radius: 12px;
+    }
+
+    /* Modal / Pop-ups Overlay */
+    .modal-overlay {
+      position: absolute;
+      top: 0;
+      left: 0;
+      right: 0;
+      bottom: 0;
+      background: rgba(15, 23, 42, 0.6);
+      backdrop-filter: blur(4px);
+      z-index: 100;
+      display: none;
+      align-items: center;
+      justify-content: center;
+    }
+
+    .modal-box {
+      background: var(--bg-white);
+      border-radius: 16px;
+      max-width: 480px;
+      width: 90%;
+      padding: 30px;
+      box-shadow: var(--shadow-lg);
+      text-align: center;
+      animation: zoomIn 0.2s ease-out;
+    }
+
+    @keyframes zoomIn {
+      from { transform: scale(0.95); opacity: 0; }
+      to { transform: scale(1); opacity: 1; }
+    }
+
+    /* ---------------------------------------------------- */
+    /* MEDIC & DOCTOR PORTAL LAYOUTS                       */
+    /* ---------------------------------------------------- */
+
+    /* Staff Layout (Dual paths) */
+    .staff-container {
+      display: flex;
+      flex-direction: column;
+      flex: 1;
+      background: #F1F5F9;
+    }
+
+    .staff-top-nav {
+      background: var(--bg-white);
+      border-bottom: 1px solid var(--border-color);
+      padding: 10px 30px;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+    }
+
+    .staff-search-box {
+      position: relative;
+      width: 320px;
+    }
+
+    .staff-search-box i {
+      position: absolute;
+      left: 12px;
+      top: 50%;
+      transform: translateY(-50%);
+      color: var(--text-muted);
+    }
+
+    .staff-search-box input {
+      padding-left: 36px;
+      padding-top: 8px;
+      padding-bottom: 8px;
+      font-size: 0.85rem;
+    }
+
+    .staff-main-grid {
+      display: grid;
+      grid-template-columns: 360px 1fr;
+      flex: 1;
+      height: calc(100% - 50px);
+    }
+
+    /* Left Sidebar: Queue / List */
+    .queue-sidebar {
+      background: var(--bg-white);
+      border-right: 1px solid var(--border-color);
+      display: flex;
+      flex-direction: column;
+      overflow-y: auto;
+    }
+
+    .queue-header {
+      padding: 15px 20px;
+      border-bottom: 1px solid var(--border-color);
+      font-weight: 600;
+      font-size: 0.95rem;
+      color: var(--primary-color);
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+    }
+
+    .queue-item {
+      padding: 15px 20px;
+      border-bottom: 1px solid var(--border-color);
+      cursor: pointer;
+      transition: background 0.15s ease;
+      position: relative;
+    }
+
+    .queue-item:hover {
+      background: #F8FAFC;
+    }
+
+    .queue-item.active {
+      background: #EFF6FF;
+      border-left: 4px solid var(--secondary-color);
+    }
+
+    .queue-item-meta {
+      display: flex;
+      justify-content: space-between;
+      margin-bottom: 6px;
+      font-size: 0.75rem;
+      color: var(--text-muted);
+    }
+
+    .queue-item-name {
+      font-weight: 600;
+      font-size: 0.9rem;
+      color: var(--text-main);
+      margin-bottom: 4px;
+    }
+
+    .queue-item-problem {
+      font-size: 0.8rem;
+      color: var(--text-muted);
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+
+    /* Risk Level Badge */
+    .risk-badge {
+      display: inline-flex;
+      align-items: center;
+      gap: 4px;
+      font-size: 0.7rem;
+      font-weight: 700;
+      padding: 2px 8px;
+      border-radius: 4px;
+      text-transform: uppercase;
+    }
+
+    .risk-critical {
+      background: #FEF2F2;
+      color: var(--danger-color);
+      border: 1px solid #FEE2E2;
+    }
+
+    .risk-moderate {
+      background: #FFFBEB;
+      color: var(--warning-color);
+      border: 1px solid #FEF3C7;
+    }
+
+    .risk-low {
+      background: #ECFDF5;
+      color: var(--accent-color);
+      border: 1px solid #D1FAE5;
+    }
+
+    /* Right Main detail workspace */
+    .detail-workspace {
+      padding: 25px;
+      overflow-y: auto;
+      display: flex;
+      flex-direction: column;
+      gap: 20px;
+    }
+
+    /* Doctor Prominent Risk Banner Panel */
+    .clinical-safety-panel {
+      background: #FFF5F5;
+      border: 1.5px solid #FEB2B2;
+      border-radius: 12px;
+      padding: 20px;
+      display: grid;
+      grid-template-columns: 180px 1fr;
+      gap: 20px;
+      align-items: start;
+      box-shadow: var(--shadow-sm);
+    }
+
+    .safety-alert-left {
+      text-align: center;
+      border-right: 1px solid #FCA5A5;
+      padding-right: 20px;
+    }
+
+    .safety-alert-icon {
+      font-size: 2.5rem;
+      color: var(--danger-color);
+      margin-bottom: 10px;
+    }
+
+    .safety-alert-title {
+      font-size: 0.8rem;
+      font-weight: 700;
+      color: var(--danger-color);
+      text-transform: uppercase;
+    }
+
+    .safety-alert-desc {
+      font-size: 1.15rem;
+      font-weight: 700;
+      margin-top: 5px;
+      color: #7F1D1D;
+    }
+
+    .safety-alert-right {
+      display: flex;
+      flex-direction: column;
+      gap: 12px;
+    }
+
+    .red-flags-list {
+      display: flex;
+      flex-direction: column;
+      gap: 6px;
+    }
+
+    .red-flag-item {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      font-size: 0.9rem;
+      color: #7F1D1D;
+      font-weight: 600;
+    }
+
+    .xai-explanation-box {
+      font-size: 0.85rem;
+      line-height: 1.5;
+      color: #991B1B;
+      background: rgba(254, 226, 226, 0.5);
+      padding: 10px 15px;
+      border-radius: 6px;
+      border-left: 3px solid var(--danger-color);
+    }
+
+    /* Clinician Medical Problem Summary Fields List */
+    .collapsible-fields-container {
+      display: flex;
+      flex-direction: column;
+      gap: 12px;
+    }
+
+    .collapsible-card {
+      background: var(--bg-white);
+      border: 1px solid var(--border-color);
+      border-radius: var(--radius);
+      overflow: hidden;
+      box-shadow: var(--shadow-sm);
+      transition: all 0.2s;
+    }
+
+    .collapsible-card:hover {
+      box-shadow: var(--shadow-md);
+    }
+
+    .collapsible-card-header {
+      padding: 15px 20px;
+      background: var(--bg-white);
+      cursor: pointer;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      font-weight: 600;
+      font-size: 0.95rem;
+      border-bottom: 1px solid transparent;
+    }
+
+    .collapsible-card.open .collapsible-card-header {
+      border-bottom-color: var(--border-color);
+      background: #F8FAFC;
+    }
+
+    .collapsible-card-header-title {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      color: var(--primary-color);
+    }
+
+    .collapsible-card-content {
+      padding: 20px;
+      display: none;
+      background: var(--bg-white);
+    }
+
+    .collapsible-card.open .collapsible-card-content {
+      display: block;
+    }
+
+    /* AI Source Visual Indicator tags */
+    .extraction-row {
+      display: flex;
+      align-items: flex-start;
+      gap: 15px;
+      margin-bottom: 15px;
+      padding-bottom: 15px;
+      border-bottom: 1px dashed var(--border-color);
+    }
+
+    .extraction-row:last-child {
+      margin-bottom: 0;
+      padding-bottom: 0;
+      border-bottom: none;
+    }
+
+    .extraction-meta {
+      width: 150px;
+      display: flex;
+      flex-direction: column;
+      gap: 5px;
+    }
+
+    .source-badge {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      gap: 4px;
+      font-size: 0.65rem;
+      font-weight: 700;
+      padding: 3px 8px;
+      border-radius: 4px;
+      text-transform: uppercase;
+      width: fit-content;
+    }
+
+    .source-ai {
+      background: #EFF6FF;
+      color: var(--secondary-color);
+      border: 1px solid #DBEAFE;
+    }
+
+    .source-human {
+      background: #F0FDF4;
+      color: var(--accent-color);
+      border: 1px solid #DCFCE7;
+    }
+
+    .extraction-label {
+      font-size: 0.75rem;
+      font-weight: 600;
+      color: var(--text-muted);
+    }
+
+    .extraction-editor-wrapper {
+      flex: 1;
+      display: flex;
+      gap: 10px;
+      align-items: center;
+    }
+
+    .extraction-text {
+      flex: 1;
+      font-size: 0.95rem;
+      line-height: 1.5;
+    }
+
+    .editor-input {
+      display: none;
+      flex: 1;
+    }
+
+    .edit-actions-panel {
+      display: flex;
+      gap: 5px;
+    }
+
+    .edit-btn {
+      background: none;
+      border: none;
+      color: var(--secondary-color);
+      cursor: pointer;
+      padding: 5px;
+      font-size: 0.85rem;
+    }
+
+    .edit-btn:hover {
+      color: var(--primary-color);
+    }
+
+    .save-btn, .cancel-btn {
+      padding: 6px 12px;
+      font-size: 0.75rem;
+    }
+
+    /* Medic Assignment panel */
+    .assignment-card {
+      background: var(--bg-white);
+      border: 1.5px solid var(--border-color);
+      border-radius: 12px;
+      padding: 20px;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      box-shadow: var(--shadow-sm);
+    }
+
+    .assignment-select-group {
+      display: flex;
+      align-items: center;
+      gap: 15px;
+    }
+
+    .assignment-select-group label {
+      font-weight: 600;
+      font-size: 0.9rem;
+      color: var(--primary-color);
+    }
+
+    .assignment-select {
+      padding: 8px 16px;
+      border-radius: var(--radius);
+      border: 1px solid var(--border-color);
+      outline: none;
+      font-size: 0.9rem;
+      min-width: 220px;
+    }
+
+    /* ---------------------------------------------------- */
+    /* ADMIN / MANAGEMENT VIEW STYLE                        */
+    /* ---------------------------------------------------- */
+
+    .admin-dashboard {
+      padding: 25px 30px;
+      display: flex;
+      flex-direction: column;
+      gap: 25px;
+      background: var(--bg-main);
+      flex: 1;
+    }
+
+    .admin-stats-grid {
+      display: grid;
+      grid-template-columns: repeat(4, 1fr);
+      gap: 20px;
+    }
+
+    .stat-card {
+      background: var(--bg-white);
+      border: 1px solid var(--border-color);
+      border-radius: 12px;
+      padding: 20px;
+      box-shadow: var(--shadow-sm);
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+    }
+
+    .stat-info {
+      display: flex;
+      flex-direction: column;
+      gap: 5px;
+    }
+
+    .stat-label {
+      font-size: 0.75rem;
+      text-transform: uppercase;
+      font-weight: 600;
+      color: var(--text-muted);
+      letter-spacing: 0.05em;
+    }
+
+    .stat-value {
+      font-size: 1.75rem;
+      font-weight: 700;
+      color: var(--primary-color);
+    }
+
+    .stat-icon-box {
+      width: 48px;
+      height: 48px;
+      border-radius: 10px;
+      background: #EFF6FF;
+      color: var(--secondary-color);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 1.25rem;
+    }
+
+    .stat-icon-box.green {
+      background: #ECFDF5;
+      color: var(--accent-color);
+    }
+
+    .stat-icon-box.orange {
+      background: #FFFBEB;
+      color: var(--warning-color);
+    }
+
+    .stat-icon-box.red {
+      background: #FEF2F2;
+      color: var(--danger-color);
+    }
+
+    .admin-content-grid {
+      display: grid;
+      grid-template-columns: 2fr 1fr;
+      gap: 25px;
+      flex: 1;
+    }
+
+    .admin-card {
+      background: var(--bg-white);
+      border: 1px solid var(--border-color);
+      border-radius: 12px;
+      box-shadow: var(--shadow-sm);
+      display: flex;
+      flex-direction: column;
+      overflow: hidden;
+    }
+
+    .admin-card-header {
+      padding: 15px 20px;
+      border-bottom: 1px solid var(--border-color);
+      font-weight: 600;
+      color: var(--primary-color);
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      font-size: 0.95rem;
+    }
+
+    .admin-card-body {
+      padding: 20px;
+      flex: 1;
+      overflow-y: auto;
+    }
+
+    /* System Health List style */
+    .system-health-list {
+      display: flex;
+      flex-direction: column;
+      gap: 15px;
+    }
+
+    .health-item {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      padding-bottom: 12px;
+      border-bottom: 1px solid var(--bg-main);
+    }
+
+    .health-item:last-child {
+      border-bottom: none;
+      padding-bottom: 0;
+    }
+
+    .health-item-info {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+    }
+
+    .health-status-dot {
+      width: 10px;
+      height: 10px;
+      border-radius: 50%;
+      background: var(--accent-color);
+    }
+
+    .health-status-dot.warning {
+      background: var(--warning-color);
+    }
+
+    .health-status-dot.danger {
+      background: var(--danger-color);
+    }
+
+    .health-service-name {
+      font-weight: 600;
+      font-size: 0.85rem;
+    }
+
+    .health-service-desc {
+      font-size: 0.75rem;
+      color: var(--text-muted);
+    }
+
+    /* Log Stream style */
+    .log-stream {
+      background: #0F172A; /* Dark slate 900 code background */
+      border-radius: 6px;
+      padding: 15px;
+      font-family: monospace;
+      font-size: 0.75rem;
+      color: #E2E8F0;
+      height: 280px;
+      overflow-y: auto;
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+    }
+
+    .log-line {
+      line-height: 1.4;
+      border-bottom: 1px solid rgba(255,255,255,0.05);
+      padding-bottom: 4px;
+    }
+
+    .log-time {
+      color: var(--secondary-color);
+    }
+
+    .log-level-info {
+      color: var(--accent-color);
+    }
+
+    .log-level-warn {
+      color: var(--warning-color);
+    }
+
+    .log-level-error {
+      color: var(--danger-color);
+    }
+
+    /* Inline CSS for simple login state styling */
+    .login-container {
+      display: flex;
+      flex: 1;
+      align-items: center;
+      justify-content: center;
+      padding: 40px;
+    }
+
+    .login-card {
+      background: var(--bg-white);
+      border: 1px solid var(--border-color);
+      border-radius: 12px;
+      padding: 35px;
+      width: 100%;
+      max-width: 400px;
+      box-shadow: var(--shadow-md);
+    }
+
+    .login-logo {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      margin-bottom: 25px;
+      text-align: center;
+    }
+
+    .login-logo i {
+      font-size: 2.5rem;
+      color: var(--primary-color);
+      margin-bottom: 10px;
+    }
+
+    .login-logo h2 {
+      font-size: 1.25rem;
+      color: var(--primary-color);
+    }
+
+    .form-group {
+      margin-bottom: 20px;
+    }
+
+    .form-group label {
+      display: block;
+      font-size: 0.8rem;
+      font-weight: 600;
+      color: var(--text-muted);
+      margin-bottom: 6px;
+      text-transform: uppercase;
+    }
+  </style>
+</head>
+<body>
+
+  <!-- Mockup Controller/Tabs Header -->
+  <div class="mockup-controller">
+    <div class="controller-title-bar">
+      <h1>
+        <i class="fa-solid fa-wand-magic-sparkles"></i> 
+        Interactive UI/UX Demo Framework 
+        <span class="badge">EHR-Integrated Clinical Pre-Screening</span>
+      </h1>
+      <div style="font-size: 0.8rem; color: #CBD5E1;">
+        <i class="fa-solid fa-tablet-screen-button"></i> Kiosk View: 16:10 aspect
+      </div>
+    </div>
+    
+    <div class="portal-tabs">
+      <button class="portal-tab-btn active" onclick="switchPortal('patient')">
+        <i class="fa-solid fa-hospital-user"></i> Patient View (Kiosk)
+      </button>
+      <button class="portal-tab-btn" onclick="switchPortal('medic')">
+        <i class="fa-solid fa-user-nurse"></i> Medic / Pre-Screening
+      </button>
+      <button class="portal-tab-btn" onclick="switchPortal('doctor')">
+        <i class="fa-solid fa-user-md"></i> Doctor View
+      </button>
+      <button class="portal-tab-btn" onclick="switchPortal('admin')">
+        <i class="fa-solid fa-screwdriver-wrench"></i> Admin Monitoring
+      </button>
+    </div>
+
+    <!-- Sub-navigation links to trigger specific screen states -->
+    <div class="screen-tabs-container" id="patient-sub-tabs">
+      <button class="screen-tab-btn active" onclick="setScreen('patient-phone')">1. Phone Input (OTP)</button>
+      <button class="screen-tab-btn" onclick="setScreen('patient-otp')">2. OTP Verification</button>
+      <button class="screen-tab-btn" onclick="setScreen('patient-voice')">3. Live Voice Interaction</button>
+      <button class="screen-tab-btn" onclick="setScreen('patient-summary')">4. Problem Summary & Review</button>
+    </div>
+
+    <div class="screen-tabs-container" id="medic-sub-tabs" style="display: none;">
+      <button class="screen-tab-btn active" onclick="setScreen('medic-login')">1. Staff Login</button>
+      <button class="screen-tab-btn" onclick="setScreen('medic-dashboard')">2. Case Queue Dashboard</button>
+      <button class="screen-tab-btn" onclick="setScreen('medic-detail')">3. Detail & Edit View</button>
+    </div>
+
+    <div class="screen-tabs-container" id="doctor-sub-tabs" style="display: none;">
+      <button class="screen-tab-btn active" onclick="setScreen('doctor-login')">1. Doctor Login</button>
+      <button class="screen-tab-btn" onclick="setScreen('doctor-dashboard')">2. Dashboard Queue</button>
+      <button class="screen-tab-btn" onclick="setScreen('doctor-detail')">3. Clinical Scan & Verify</button>
+    </div>
+
+    <div class="screen-tabs-container" id="admin-sub-tabs" style="display: none;">
+      <button class="screen-tab-btn active" onclick="setScreen('admin-login')">1. Admin Login</button>
+      <button class="screen-tab-btn" onclick="setScreen('admin-dashboard')">2. Pipeline Health Dashboard</button>
+    </div>
+  </div>
+
+  <!-- Device Container / Frame representing the Tablet/Kiosk Screen -->
+  <div class="device-viewport">
+    
+    <!-- Portal Header containing Branding & Language Toggles -->
+    <div class="portal-header">
+      <div class="portal-branding">
+        <i class="fa-solid fa-circle-h portal-logo-icon"></i>
+        <div class="portal-title" id="hdr-portal-title">Niramoy Pre-Screening</div>
+        <div class="portal-subtitle" id="hdr-portal-subtitle">Patient Kiosk Portal</div>
+      </div>
+      
+      <div class="portal-header-actions">
+        <!-- Language Switcher -->
+        <div class="lang-toggle-container">
+          <button class="lang-btn active" id="lang-en" onclick="setLanguage('en')">English</button>
+          <button class="lang-btn" id="lang-bn" onclick="setLanguage('bn')">বাংলা</button>
+        </div>
+        <div id="logged-user-tag" style="display: none; font-size: 0.8rem; font-weight: 600; color: var(--text-muted);">
+          <i class="fa-solid fa-user-circle"></i> Staff: Medic_Rahman
+        </div>
+      </div>
+    </div>
+
+    <!-- Device Content Workspace -->
+    <div class="device-canvas">
+
+      <!-- ==================================================== -->
+      <!-- PATIENT PORTAL SCREENS                               -->
+      <!-- ==================================================== -->
+      
+      <!-- Patient Screen 1: Phone Login -->
+      <div class="screen-content active-screen" id="patient-phone">
+        <div class="patient-login-grid">
+          <i class="fa-solid fa-hospital-user patient-welcome-icon"></i>
+          <h2 class="ai-voice-prompt" style="font-size: 1.4rem; margin-bottom: 8px;" data-en="Welcome to Pre-Screening" data-bn="প্রাক-পরীক্ষায় স্বাগতম">Welcome to Pre-Screening</h2>
+          <p style="color: var(--text-muted); font-size: 0.9rem; margin-bottom: 25px;" data-en="Enter your mobile number to begin your medical summary check." data-bn="আপনার চিকিৎসা বিবরণী শুরু করতে মোবাইল নম্বরটি লিখুন।">Enter your mobile number to begin your medical summary check.</p>
+          
+          <div class="patient-card">
+            <div class="form-group">
+              <label for="p-phone" data-en="Mobile Number" data-bn="মোবাইল নম্বর">Mobile Number</label>
+              <div style="position: relative;">
+                <span style="position: absolute; left: 14px; top: 12px; font-weight: 600; color: var(--text-muted);">+880</span>
+                <input type="tel" id="p-phone" class="input-field" placeholder="1712345678" style="padding-left: 65px;" value="1715984632">
+              </div>
+            </div>
+            <button class="btn btn-primary" style="width:100%; padding: 12px;" onclick="goToPatientOTP()" data-en="Send Verification Code" data-bn="যাচাইকরণ কোড পাঠান">Send Verification Code</button>
+            <p style="font-size: 0.7rem; color: var(--text-muted); margin-top: 15px; text-align: center;" data-en="*Powered by secure OTP authentication gateway." data-bn="*নিরাপদ ওটিপি যাচাইকরণ গেটওয়ে দ্বারা চালিত।">*Powered by secure OTP authentication gateway.</p>
+          </div>
+        </div>
+      </div>
+
+      <!-- Patient Screen 2: OTP Verification -->
+      <div class="screen-content" id="patient-otp">
+        <div class="patient-login-grid">
+          <i class="fa-solid fa-shield-halved patient-welcome-icon" style="color: var(--accent-color);"></i>
+          <h2 class="ai-voice-prompt" style="font-size: 1.4rem; margin-bottom: 8px;" data-en="Verify OTP" data-bn="ওটিপি যাচাই করুন">Verify OTP</h2>
+          <p style="color: var(--text-muted); font-size: 0.9rem; margin-bottom: 25px;" data-en="A 6-digit code has been sent to +880 1715984632" data-bn="একটি ৬-সংখ্যার কোড +880 1715984632 নম্বরে পাঠানো হয়েছে">A 6-digit code has been sent to +880 1715984632</p>
+          
+          <div class="patient-card">
+            <div class="form-group">
+              <label data-en="Enter 6-Digit OTP" data-bn="৬-সংখ্যার ওটিপি লিখুন">Enter 6-Digit OTP</label>
+              <div class="otp-digits-container">
+                <input type="text" class="otp-input" value="4" maxlength="1">
+                <input type="text" class="otp-input" value="8" maxlength="1">
+                <input type="text" class="otp-input" value="9" maxlength="1">
+                <input type="text" class="otp-input" value="1" maxlength="1">
+                <input type="text" class="otp-input" value="0" maxlength="1">
+                <input type="text" class="otp-input" value="7" maxlength="1">
+              </div>
+            </div>
+            <button class="btn btn-accent" style="width:100%; padding: 12px;" onclick="goToPatientVoice()" data-en="Confirm & Login" data-bn="নিশ্চিত করুন এবং প্রবেশ করুন">Confirm & Login</button>
+            
+            <div style="display: flex; justify-content: space-between; align-items: center; margin-top: 15px; font-size: 0.8rem;">
+              <span style="color: var(--text-muted);" id="otp-timer">01:45</span>
+              <button style="background:none; border:none; color:var(--secondary-color); cursor:pointer; font-weight:600;" data-en="Resend Code" data-bn="কোড পুনরায় পাঠান">Resend Code</button>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Patient Screen 3: Live Voice Interaction -->
+      <div class="screen-content" id="patient-voice">
+        <div class="voice-interface-layout">
+          <div class="progress-bar-container">
+            <span style="font-size: 0.85rem; font-weight: 600; color: var(--text-muted);" data-en="Diagnostic Progress" data-bn="রোগ নির্ণয় অগ্রগতি">Diagnostic Progress</span>
+            <div class="progress-track">
+              <div class="progress-fill" style="width: 30%;"></div>
+            </div>
+            <span style="font-size: 0.85rem; font-weight: 600; color: var(--primary-color);" data-en="Question 2 of ~6" data-bn="প্রশ্ন ২ (মোট প্রায় ৬টি)">Question 2 of ~6</span>
+          </div>
+
+          <div class="voice-main-content">
+            <h2 class="ai-voice-prompt" id="voice-question-text" data-en="How long have you been feeling this severe burning chest pain?" data-bn="আপনার এই তীব্র বুক জ্বালাপোড়া ও ব্যথা কতদিন যাবত হচ্ছে?">How long have you been feeling this severe burning chest pain?</h2>
+            
+            <div class="mic-button-wrapper">
+              <button class="mic-main-btn listening" id="patient-mic-btn" onclick="toggleListening()">
+                <i class="fa-solid fa-microphone"></i>
+              </button>
+              <div class="mic-btn-pulse"></div>
+              <div class="mic-btn-pulse-inner"></div>
+            </div>
+            
+            <div style="font-size: 0.9rem; font-weight: 600; color: var(--danger-color);" id="listening-badge">
+              <i class="fa-solid fa-circle-dot"></i> <span data-en="LISTENING... SPEAK NOW" data-bn="শুনছি... এখন কথা বলুন">LISTENING... SPEAK NOW</span>
+            </div>
+
+            <div class="live-transcript-box">
+              <div style="font-size: 0.75rem; font-weight: 600; color: var(--text-muted); margin-bottom: 5px;" data-en="PREVIEW TRANSCRIPT" data-bn="কথোপকথনের প্রতিলিপি">PREVIEW TRANSCRIPT</div>
+              <span id="patient-transcript-text" data-en="It started last Monday. Every time I eat spicy food, it burns like fire and goes up to my neck..." data-bn="গত সোমবার থেকে শুরু হয়েছে। যখনই ঝাল খাবার খাই, বুকের ভেতর আগুনের মতো জ্বলে আর ঘাড় পর্যন্ত উঠে আসে...">It started last Monday. Every time I eat spicy food, it burns like fire and goes up to my neck...</span>
+            </div>
+
+            <div>
+              <button class="mic-trouble-trigger" onclick="showTextFallback()" data-en="Microphone issue? Use manual text input" data-bn="মাইক্রোফোনের সমস্যা? ম্যানুয়াল টাইপ করুন">Microphone issue? Use manual text input</button>
+              
+              <div class="mic-trouble-fallback" id="fallback-input-area">
+                <div style="display:flex; gap:10px; margin-top: 10px;">
+                  <input type="text" class="input-field" placeholder="Describe symptoms in Bangla or English..." data-en="Describe symptoms in Bangla or English..." data-bn="আপনার উপসর্গগুলি বাংলা বা ইংরেজিতে লিখুন...">
+                  <button class="btn btn-primary" onclick="simulateNextQuestion()" data-en="Submit" data-bn="জমা দিন">Submit</button>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <div style="display: flex; justify-content: space-between; align-items: center; border-top: 1px solid var(--border-color); padding-top: 20px;">
+            <button class="btn btn-secondary" onclick="simulatePreviousQuestion()" data-en="Back to Previous" data-bn="পূর্ববর্তী প্রশ্ন">Back to Previous</button>
+            <button class="btn btn-primary" onclick="goToPatientSummary()" data-en="Done / Skip to Summary" data-bn="সমাপ্ত / বিবরণী দেখুন">Done / Skip to Summary</button>
+          </div>
+        </div>
+      </div>
+
+      <!-- Patient Screen 4: Problem Summary & Review -->
+      <div class="screen-content" id="patient-summary">
+        <div class="patient-summary-layout">
+          <div style="text-align: center; max-width: 600px; margin: auto;">
+            <i class="fa-solid fa-clipboard-check" style="font-size: 2.5rem; color: var(--accent-color); margin-bottom: 10px;"></i>
+            <h2 class="ai-voice-prompt" style="font-size: 1.5rem;" data-en="Please Review Your Pre-Screening Summary" data-bn="দয়া করে আপনার প্রাক-পরীক্ষার বিবরণীটি পর্যালোচনা করুন">Please Review Your Pre-Screening Summary</h2>
+            <p style="color: var(--text-muted); font-size: 0.85rem;" data-en="This information has been compiled from your voice answers. It will be sent to the doctor." data-bn="আপনার ভয়েস উত্তর থেকে এই তথ্যগুলো সংকলন করা হয়েছে। এটি ডাক্তারের কাছে পাঠানো হবে।">This information has been compiled from your voice answers. It will be sent to the doctor.</p>
+          </div>
+
+          <div class="patient-summary-grid">
+            <div class="patient-summary-card">
+              <div class="summary-heading">
+                <span data-en="Pre-Screening Report Summary" data-bn="প্রাক-পরীক্ষা বিবরণী">Pre-Screening Report Summary</span>
+                <i class="fa-solid fa-file-invoice-dollar"></i>
+              </div>
+              
+              <!-- 10 Full Fields of Medical Problem Summary -->
+              <div style="display:grid; grid-template-columns: 1fr 1fr; gap: 20px;">
+                <div class="summary-item-row">
+                  <div class="summary-item-label" data-en="1. Main Problem" data-bn="১. প্রধান সমস্যা">1. Main Problem</div>
+                  <div class="summary-item-val" data-en="Severe burning chest pain rising towards the neck" data-bn="তীব্র বুক জ্বালাপোড়া ও বুকের ব্যথা যা ঘাড়ের দিকে ছড়িয়ে পড়ছে">Severe burning chest pain rising towards the neck</div>
+                </div>
+
+                <div class="summary-item-row">
+                  <div class="summary-item-label" data-en="2. When Started & Duration" data-bn="২. শুরুর সময় ও স্থায়িত্ব">2. When Started & Duration</div>
+                  <div class="summary-item-val" data-en="Started 4 days ago (Last Monday), constant after meals" data-bn="৪ দিন আগে (গত সোমবার) শুরু হয়েছে, প্রতিবার খাবারের পর তীব্র হয়">Started 4 days ago (Last Monday), constant after meals</div>
+                </div>
+
+                <div class="summary-item-row" style="grid-column: span 2;">
+                  <div class="summary-item-label" data-en="3. Symptom Details" data-bn="৩. উপসর্গের বিস্তারিত বিবরণ">3. Symptom Details</div>
+                  <div style="background: #F8FAFC; padding: 10px; border-radius: 6px; font-size: 0.85rem;">
+                    <strong data-en="Location:" data-bn="স্থান:">Location:</strong> Retrosternal (Behind Breastbone) &nbsp;|&nbsp; 
+                    <strong data-en="Character:" data-bn="চরিত্র:">Character:</strong> Burning, sharp &nbsp;|&nbsp;
+                    <strong data-en="Worse:" data-bn="কিসে বাড়ে:">Worse:</strong> Lying down, eating spicy food &nbsp;|&nbsp;
+                    <strong data-en="Better:" data-bn="কিসে কমে:">Better:</strong> Sitting upright, cold water
+                    
+                    <div style="margin-top: 10px;">
+                      <strong data-en="Pain Severity (7/10):" data-bn="ব্যথার তীব্রতা (৭/১০):">Pain Severity (7/10):</strong>
+                      <div class="pain-range-bar">
+                        <div class="pain-range-indicator" style="left: 70%;"></div>
+                      </div>
+                      <div class="pain-range-labels">
+                        <span data-en="Mild" data-bn="সামান্য">Mild</span>
+                        <span data-en="Moderate" data-bn="মাঝারি">Moderate</span>
+                        <span data-en="Severe" data-bn="তীব্র">Severe</span>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+
+                <div class="summary-item-row">
+                  <div class="summary-item-label" data-en="4. Associated Symptoms" data-bn="৪. আনুষঙ্গিক উপসর্গ">4. Associated Symptoms</div>
+                  <div class="summary-item-val" data-en="Mild nausea, acid reflux, no shortness of breath, no fever" data-bn="হালকা বমি বমি ভাব, টক ঢেঁকুর, কোনো শ্বাসকষ্ট নেই, কোনো জ্বর নেই">Mild nausea, acid reflux, no shortness of breath, no fever</div>
+                </div>
+
+                <div class="summary-item-row">
+                  <div class="summary-item-label" data-en="5. Medical History" data-bn="৫. চিকিৎসা ইতিহাস">5. Medical History</div>
+                  <div class="summary-item-val" data-en="Diagnosed with mild Gastritis 2 years ago, no surgeries" data-bn="২ বছর আগে গ্যাস্ট্রিক রোগ নির্ণয় হয়েছিল, কোনো অপারেশন হয়নি">Diagnosed with mild Gastritis 2 years ago, no surgeries</div>
+                </div>
+
+                <div class="summary-item-row">
+                  <div class="summary-item-label" data-en="6. Current Medicines" data-bn="৬. চলমান ওষুধসমূহ">6. Current Medicines</div>
+                  <div class="summary-item-val" data-en="Tab Seclo 20mg (Omeprazole) occasionally" data-bn="ট্যাব সেকলো ২০মি.গ্রা. (ওমিপ্রাজল) মাঝে মাঝে খাচ্ছেন">Tab Seclo 20mg (Omeprazole) occasionally</div>
+                </div>
+
+                <div class="summary-item-row">
+                  <div class="summary-item-label" data-en="7. Allergies" data-bn="৭. অ্যালার্জি">7. Allergies</div>
+                  <div class="summary-item-val" data-en="No known drug or food allergy" data-bn="কোনো ওষুধ বা খাবারে অ্যালার্জি নেই">No known drug or food allergy</div>
+                </div>
+
+                <div class="summary-item-row">
+                  <div class="summary-item-label" data-en="8. Recent Changes / Exposures" data-bn="৮. সাম্প্রতিক পরিবর্তন / এক্সপোজার">8. Recent Changes / Exposures</div>
+                  <div class="summary-item-val" data-en="Attended a wedding feast with rich food last week" data-bn="গত সপ্তাহে একটি বিয়ের অনুষ্ঠানে গুরুপাক খাবার খেয়েছিলেন">Attended a wedding feast with rich food last week</div>
+                </div>
+
+                <div class="summary-item-row">
+                  <div class="summary-item-label" data-en="9. Treatments Tried" data-bn="৯. গৃহীত পূর্ববর্তী ব্যবস্থা">9. Treatments Tried</div>
+                  <div class="summary-item-val" data-en="Took Antacid liquid at home, temporary relief only" data-bn="বাসায় অ্যান্টাসিড সিরাপ খেয়েছিলেন, কেবল সাময়িক উপশম হয়েছে">Took Antacid liquid at home, temporary relief only</div>
+                </div>
+
+                <div class="summary-item-row" style="grid-column: span 2;">
+                  <div class="summary-item-label" data-en="10. Current Concern / Question" data-bn="১০. বর্তমান মূল উদ্বেগ / প্রশ্ন">10. Current Concern / Question</div>
+                  <div class="summary-item-val" style="font-weight: 600;" data-en="wants to check if the pain is due to heart problem or gastric acid reflux" data-bn="জানতে চান এই ব্যথাটি হৃদরোগ সংক্রান্ত নাকি গ্যাস্ট্রিক রিফ্লাক্সের কারণে">wants to check if the pain is due to heart problem or gastric acid reflux</div>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <div class="summary-action-panel">
+            <span style="font-size: 0.85rem; color: var(--text-muted);" data-en="If anything is incorrect, tap Speak to correct." data-bn="কোনো তথ্য ভুল হলে, সংশোধন করতে বলুন।">If anything is incorrect, tap Speak to correct.</span>
+            <button class="btn btn-secondary" onclick="goToPatientVoice()" data-en="Speak Again" data-bn="আবার বলুন">
+              <i class="fa-solid fa-rotate-left"></i> Speak Again
+            </button>
+            <button class="btn btn-accent" onclick="showPatientLogoutModal()" data-en="Confirm & Submit" data-bn="নিশ্চিত ও জমা দিন">
+              <i class="fa-solid fa-circle-check"></i> Confirm & Submit
+            </button>
+          </div>
+        </div>
+      </div>
+
+
+      <!-- ==================================================== -->
+      <!-- MEDIC / STAFF PORTAL SCREENS                         -->
+      <!-- ==================================================== -->
+      
+      <!-- Medic Login -->
+      <div class="screen-content" id="medic-login">
+        <div class="login-container">
+          <div class="login-card">
+            <div class="login-logo">
+              <i class="fa-solid fa-user-nurse"></i>
+              <h2 data-en="Clinic Medic Portal" data-bn="ক্লিনিক মেডিক পোর্টাল">Clinic Medic Portal</h2>
+              <span style="font-size: 0.75rem; color: var(--text-muted);" data-en="Registered Staff Access" data-bn="নিবন্ধিত কর্মীদের প্রবেশাধিকার">Registered Staff Access</span>
+            </div>
+            
+            <div class="form-group">
+              <label data-en="Medic Staff ID" data-bn="মেডিক স্টাফ আইডি">Medic Staff ID</label>
+              <input type="text" class="input-field" value="medic_rahman_02">
+            </div>
+            
+            <div class="form-group">
+              <label data-en="Password" data-bn="পাসওয়ার্ড">Password</label>
+              <input type="password" class="input-field" value="••••••••••••••">
+            </div>
+            
+            <button class="btn btn-primary" style="width: 100%; padding: 12px;" onclick="goToMedicDashboard()" data-en="Login to Dashboard" data-bn="ড্যাশবোর্ডে প্রবেশ করুন">Login to Dashboard</button>
+          </div>
+        </div>
+      </div>
+
+      <!-- Medic Dashboard (Queue & Phone lookup) -->
+      <div class="screen-content" id="medic-dashboard">
+        <div class="staff-container">
+          <div class="staff-top-nav">
+            <div style="font-weight:600; font-size:0.9rem;" data-en="Incoming Pre-Screened Cases" data-bn="আগত প্রাক-পরীক্ষিত রোগী">Incoming Pre-Screened Cases</div>
+            
+            <!-- Direct Lookup (Primary Action Path) -->
+            <div class="staff-search-box">
+              <i class="fa-solid fa-magnifying-glass"></i>
+              <input type="text" class="input-field" placeholder="Patient Mobile Lookup (+880...)" value="01715984632" onkeydown="if(event.key === 'Enter') goToMedicDetail()">
+            </div>
+          </div>
+
+          <div class="staff-main-grid">
+            <!-- Sidebar Queue -->
+            <div class="queue-sidebar">
+              <div class="queue-header">
+                <span data-en="Queue (3 Active)" data-bn="রোগী তালিকা (৩ জন)">Queue (3 Active)</span>
+                <i class="fa-solid fa-clock-rotate-left"></i>
+              </div>
+              
+              <div class="queue-item active" onclick="goToMedicDetail()">
+                <div class="queue-item-meta">
+                  <span>9:15 AM</span>
+                  <span class="risk-badge risk-critical" data-en="Critical" data-bn="ঝুঁকিপূর্ণ">Critical</span>
+                </div>
+                <div class="queue-item-name">Kabir Hossain (45 M)</div>
+                <div class="queue-item-problem" data-en="Severe burning chest pain rising towards the neck" data-bn="তীব্র বুক জ্বালাপোড়া ও বুকের ব্যথা যা ঘাড়ের দিকে ছড়িয়ে পড়ছে">Severe burning chest pain rising towards the neck</div>
+              </div>
+
+              <div class="queue-item" onclick="goToMedicDetail()">
+                <div class="queue-item-meta">
+                  <span>8:50 AM</span>
+                  <span class="risk-badge risk-moderate" data-en="Moderate" data-bn="মাঝারি">Moderate</span>
+                </div>
+                <div class="queue-item-name">Tahmina Begum (38 F)</div>
+                <div class="queue-item-problem" data-en="Constant dry cough with high fever for 3 days" data-bn="৩ দিন ধরে ক্রমাগত শুকনো কাশি ও প্রচণ্ড জ্বর">Constant dry cough with high fever for 3 days</div>
+              </div>
+
+              <div class="queue-item" onclick="goToMedicDetail()">
+                <div class="queue-item-meta">
+                  <span>8:30 AM</span>
+                  <span class="risk-badge risk-low" data-en="Low" data-bn="স্বাভাবিক">Low</span>
+                </div>
+                <div class="queue-item-name">Abul Kalam (60 M)</div>
+                <div class="queue-item-problem" data-en="Skin itching and localized allergy patches on arm" data-bn="হাত চুলকানি এবং বাহুতে লাল অ্যালার্জির চাকা">Skin itching and localized allergy patches on arm</div>
+              </div>
+            </div>
+
+            <!-- Dashboard Preview Area -->
+            <div class="detail-workspace" style="align-items: center; justify-content: center; text-align: center; color: var(--text-muted);">
+              <i class="fa-solid fa-user-injured" style="font-size: 4rem; color: #CBD5E1; margin-bottom: 20px;"></i>
+              <h3 data-en="No Case Selected" data-bn="কোনো রোগী নির্বাচন করা হয়নি">No Case Selected</h3>
+              <p style="font-size: 0.85rem;" data-en="Select a patient from the queue or search by phone to review the pre-screening summary." data-bn="প্রাক-পরীক্ষা বিবরণী পর্যালোচনা করতে তালিকা থেকে রোগী নির্বাচন করুন অথবা মোবাইল নম্বর দিয়ে খুঁজুন।">Select a patient from the queue or search by phone to review the pre-screening summary.</p>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Medic Detail & Edit Screen -->
+      <div class="screen-content" id="medic-detail">
+        <div class="staff-container">
+          <div class="staff-top-nav">
+            <div style="display:flex; align-items:center; gap:10px;">
+              <button class="btn btn-secondary" style="padding:6px 12px; font-size:0.8rem;" onclick="goToMedicDashboard()">
+                <i class="fa-solid fa-arrow-left"></i> Back to Queue
+              </button>
+              <span style="font-weight: 600;" id="medic-detail-patient-name">Kabir Hossain (45 M) - Patient ID #482910</span>
+            </div>
+            
+            <div class="staff-search-box">
+              <i class="fa-solid fa-magnifying-glass"></i>
+              <input type="text" class="input-field" placeholder="Patient Mobile Lookup..." value="01715984632" onkeydown="if(event.key==='Enter') goToMedicDetail()">
+            </div>
+          </div>
+
+          <div class="staff-main-grid">
+            <!-- Left Sidebar List (Kept for quick shifting) -->
+            <div class="queue-sidebar">
+              <div class="queue-header" data-en="Switch Case" data-bn="রোগী পরিবর্তন">Switch Case</div>
+              <div class="queue-item active">
+                <div class="queue-item-meta">
+                  <span>9:15 AM</span>
+                  <span class="risk-badge risk-critical">Critical</span>
+                </div>
+                <div class="queue-item-name">Kabir Hossain (45 M)</div>
+              </div>
+              <div class="queue-item" onclick="goToMedicDetail()">
+                <div class="queue-item-meta">
+                  <span>8:50 AM</span>
+                  <span class="risk-badge risk-moderate">Moderate</span>
+                </div>
+                <div class="queue-item-name">Tahmina Begum (38 F)</div>
+              </div>
+            </div>
+
+            <!-- Medic Edit Details Work Area -->
+            <div class="detail-workspace">
+              
+              <!-- Patient Info Panel -->
+              <div class="assignment-card">
+                <div>
+                  <h3 style="font-size: 1.1rem; color: var(--primary-color);">Patient Summary Case Verification</h3>
+                  <p style="font-size:0.8rem; color: var(--text-muted);" data-en="Review the AI-extracted fields below. Edit any field that requires correction." data-bn="নিচে কৃত্রিম বুদ্ধিমত্তা (AI) দ্বারা সংকলিত তথ্যগুলো পর্যালোচনা করুন। যেকোনো তথ্য সংশোধনের জন্য এডিট করুন।">Review the AI-extracted fields below. Edit any field that requires correction.</p>
+                </div>
+                
+                <div class="assignment-select-group">
+                  <label for="doctor-assign" data-en="Assign Doctor:" data-bn="ডাক্তার নির্ধারণ:">Assign Doctor:</label>
+                  <select class="assignment-select" id="doctor-assign">
+                    <option value="">-- Choose Doctor --</option>
+                    <option value="dr-rahman" selected>Dr. M. Rahman (Cardiologist)</option>
+                    <option value="dr-yasmin">Dr. Yasmin Ara (General Physician)</option>
+                  </select>
+                  <button class="btn btn-primary" onclick="submitCaseAssignment('Medic')" data-en="Submit & Forward" data-bn="জমা দিন ও ফরওয়ার্ড করুন">Submit & Forward</button>
+                </div>
+              </div>
+
+              <!-- Collapsible 10 Fields of Pre-screening Summary -->
+              <div class="collapsible-fields-container">
+                
+                <!-- Field 1 -->
+                <div class="collapsible-card open" id="card-m-1">
+                  <div class="collapsible-card-header" onclick="toggleCard('card-m-1')">
+                    <span class="collapsible-card-header-title">
+                      <i class="fa-solid fa-stethoscope"></i> 1. Main Problem / Chief Complaint
+                    </span>
+                    <i class="fa-solid fa-chevron-down"></i>
+                  </div>
+                  <div class="collapsible-card-content">
+                    <div class="extraction-row">
+                      <div class="extraction-meta">
+                        <span class="source-badge source-ai">AI-Extracted</span>
+                        <span class="extraction-label">Extracted Text</span>
+                      </div>
+                      <div class="extraction-editor-wrapper">
+                        <div class="extraction-text" id="text-m-1">Severe burning chest pain rising towards the neck</div>
+                        <input type="text" class="input-field editor-input" id="input-m-1" value="Severe burning chest pain rising towards the neck">
+                        <div class="edit-actions-panel">
+                          <button class="edit-btn" onclick="enableFieldEdit('m-1')"><i class="fa-solid fa-pen"></i> Edit</button>
+                          <button class="btn btn-primary save-btn" onclick="saveFieldEdit('m-1')" style="display:none;">Save</button>
+                          <button class="btn btn-secondary cancel-btn" onclick="cancelFieldEdit('m-1')" style="display:none;">Cancel</button>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+
+                <!-- Field 2 -->
+                <div class="collapsible-card" id="card-m-2">
+                  <div class="collapsible-card-header" onclick="toggleCard('card-m-2')">
+                    <span class="collapsible-card-header-title">
+                      <i class="fa-solid fa-hourglass-start"></i> 2. When Started & Duration
+                    </span>
+                    <i class="fa-solid fa-chevron-down"></i>
+                  </div>
+                  <div class="collapsible-card-content">
+                    <div class="extraction-row">
+                      <div class="extraction-meta">
+                        <span class="source-badge source-ai">AI-Extracted</span>
+                        <span class="extraction-label">Extracted Text</span>
+                      </div>
+                      <div class="extraction-editor-wrapper">
+                        <div class="extraction-text" id="text-m-2">Started 4 days ago (Last Monday), constant after meals</div>
+                        <input type="text" class="input-field editor-input" id="input-m-2" value="Started 4 days ago (Last Monday), constant after meals">
+                        <div class="edit-actions-panel">
+                          <button class="edit-btn" onclick="enableFieldEdit('m-2')"><i class="fa-solid fa-pen"></i> Edit</button>
+                          <button class="btn btn-primary save-btn" onclick="saveFieldEdit('m-2')" style="display:none;">Save</button>
+                          <button class="btn btn-secondary cancel-btn" onclick="cancelFieldEdit('m-2')" style="display:none;">Cancel</button>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+
+                <!-- Field 3 (Human Edited Example) -->
+                <div class="collapsible-card" id="card-m-3">
+                  <div class="collapsible-card-header" onclick="toggleCard('card-m-3')">
+                    <span class="collapsible-card-header-title">
+                      <i class="fa-solid fa-heart-pulse"></i> 3. Symptoms (Main, Severity, Location, Character, Worse, Better)
+                    </span>
+                    <i class="fa-solid fa-chevron-down"></i>
+                  </div>
+                  <div class="collapsible-card-content">
+                    <div class="extraction-row">
+                      <div class="extraction-meta">
+                        <span class="source-badge source-human">Human Edited</span>
+                        <span class="extraction-label">Modified Text</span>
+                      </div>
+                      <div class="extraction-editor-wrapper">
+                        <div class="extraction-text" id="text-m-3">Retrosternal chest pain, Severity 7/10. Worse when lying down after meals. Better with upright sitting.</div>
+                        <input type="text" class="input-field editor-input" id="input-m-3" value="Retrosternal chest pain, Severity 7/10. Worse when lying down after meals. Better with upright sitting.">
+                        <div class="edit-actions-panel">
+                          <button class="edit-btn" onclick="enableFieldEdit('m-3')"><i class="fa-solid fa-pen"></i> Edit</button>
+                          <button class="btn btn-primary save-btn" onclick="saveFieldEdit('m-3')" style="display:none;">Save</button>
+                          <button class="btn btn-secondary cancel-btn" onclick="cancelFieldEdit('m-3')" style="display:none;">Cancel</button>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+
+                <!-- Field 4 -->
+                <div class="collapsible-card" id="card-m-4">
+                  <div class="collapsible-card-header" onclick="toggleCard('card-m-4')">
+                    <span class="collapsible-card-header-title">
+                      <i class="fa-solid fa-circle-info"></i> 4. Associated Symptoms
+                    </span>
+                    <i class="fa-solid fa-chevron-down"></i>
+                  </div>
+                  <div class="collapsible-card-content">
+                    <div class="extraction-row">
+                      <div class="extraction-meta">
+                        <span class="source-badge source-ai">AI-Extracted</span>
+                        <span class="extraction-label">Extracted Text</span>
+                      </div>
+                      <div class="extraction-editor-wrapper">
+                        <div class="extraction-text" id="text-m-4">Mild nausea, acid reflux, no shortness of breath, no fever</div>
+                        <input type="text" class="input-field editor-input" id="input-m-4" value="Mild nausea, acid reflux, no shortness of breath, no fever">
+                        <div class="edit-actions-panel">
+                          <button class="edit-btn" onclick="enableFieldEdit('m-4')"><i class="fa-solid fa-pen"></i> Edit</button>
+                          <button class="btn btn-primary save-btn" onclick="saveFieldEdit('m-4')" style="display:none;">Save</button>
+                          <button class="btn btn-secondary cancel-btn" onclick="cancelFieldEdit('m-4')" style="display:none;">Cancel</button>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+
+                <!-- Field 5 -->
+                <div class="collapsible-card" id="card-m-5">
+                  <div class="collapsible-card-header" onclick="toggleCard('card-m-5')">
+                    <span class="collapsible-card-header-title">
+                      <i class="fa-solid fa-file-medical"></i> 5. Relevant Medical History
+                    </span>
+                    <i class="fa-solid fa-chevron-down"></i>
+                  </div>
+                  <div class="collapsible-card-content">
+                    <div class="extraction-row">
+                      <div class="extraction-meta">
+                        <span class="source-badge source-ai">AI-Extracted</span>
+                        <span class="extraction-label">Extracted Text</span>
+                      </div>
+                      <div class="extraction-editor-wrapper">
+                        <div class="extraction-text" id="text-m-5">Diagnosed with mild Gastritis 2 years ago, no surgeries</div>
+                        <input type="text" class="input-field editor-input" id="input-m-5" value="Diagnosed with mild Gastritis 2 years ago, no surgeries">
+                        <div class="edit-actions-panel">
+                          <button class="edit-btn" onclick="enableFieldEdit('m-5')"><i class="fa-solid fa-pen"></i> Edit</button>
+                          <button class="btn btn-primary save-btn" onclick="saveFieldEdit('m-5')" style="display:none;">Save</button>
+                          <button class="btn btn-secondary cancel-btn" onclick="cancelFieldEdit('m-5')" style="display:none;">Cancel</button>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+
+                <!-- Field 6 -->
+                <div class="collapsible-card" id="card-m-6">
+                  <div class="collapsible-card-header" onclick="toggleCard('card-m-6')">
+                    <span class="collapsible-card-header-title">
+                      <i class="fa-solid fa-pills"></i> 6. Medicines Currently Taking
+                    </span>
+                    <i class="fa-solid fa-chevron-down"></i>
+                  </div>
+                  <div class="collapsible-card-content">
+                    <div class="extraction-row">
+                      <div class="extraction-meta">
+                        <span class="source-badge source-ai">AI-Extracted</span>
+                        <span class="extraction-label">Extracted Text</span>
+                      </div>
+                      <div class="extraction-editor-wrapper">
+                        <div class="extraction-text" id="text-m-6">Tab Seclo 20mg (Omeprazole) occasionally</div>
+                        <input type="text" class="input-field editor-input" id="input-m-6" value="Tab Seclo 20mg (Omeprazole) occasionally">
+                        <div class="edit-actions-panel">
+                          <button class="edit-btn" onclick="enableFieldEdit('m-6')"><i class="fa-solid fa-pen"></i> Edit</button>
+                          <button class="btn btn-primary save-btn" onclick="saveFieldEdit('m-6')" style="display:none;">Save</button>
+                          <button class="btn btn-secondary cancel-btn" onclick="cancelFieldEdit('m-6')" style="display:none;">Cancel</button>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+
+                <!-- Field 7 -->
+                <div class="collapsible-card" id="card-m-7">
+                  <div class="collapsible-card-header" onclick="toggleCard('card-m-7')">
+                    <span class="collapsible-card-header-title">
+                      <i class="fa-solid fa-triangle-exclamation"></i> 7. Allergies
+                    </span>
+                    <i class="fa-solid fa-chevron-down"></i>
+                  </div>
+                  <div class="collapsible-card-content">
+                    <div class="extraction-row">
+                      <div class="extraction-meta">
+                        <span class="source-badge source-ai">AI-Extracted</span>
+                        <span class="extraction-label">Extracted Text</span>
+                      </div>
+                      <div class="extraction-editor-wrapper">
+                        <div class="extraction-text" id="text-m-7">No known drug or food allergy</div>
+                        <input type="text" class="input-field editor-input" id="input-m-7" value="No known drug or food allergy">
+                        <div class="edit-actions-panel">
+                          <button class="edit-btn" onclick="enableFieldEdit('m-7')"><i class="fa-solid fa-pen"></i> Edit</button>
+                          <button class="btn btn-primary save-btn" onclick="saveFieldEdit('m-7')" style="display:none;">Save</button>
+                          <button class="btn btn-secondary cancel-btn" onclick="cancelFieldEdit('m-7')" style="display:none;">Cancel</button>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+
+                <!-- Field 8 -->
+                <div class="collapsible-card" id="card-m-8">
+                  <div class="collapsible-card-header" onclick="toggleCard('card-m-8')">
+                    <span class="collapsible-card-header-title">
+                      <i class="fa-solid fa-shoe-prints"></i> 8. Recent Changes / Exposures
+                    </span>
+                    <i class="fa-solid fa-chevron-down"></i>
+                  </div>
+                  <div class="collapsible-card-content">
+                    <div class="extraction-row">
+                      <div class="extraction-meta">
+                        <span class="source-badge source-ai">AI-Extracted</span>
+                        <span class="extraction-label">Extracted Text</span>
+                      </div>
+                      <div class="extraction-editor-wrapper">
+                        <div class="extraction-text" id="text-m-8">Attended a wedding feast with rich food last week</div>
+                        <input type="text" class="input-field editor-input" id="input-m-8" value="Attended a wedding feast with rich food last week">
+                        <div class="edit-actions-panel">
+                          <button class="edit-btn" onclick="enableFieldEdit('m-8')"><i class="fa-solid fa-pen"></i> Edit</button>
+                          <button class="btn btn-primary save-btn" onclick="saveFieldEdit('m-8')" style="display:none;">Save</button>
+                          <button class="btn btn-secondary cancel-btn" onclick="cancelFieldEdit('m-8')" style="display:none;">Cancel</button>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+
+                <!-- Field 9 -->
+                <div class="collapsible-card" id="card-m-9">
+                  <div class="collapsible-card-header" onclick="toggleCard('card-m-9')">
+                    <span class="collapsible-card-header-title">
+                      <i class="fa-solid fa-kit-medical"></i> 9. What has Already Been Done
+                    </span>
+                    <i class="fa-solid fa-chevron-down"></i>
+                  </div>
+                  <div class="collapsible-card-content">
+                    <div class="extraction-row">
+                      <div class="extraction-meta">
+                        <span class="source-badge source-ai">AI-Extracted</span>
+                        <span class="extraction-label">Extracted Text</span>
+                      </div>
+                      <div class="extraction-editor-wrapper">
+                        <div class="extraction-text" id="text-m-9">Took Antacid liquid at home, temporary relief only</div>
+                        <input type="text" class="input-field editor-input" id="input-m-9" value="Took Antacid liquid at home, temporary relief only">
+                        <div class="edit-actions-panel">
+                          <button class="edit-btn" onclick="enableFieldEdit('m-9')"><i class="fa-solid fa-pen"></i> Edit</button>
+                          <button class="btn btn-primary save-btn" onclick="saveFieldEdit('m-9')" style="display:none;">Save</button>
+                          <button class="btn btn-secondary cancel-btn" onclick="cancelFieldEdit('m-9')" style="display:none;">Cancel</button>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+
+                <!-- Field 10 -->
+                <div class="collapsible-card" id="card-m-10">
+                  <div class="collapsible-card-header" onclick="toggleCard('card-m-10')">
+                    <span class="collapsible-card-header-title">
+                      <i class="fa-solid fa-question"></i> 10. Current Concern / Question
+                    </span>
+                    <i class="fa-solid fa-chevron-down"></i>
+                  </div>
+                  <div class="collapsible-card-content">
+                    <div class="extraction-row">
+                      <div class="extraction-meta">
+                        <span class="source-badge source-ai">AI-Extracted</span>
+                        <span class="extraction-label">Extracted Text</span>
+                      </div>
+                      <div class="extraction-editor-wrapper">
+                        <div class="extraction-text" id="text-m-10">wants to check if the pain is due to heart problem or gastric acid reflux</div>
+                        <input type="text" class="input-field editor-input" id="input-m-10" value="wants to check if the pain is due to heart problem or gastric acid reflux">
+                        <div class="edit-actions-panel">
+                          <button class="edit-btn" onclick="enableFieldEdit('m-10')"><i class="fa-solid fa-pen"></i> Edit</button>
+                          <button class="btn btn-primary save-btn" onclick="saveFieldEdit('m-10')" style="display:none;">Save</button>
+                          <button class="btn btn-secondary cancel-btn" onclick="cancelFieldEdit('m-10')" style="display:none;">Cancel</button>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+                
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+
+      <!-- ==================================================== -->
+      <!-- DOCTOR PORTAL SCREENS                                -->
+      <!-- ==================================================== -->
+      
+      <!-- Doctor Login -->
+      <div class="screen-content" id="doctor-login">
+        <div class="login-container">
+          <div class="login-card">
+            <div class="login-logo">
+              <i class="fa-solid fa-user-md"></i>
+              <h2 data-en="Doctor Clinical Portal" data-bn="ডাক্তার ক্লিনিক্যাল পোর্টাল">Doctor Clinical Portal</h2>
+              <span style="font-size: 0.75rem; color: var(--text-muted);" data-en="Registered Physicians Only" data-bn="শুধুমাত্র নিবন্ধিত ডাক্তারদের জন্য">Registered Physicians Only</span>
+            </div>
+            
+            <div class="form-group">
+              <label data-en="Credential / Email" data-bn="ক্রেডেনশিয়াল / ইমেইল">Credential / Email</label>
+              <input type="email" class="input-field" value="dr.m_rahman@clinic.org">
+            </div>
+            
+            <div class="form-group">
+              <label data-en="Password" data-bn="পাসওয়ার্ড">Password</label>
+              <input type="password" class="input-field" value="••••••••••••••">
+            </div>
+            
+            <button class="btn btn-primary" style="width: 100%; padding: 12px;" onclick="goToDoctorDashboard()" data-en="Authenticate & Enter" data-bn="প্রবেশ করুন">Authenticate & Enter</button>
+          </div>
+        </div>
+      </div>
+
+      <!-- Doctor Dashboard Queue -->
+      <div class="screen-content" id="doctor-dashboard">
+        <div class="staff-container">
+          <div class="staff-top-nav">
+            <div style="font-weight:600; font-size:0.9rem;" data-en="My Assigned Patients" data-bn="আমার নির্ধারিত রোগী">My Assigned Patients</div>
+            
+            <!-- Direct Lookup (Primary Action Path) -->
+            <div class="staff-search-box">
+              <i class="fa-solid fa-magnifying-glass"></i>
+              <input type="text" class="input-field" placeholder="Patient Mobile Lookup..." value="01715984632" onkeydown="if(event.key === 'Enter') goToDoctorDetail()">
+            </div>
+          </div>
+
+          <div class="staff-main-grid">
+            <!-- Sidebar Queue -->
+            <div class="queue-sidebar">
+              <div class="queue-header" data-en="Assigned Queue" data-bn="নির্ধারিত তালিকা">Assigned Queue</div>
+              
+              <div class="queue-item active" onclick="goToDoctorDetail()">
+                <div class="queue-item-meta">
+                  <span>9:15 AM</span>
+                  <span class="risk-badge risk-critical">Critical</span>
+                </div>
+                <div class="queue-item-name">Kabir Hossain (45 M)</div>
+                <div class="queue-item-problem">Severe chest pain and burning discomfort</div>
+              </div>
+
+              <div class="queue-item">
+                <div class="queue-item-meta">
+                  <span>Yesterday</span>
+                  <span class="risk-badge risk-low">Low</span>
+                </div>
+                <div class="queue-item-name">Imran Khan (23 M)</div>
+                <div class="queue-item-problem">Common cold, mild headache</div>
+              </div>
+            </div>
+
+            <!-- Doctor Detail Preview (No Selection State) -->
+            <div class="detail-workspace" style="align-items: center; justify-content: center; text-align: center; color: var(--text-muted);">
+              <i class="fa-solid fa-user-md" style="font-size: 4rem; color: #CBD5E1; margin-bottom: 20px;"></i>
+              <h3 data-en="Select Patient" data-bn="রোগী নির্বাচন করুন">Select Patient</h3>
+              <p style="font-size: 0.85rem;" data-en="Click on a patient to scan their clinical risk alerts and verified pre-screening summaries." data-bn="প্রাক-পরীক্ষা বিবরণী পর্যালোচনা করতে তালিকায় রোগীর নামের ওপর ক্লিক করুন।">Click on a patient to scan their clinical risk alerts and verified pre-screening summaries.</p>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Doctor Clinical Scan & Detail View -->
+      <div class="screen-content" id="doctor-detail">
+        <div class="staff-container">
+          <div class="staff-top-nav">
+            <div style="display:flex; align-items:center; gap:10px;">
+              <button class="btn btn-secondary" style="padding:6px 12px; font-size:0.8rem;" onclick="goToDoctorDashboard()">
+                <i class="fa-solid fa-arrow-left"></i> Back
+              </button>
+              <span style="font-weight: 600;" id="doctor-detail-patient-name">Kabir Hossain (45 M) - Patient ID #482910</span>
+            </div>
+            
+            <div class="staff-search-box">
+              <i class="fa-solid fa-magnifying-glass"></i>
+              <input type="text" class="input-field" placeholder="Patient Mobile Lookup..." value="01715984632" onkeydown="if(event.key === 'Enter') goToDoctorDetail()">
+            </div>
+          </div>
+
+          <div class="staff-main-grid">
+            <!-- Sidebar Queue -->
+            <div class="queue-sidebar">
+              <div class="queue-header" data-en="Switch Patient" data-bn="রোগী পরিবর্তন">Switch Patient</div>
+              <div class="queue-item active">
+                <div class="queue-item-meta">
+                  <span>9:15 AM</span>
+                  <span class="risk-badge risk-critical">Critical</span>
+                </div>
+                <div class="queue-item-name">Kabir Hossain (45 M)</div>
+              </div>
+            </div>
+
+            <!-- Doctor Scan Workspace -->
+            <div class="detail-workspace">
+              
+              <!-- GLANCEABLE RISK, RED FLAGS & EXPLAINABLE-AI PANEL (RULE 7) -->
+              <div class="clinical-safety-panel">
+                <div class="safety-alert-left">
+                  <i class="fa-solid fa-triangle-exclamation safety-alert-icon"></i>
+                  <div class="safety-alert-title" data-en="Risk Assessment" data-bn="ঝুঁকি মূল্যায়ন">Risk Assessment</div>
+                  <div class="safety-alert-desc" data-en="CRITICAL" data-bn="গুরুত্বপূর্ণ">CRITICAL</div>
+                </div>
+                
+                <div class="safety-alert-right">
+                  <div class="red-flags-list">
+                    <div class="red-flag-item">
+                      <i class="fa-solid fa-circle-chevron-right"></i>
+                      <span data-en="Red Flag: Chest pain radiating to the neck / throat (Retrosternal chest discomfort)" data-bn="লাল পতাকা: বুকের ব্যথা যা ঘাড় এবং গলার দিকে ছড়িয়ে পড়ছে">Red Flag: Chest pain radiating to the neck / throat (Retrosternal chest discomfort)</span>
+                    </div>
+                    <div class="red-flag-item">
+                      <i class="fa-solid fa-circle-chevron-right"></i>
+                      <span data-en="Risk Factor: Patient age (45) with severe acute symptom onset (4 days ago)" data-bn="ঝুঁকি উপাদান: রোগীর বয়স (৪৫) সহ তীব্র উপসর্গের আকস্মিক সূচনা (৪ দিন আগে)">Risk Factor: Patient age (45) with severe acute symptom onset (4 days ago)</span>
+                    </div>
+                  </div>
+                  
+                  <div class="xai-explanation-box">
+                    <strong><i class="fa-solid fa-microchip"></i> Explainable-AI Reasoning (XAI):</strong><br>
+                    <span data-en="AI model detected high-priority keywords associated with acute coronary syndrome ('chest pain radiating to neck', 'severity 7/10'). Rule-based check triggered 'Critical' routing, bypassing general queue. Heart disease history needs validation." data-bn="এআই মডেল একিউট করোনারি সিন্ড্রোম সংক্রান্ত লক্ষণ শনাক্ত করেছে ('বুকের ব্যথা ঘাড়ে ছড়ায়', 'তীব্রতা ৭/১০')। নিয়মতান্ত্রিক চেকিংয়ে এটি ক্রিকাল হিসেবে চিহ্নিত হয়েছে।">AI model detected high-priority keywords associated with acute coronary syndrome ('chest pain radiating to neck', 'severity 7/10'). Rule-based check triggered 'Critical' routing, bypassing general queue. Heart disease history needs validation.</span>
+                  </div>
+                </div>
+              </div>
+
+              <!-- Clickable/Expandable Medical Problem Summary Sections -->
+              <div class="collapsible-fields-container">
+                
+                <!-- Field 1 -->
+                <div class="collapsible-card open" id="card-d-1">
+                  <div class="collapsible-card-header" onclick="toggleCard('card-d-1')">
+                    <span class="collapsible-card-header-title">
+                      <i class="fa-solid fa-stethoscope"></i> 1. Main Problem / Chief Complaint
+                    </span>
+                    <i class="fa-solid fa-chevron-down"></i>
+                  </div>
+                  <div class="collapsible-card-content">
+                    <div class="extraction-row">
+                      <div class="extraction-meta">
+                        <span class="source-badge source-ai">AI-Extracted</span>
+                        <span class="extraction-label">Extracted Text</span>
+                      </div>
+                      <div class="extraction-editor-wrapper">
+                        <div class="extraction-text" id="text-d-1">Severe burning chest pain rising towards the neck</div>
+                        <input type="text" class="input-field editor-input" id="input-d-1" value="Severe burning chest pain rising towards the neck">
+                        <div class="edit-actions-panel">
+                          <button class="edit-btn" onclick="enableFieldEdit('d-1')"><i class="fa-solid fa-pen"></i> Edit / Override</button>
+                          <button class="btn btn-primary save-btn" onclick="saveFieldEdit('d-1')" style="display:none;">Save</button>
+                          <button class="btn btn-secondary cancel-btn" onclick="cancelFieldEdit('d-1')" style="display:none;">Cancel</button>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+
+                <!-- Field 2 -->
+                <div class="collapsible-card" id="card-d-2">
+                  <div class="collapsible-card-header" onclick="toggleCard('card-d-2')">
+                    <span class="collapsible-card-header-title">
+                      <i class="fa-solid fa-hourglass-start"></i> 2. When Started & Duration
+                    </span>
+                    <i class="fa-solid fa-chevron-down"></i>
+                  </div>
+                  <div class="collapsible-card-content">
+                    <div class="extraction-row">
+                      <div class="extraction-meta">
+                        <span class="source-badge source-ai">AI-Extracted</span>
+                        <span class="extraction-label">Extracted Text</span>
+                      </div>
+                      <div class="extraction-editor-wrapper">
+                        <div class="extraction-text" id="text-d-2">Started 4 days ago (Last Monday), constant after meals</div>
+                        <input type="text" class="input-field editor-input" id="input-d-2" value="Started 4 days ago (Last Monday), constant after meals">
+                        <div class="edit-actions-panel">
+                          <button class="edit-btn" onclick="enableFieldEdit('d-2')"><i class="fa-solid fa-pen"></i> Edit</button>
+                          <button class="btn btn-primary save-btn" onclick="saveFieldEdit('d-2')" style="display:none;">Save</button>
+                          <button class="btn btn-secondary cancel-btn" onclick="cancelFieldEdit('d-2')" style="display:none;">Cancel</button>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+
+                <!-- Field 3 -->
+                <div class="collapsible-card" id="card-d-3">
+                  <div class="collapsible-card-header" onclick="toggleCard('card-d-3')">
+                    <span class="collapsible-card-header-title">
+                      <i class="fa-solid fa-heart-pulse"></i> 3. Symptoms (Main, Severity, Location, Character, Worse, Better)
+                    </span>
+                    <i class="fa-solid fa-chevron-down"></i>
+                  </div>
+                  <div class="collapsible-card-content">
+                    <div class="extraction-row">
+                      <div class="extraction-meta">
+                        <span class="source-badge source-human">Human Verified</span>
+                        <span class="extraction-label">Verified Text</span>
+                      </div>
+                      <div class="extraction-editor-wrapper">
+                        <div class="extraction-text" id="text-d-3">Retrosternal chest pain, Severity 7/10. Worse when lying down after meals. Better with upright sitting.</div>
+                        <input type="text" class="input-field editor-input" id="input-d-3" value="Retrosternal chest pain, Severity 7/10. Worse when lying down after meals. Better with upright sitting.">
+                        <div class="edit-actions-panel">
+                          <button class="edit-btn" onclick="enableFieldEdit('d-3')"><i class="fa-solid fa-pen"></i> Edit</button>
+                          <button class="btn btn-primary save-btn" onclick="saveFieldEdit('d-3')" style="display:none;">Save</button>
+                          <button class="btn btn-secondary cancel-btn" onclick="cancelFieldEdit('d-3')" style="display:none;">Cancel</button>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+
+                <!-- Field 4 -->
+                <div class="collapsible-card" id="card-d-4">
+                  <div class="collapsible-card-header" onclick="toggleCard('card-d-4')">
+                    <span class="collapsible-card-header-title">
+                      <i class="fa-solid fa-circle-info"></i> 4. Associated Symptoms
+                    </span>
+                    <i class="fa-solid fa-chevron-down"></i>
+                  </div>
+                  <div class="collapsible-card-content">
+                    <div class="extraction-row">
+                      <div class="extraction-meta">
+                        <span class="source-badge source-ai">AI-Extracted</span>
+                        <span class="extraction-label">Extracted Text</span>
+                      </div>
+                      <div class="extraction-editor-wrapper">
+                        <div class="extraction-text" id="text-d-4">Mild nausea, acid reflux, no shortness of breath, no fever</div>
+                        <input type="text" class="input-field editor-input" id="input-d-4" value="Mild nausea, acid reflux, no shortness of breath, no fever">
+                        <div class="edit-actions-panel">
+                          <button class="edit-btn" onclick="enableFieldEdit('d-4')"><i class="fa-solid fa-pen"></i> Edit</button>
+                          <button class="btn btn-primary save-btn" onclick="saveFieldEdit('d-4')" style="display:none;">Save</button>
+                          <button class="btn btn-secondary cancel-btn" onclick="cancelFieldEdit('d-4')" style="display:none;">Cancel</button>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+
+                <!-- Field 5 -->
+                <div class="collapsible-card" id="card-d-5">
+                  <div class="collapsible-card-header" onclick="toggleCard('card-d-5')">
+                    <span class="collapsible-card-header-title">
+                      <i class="fa-solid fa-file-medical"></i> 5. Relevant Medical History
+                    </span>
+                    <i class="fa-solid fa-chevron-down"></i>
+                  </div>
+                  <div class="collapsible-card-content">
+                    <div class="extraction-row">
+                      <div class="extraction-meta">
+                        <span class="source-badge source-ai">AI-Extracted</span>
+                        <span class="extraction-label">Extracted Text</span>
+                      </div>
+                      <div class="extraction-editor-wrapper">
+                        <div class="extraction-text" id="text-d-5">Diagnosed with mild Gastritis 2 years ago, no surgeries</div>
+                        <input type="text" class="input-field editor-input" id="input-d-5" value="Diagnosed with mild Gastritis 2 years ago, no surgeries">
+                        <div class="edit-actions-panel">
+                          <button class="edit-btn" onclick="enableFieldEdit('d-5')"><i class="fa-solid fa-pen"></i> Edit</button>
+                          <button class="btn btn-primary save-btn" onclick="saveFieldEdit('d-5')" style="display:none;">Save</button>
+                          <button class="btn btn-secondary cancel-btn" onclick="cancelFieldEdit('d-5')" style="display:none;">Cancel</button>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+
+                <!-- Field 6 -->
+                <div class="collapsible-card" id="card-d-6">
+                  <div class="collapsible-card-header" onclick="toggleCard('card-d-6')">
+                    <span class="collapsible-card-header-title">
+                      <i class="fa-solid fa-pills"></i> 6. Medicines Currently Taking
+                    </span>
+                    <i class="fa-solid fa-chevron-down"></i>
+                  </div>
+                  <div class="collapsible-card-content">
+                    <div class="extraction-row">
+                      <div class="extraction-meta">
+                        <span class="source-badge source-ai">AI-Extracted</span>
+                        <span class="extraction-label">Extracted Text</span>
+                      </div>
+                      <div class="extraction-editor-wrapper">
+                        <div class="extraction-text" id="text-d-6">Tab Seclo 20mg (Omeprazole) occasionally</div>
+                        <input type="text" class="input-field editor-input" id="input-d-6" value="Tab Seclo 20mg (Omeprazole) occasionally">
+                        <div class="edit-actions-panel">
+                          <button class="edit-btn" onclick="enableFieldEdit('d-6')"><i class="fa-solid fa-pen"></i> Edit</button>
+                          <button class="btn btn-primary save-btn" onclick="saveFieldEdit('d-6')" style="display:none;">Save</button>
+                          <button class="btn btn-secondary cancel-btn" onclick="cancelFieldEdit('d-6')" style="display:none;">Cancel</button>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+
+                <!-- Field 7 -->
+                <div class="collapsible-card" id="card-d-7">
+                  <div class="collapsible-card-header" onclick="toggleCard('card-d-7')">
+                    <span class="collapsible-card-header-title">
+                      <i class="fa-solid fa-triangle-exclamation"></i> 7. Allergies
+                    </span>
+                    <i class="fa-solid fa-chevron-down"></i>
+                  </div>
+                  <div class="collapsible-card-content">
+                    <div class="extraction-row">
+                      <div class="extraction-meta">
+                        <span class="source-badge source-ai">AI-Extracted</span>
+                        <span class="extraction-label">Extracted Text</span>
+                      </div>
+                      <div class="extraction-editor-wrapper">
+                        <div class="extraction-text" id="text-d-7">No known drug or food allergy</div>
+                        <input type="text" class="input-field editor-input" id="input-d-7" value="No known drug or food allergy">
+                        <div class="edit-actions-panel">
+                          <button class="edit-btn" onclick="enableFieldEdit('d-7')"><i class="fa-solid fa-pen"></i> Edit</button>
+                          <button class="btn btn-primary save-btn" onclick="saveFieldEdit('d-7')" style="display:none;">Save</button>
+                          <button class="btn btn-secondary cancel-btn" onclick="cancelFieldEdit('d-7')" style="display:none;">Cancel</button>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+
+                <!-- Field 8 -->
+                <div class="collapsible-card" id="card-d-8">
+                  <div class="collapsible-card-header" onclick="toggleCard('card-d-8')">
+                    <span class="collapsible-card-header-title">
+                      <i class="fa-solid fa-shoe-prints"></i> 8. Recent Changes / Exposures
+                    </span>
+                    <i class="fa-solid fa-chevron-down"></i>
+                  </div>
+                  <div class="collapsible-card-content">
+                    <div class="extraction-row">
+                      <div class="extraction-meta">
+                        <span class="source-badge source-ai">AI-Extracted</span>
+                        <span class="extraction-label">Extracted Text</span>
+                      </div>
+                      <div class="extraction-editor-wrapper">
+                        <div class="extraction-text" id="text-d-8">Attended a wedding feast with rich food last week</div>
+                        <input type="text" class="input-field editor-input" id="input-d-8" value="Attended a wedding feast with rich food last week">
+                        <div class="edit-actions-panel">
+                          <button class="edit-btn" onclick="enableFieldEdit('d-8')"><i class="fa-solid fa-pen"></i> Edit</button>
+                          <button class="btn btn-primary save-btn" onclick="saveFieldEdit('d-8')" style="display:none;">Save</button>
+                          <button class="btn btn-secondary cancel-btn" onclick="cancelFieldEdit('d-8')" style="display:none;">Cancel</button>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+
+                <!-- Field 9 -->
+                <div class="collapsible-card" id="card-d-9">
+                  <div class="collapsible-card-header" onclick="toggleCard('card-d-9')">
+                    <span class="collapsible-card-header-title">
+                      <i class="fa-solid fa-kit-medical"></i> 9. What has Already Been Done
+                    </span>
+                    <i class="fa-solid fa-chevron-down"></i>
+                  </div>
+                  <div class="collapsible-card-content">
+                    <div class="extraction-row">
+                      <div class="extraction-meta">
+                        <span class="source-badge source-ai">AI-Extracted</span>
+                        <span class="extraction-label">Extracted Text</span>
+                      </div>
+                      <div class="extraction-editor-wrapper">
+                        <div class="extraction-text" id="text-d-9">Took Antacid liquid at home, temporary relief only</div>
+                        <input type="text" class="input-field editor-input" id="input-d-9" value="Took Antacid liquid at home, temporary relief only">
+                        <div class="edit-actions-panel">
+                          <button class="edit-btn" onclick="enableFieldEdit('d-9')"><i class="fa-solid fa-pen"></i> Edit</button>
+                          <button class="btn btn-primary save-btn" onclick="saveFieldEdit('d-9')" style="display:none;">Save</button>
+                          <button class="btn btn-secondary cancel-btn" onclick="cancelFieldEdit('d-9')" style="display:none;">Cancel</button>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+
+                <!-- Field 10 -->
+                <div class="collapsible-card" id="card-d-10">
+                  <div class="collapsible-card-header" onclick="toggleCard('card-d-10')">
+                    <span class="collapsible-card-header-title">
+                      <i class="fa-solid fa-question"></i> 10. Current Concern / Question
+                    </span>
+                    <i class="fa-solid fa-chevron-down"></i>
+                  </div>
+                  <div class="collapsible-card-content">
+                    <div class="extraction-row">
+                      <div class="extraction-meta">
+                        <span class="source-badge source-ai">AI-Extracted</span>
+                        <span class="extraction-label">Extracted Text</span>
+                      </div>
+                      <div class="extraction-editor-wrapper">
+                        <div class="extraction-text" id="text-d-10">wants to check if the pain is due to heart problem or gastric acid reflux</div>
+                        <input type="text" class="input-field editor-input" id="input-d-10" value="wants to check if the pain is due to heart problem or gastric acid reflux">
+                        <div class="edit-actions-panel">
+                          <button class="edit-btn" onclick="enableFieldEdit('d-10')"><i class="fa-solid fa-pen"></i> Edit</button>
+                          <button class="btn btn-primary save-btn" onclick="saveFieldEdit('d-10')" style="display:none;">Save</button>
+                          <button class="btn btn-secondary cancel-btn" onclick="cancelFieldEdit('d-10')" style="display:none;">Cancel</button>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+                
+              </div>
+
+              <!-- Doctor Actions panel -->
+              <div class="assignment-card">
+                <div>
+                  <h4 style="color:var(--primary-color);">Confirm Verification & Diagnostics</h4>
+                  <p style="font-size:0.8rem; color:var(--text-muted);">Save clinical overrides and commit this pre-screening summary report to EHR database.</p>
+                </div>
+                <div style="display:flex; gap:10px;">
+                  <button class="btn btn-secondary" onclick="submitCaseAssignment('Doctor')" style="border-color: var(--danger-color); color:var(--danger-color);">Override to Low-Risk</button>
+                  <button class="btn btn-primary" onclick="submitCaseAssignment('Doctor')">Accept & Write to EHR</button>
+                </div>
+              </div>
+
+            </div>
+          </div>
+        </div>
+      </div>
+
+
+      <!-- ==================================================== -->
+      <!-- ADMIN / OPERATIONS PORTAL                            -->
+      <!-- ==================================================== -->
+      
+      <!-- Admin Login -->
+      <div class="screen-content" id="admin-login">
+        <div class="login-container">
+          <div class="login-card">
+            <div class="login-logo">
+              <i class="fa-solid fa-gears"></i>
+              <h2>Admin System Panel</h2>
+              <span style="font-size: 0.75rem; color: var(--text-muted);">System Health & Pipelines</span>
+            </div>
+            
+            <div class="form-group">
+              <label>Admin ID</label>
+              <input type="text" class="input-field" value="admin_supervisor">
+            </div>
+            
+            <div class="form-group">
+              <label>Security Key</label>
+              <input type="password" class="input-field" value="••••••••••••••">
+            </div>
+            
+            <button class="btn btn-primary" style="width: 100%; padding: 12px;" onclick="goToAdminDashboard()">Launch Admin Console</button>
+          </div>
+        </div>
+      </div>
+
+      <!-- Admin Dashboard (Pipeline Status & Metrics) -->
+      <div class="screen-content" id="admin-dashboard">
+        <div class="admin-dashboard">
+          
+          <div class="admin-stats-grid">
+            <div class="stat-card">
+              <div class="stat-info">
+                <span class="stat-label">Active Kiosks</span>
+                <span class="stat-value">12 / 12</span>
+              </div>
+              <div class="stat-icon-box green">
+                <i class="fa-solid fa-tablet-screen-button"></i>
+              </div>
+            </div>
+
+            <div class="stat-card">
+              <div class="stat-info">
+                <span class="stat-label">Daily Pre-Screenings</span>
+                <span class="stat-value">284</span>
+              </div>
+              <div class="stat-icon-box">
+                <i class="fa-solid fa-people-arrows"></i>
+              </div>
+            </div>
+
+            <div class="stat-card">
+              <div class="stat-info">
+                <span class="stat-label">Transcription Success</span>
+                <span class="stat-value">98.2%</span>
+              </div>
+              <div class="stat-icon-box green">
+                <i class="fa-solid fa-microphone-lines"></i>
+              </div>
+            </div>
+
+            <div class="stat-card">
+              <div class="stat-info">
+                <span class="stat-label">Pipeline Latency</span>
+                <span class="stat-value">1.8s</span>
+              </div>
+              <div class="stat-icon-box orange">
+                <i class="fa-solid fa-gauge-high"></i>
+              </div>
+            </div>
+          </div>
+
+          <div class="admin-content-grid">
+            <div class="admin-card">
+              <div class="admin-card-header">
+                <span>System Pipeline Health Monitors</span>
+                <span class="badge" style="background:var(--accent-color);">All Systems Normal</span>
+              </div>
+              <div class="admin-card-body">
+                <div class="system-health-list">
+                  <div class="health-item">
+                    <div class="health-item-info">
+                      <div class="health-status-dot"></div>
+                      <div>
+                        <div class="health-service-name">Speech-to-Text Transcription Engine</div>
+                        <div class="health-service-desc">Converting Bengali / Banglish input to text</div>
+                      </div>
+                    </div>
+                    <span style="font-size:0.8rem; font-weight:600; color:var(--accent-color);">Active</span>
+                  </div>
+
+                  <div class="health-item">
+                    <div class="health-item-info">
+                      <div class="health-status-dot"></div>
+                      <div>
+                        <div class="health-service-name">Clinical Information Extraction Engine (NLP)</div>
+                        <div class="health-service-desc">NER pipeline parsing symptoms and severity</div>
+                      </div>
+                    </div>
+                    <span style="font-size:0.8rem; font-weight:600; color:var(--accent-color);">Active</span>
+                  </div>
+
+                  <div class="health-item">
+                    <div class="health-item-info">
+                      <div class="health-status-dot"></div>
+                      <div>
+                        <div class="health-service-name">Risk Assessment Model</div>
+                        <div class="health-service-desc">Surfacing red-flags and determining critical routing</div>
+                      </div>
+                    </div>
+                    <span style="font-size:0.8rem; font-weight:600; color:var(--accent-color);">Active</span>
+                  </div>
+
+                  <div class="health-item">
+                    <div class="health-item-info">
+                      <div class="health-status-dot warning"></div>
+                      <div>
+                        <div class="health-service-name">EHR Integration Pipeline</div>
+                        <div class="health-service-desc">Syncing problem summaries with clinic local DB</div>
+                      </div>
+                    </div>
+                    <span style="font-size:0.8rem; font-weight:600; color:var(--warning-color);">Slight Sync Delay</span>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            <div class="admin-card">
+              <div class="admin-card-header">
+                <span>Real-Time Logs</span>
+                <i class="fa-solid fa-terminal"></i>
+              </div>
+              <div class="admin-card-body" style="background:#0F172A; padding:0;">
+                <div class="log-stream" id="admin-log-stream">
+                  <div class="log-line"><span class="log-time">[09:22:15]</span> <span class="log-level-info">INFO:</span> Pipeline request received. SessionID: ss-83921.</div>
+                  <div class="log-line"><span class="log-time">[09:22:16]</span> <span class="log-level-info">INFO:</span> Speech audio chunk successfully decoded. Length: 12s.</div>
+                  <div class="log-line"><span class="log-time">[09:22:17]</span> <span class="log-level-info">INFO:</span> Transcription done. Text: "বুকের বাম পাশে ব্যাথা..."</div>
+                  <div class="log-line"><span class="log-time">[09:22:18]</span> <span class="log-level-info">INFO:</span> Extraction run. Keywords: [Chest Pain, Burning].</div>
+                  <div class="log-line"><span class="log-time">[09:22:19]</span> <span class="log-level-info">INFO:</span> Risk Assessment done: Severity 7/10 -> Critical routing.</div>
+                  <div class="log-line"><span class="log-time">[09:22:20]</span> <span class="log-level-info">INFO:</span> Successfully synced record to local hospital EHR.</div>
+                </div>
+              </div>
+            </div>
+          </div>
+
+        </div>
+      </div>
+
+    </div>
+  </div>
+
+  <!-- PATIENT CONFIRMATION AUTO LOGOUT MODAL (RULE 4) -->
+  <div class="modal-overlay" id="patient-logout-modal">
+    <div class="modal-box">
+      <i class="fa-solid fa-circle-check" style="font-size: 3.5rem; color: var(--accent-color); margin-bottom: 20px;"></i>
+      <h2 style="font-size: 1.4rem; color: var(--primary-color); margin-bottom: 10px;" data-en="Pre-Screening Complete!" data-bn="প্রাক-পরীক্ষা সম্পন্ন হয়েছে!">Pre-Screening Complete!</h2>
+      <p style="color: var(--text-muted); font-size: 0.9rem; margin-bottom: 25px;" data-en="Your medical summary has been locked and securely transmitted to the doctor. You are now being logged out to protect your privacy." data-bn="আপনার চিকিৎসা বিবরণীটি নিরাপদে ডাক্তারের কাছে পাঠানো হয়েছে। আপনার তথ্যের নিরাপত্তার জন্য এই সেশনটি বন্ধ করা হচ্ছে।">Your medical summary has been locked and securely transmitted to the doctor. You are now being logged out to protect your privacy.</p>
+      
+      <div style="font-size: 0.85rem; font-weight: 600; color: var(--text-muted); margin-bottom: 20px;">
+        <span data-en="Next patient kiosk preparation in" data-bn="পরবর্তী রোগীর জন্য কিওস্ক প্রস্তুত হচ্ছে">Next patient kiosk preparation in</span> <span id="auto-logout-timer" style="color: var(--secondary-color); font-size: 1.1rem;">5</span>s...
+      </div>
+      
+      <button class="btn btn-primary" onclick="closePatientSession()" data-en="Restart Kiosk Now" data-bn="এখনই রিসেট করুন">Restart Kiosk Now</button>
+    </div>
+  </div>
+
+  <script>
+    // System Translation Mapping
+    const translations = {
+      'en': {
+        'portal-title-patient': 'Niramoy Pre-Screening',
+        'portal-subtitle-patient': 'Patient Kiosk Portal',
+        'portal-title-medic': 'Niramoy Medic Console',
+        'portal-subtitle-medic': 'Pre-Screening & Case Assignment',
+        'portal-title-doctor': 'Niramoy Clinical Suite',
+        'portal-subtitle-doctor': 'Physician EHR Verification',
+        'portal-title-admin': 'Niramoy Admin Center',
+        'portal-subtitle-admin': 'System Monitor & Pipeline Operations',
+      },
+      'bn': {
+        'portal-title-patient': 'নিরাময় প্রি-স্ক্রিনিং',
+        'portal-subtitle-patient': 'রোগীর বুথ পোর্টাল',
+        'portal-title-medic': 'নিরাময় মেডিক কনসোল',
+        'portal-subtitle-medic': 'প্রাক-পরীক্ষা ও ডাক্তার নির্ধারণ',
+        'portal-title-doctor': 'নিরাময় ক্লিনিক্যাল স্যুট',
+        'portal-subtitle-doctor': 'ডাক্তার ইএইচআর যাচাইকরণ',
+        'portal-title-admin': 'নিরাময় অ্যাডমিন সেন্টার',
+        'portal-subtitle-admin': 'সিস্টেম ও ডাটা পাইপলাইন পর্যবেক্ষণ',
+      }
+    };
+
+    let currentPortal = 'patient';
+    let currentLanguage = 'en';
+
+    // Set translation strings depending on selected language
+    function setLanguage(lang) {
+      currentLanguage = lang;
+      
+      // Update toggle buttons active class
+      document.getElementById('lang-en').classList.toggle('active', lang === 'en');
+      document.getElementById('lang-bn').classList.toggle('active', lang === 'bn');
+
+      // Update titles
+      document.getElementById('hdr-portal-title').innerText = translations[lang][`portal-title-${currentPortal}`];
+      document.getElementById('hdr-portal-subtitle').innerText = translations[lang][`portal-subtitle-${currentPortal}`];
+
+      // Update all elements with data-en/data-bn tags
+      const translatable = document.querySelectorAll('[data-en]');
+      translatable.forEach(el => {
+        el.innerText = el.getAttribute(`data-${lang}`);
+      });
+
+      // Special handling of place holders
+      const searchInputs = document.querySelectorAll('.staff-search-box input');
+      searchInputs.forEach(input => {
+        if (lang === 'bn') {
+          input.setAttribute('placeholder', 'রোগীর মোবাইল দিয়ে খুঁজুন (+৮৮০...)');
+        } else {
+          input.setAttribute('placeholder', 'Patient Mobile Lookup (+880...)');
+        }
+      });
+    }
+
+    // Portal Switching logic
+    function switchPortal(portal) {
+      currentPortal = portal;
+      
+      // Update Tab Button Active states
+      const tabBtns = document.querySelectorAll('.portal-tab-btn');
+      tabBtns.forEach(btn => btn.classList.remove('active'));
+      const activeBtn = Array.from(tabBtns).find(btn => btn.innerText.toLowerCase().includes(portal));
+      if (activeBtn) activeBtn.classList.add('active');
+
+      // Show hide sub tabs
+      document.getElementById('patient-sub-tabs').style.display = (portal === 'patient') ? 'flex' : 'none';
+      document.getElementById('medic-sub-tabs').style.display = (portal === 'medic') ? 'flex' : 'none';
+      document.getElementById('doctor-sub-tabs').style.display = (portal === 'doctor') ? 'flex' : 'none';
+      document.getElementById('admin-sub-tabs').style.display = (portal === 'admin') ? 'flex' : 'none';
+
+      // Staff header details
+      document.getElementById('logged-user-tag').style.display = (portal === 'medic' || portal === 'doctor') ? 'block' : 'none';
+
+      // Load default screen for this portal
+      if (portal === 'patient') {
+        setScreen('patient-phone');
+      } else if (portal === 'medic') {
+        setScreen('medic-login');
+      } else if (portal === 'doctor') {
+        setScreen('doctor-login');
+      } else if (portal === 'admin') {
+        setScreen('admin-login');
+      }
+    }
+
+    // Direct screen state loading within a portal
+    function setScreen(screenId) {
+      // Hide all screen contents
+      const screens = document.querySelectorAll('.screen-content');
+      screens.forEach(screen => screen.classList.remove('active-screen'));
+
+      // Show targeted screen
+      const activeScreen = document.getElementById(screenId);
+      if (activeScreen) {
+        activeScreen.classList.add('active-screen');
+      }
+
+      // Update active sub-tab styling
+      const activeTabGroup = document.getElementById(`${currentPortal}-sub-tabs`);
+      if (activeTabGroup) {
+        const subTabs = activeTabGroup.querySelectorAll('.screen-tab-btn');
+        subTabs.forEach(tab => tab.classList.remove('active'));
+        
+        // Find which button maps to the click
+        const searchPhrase = screenId.replace(`${currentPortal}-`, '');
+        subTabs.forEach(tab => {
+          if (tab.getAttribute('onclick').includes(screenId)) {
+            tab.classList.add('active');
+          }
+        });
+      }
+
+      // Re-trigger language update for current view
+      setLanguage(currentLanguage);
+    }
+
+    // Simulated flows
+    function goToPatientOTP() {
+      setScreen('patient-otp');
+    }
+
+    function goToPatientVoice() {
+      setScreen('patient-voice');
+      // Simulate Speech Synthesizer speaking the question
+      speakVoiceQuestion();
+    }
+
+    function goToPatientSummary() {
+      setScreen('patient-summary');
+    }
+
+    function goToMedicDashboard() {
+      setScreen('medic-dashboard');
+    }
+
+    function goToMedicDetail() {
+      setScreen('medic-detail');
+    }
+
+    function goToDoctorDashboard() {
+      setScreen('doctor-dashboard');
+    }
+
+    function goToDoctorDetail() {
+      setScreen('doctor-detail');
+    }
+
+    function goToAdminDashboard() {
+      setScreen('admin-dashboard');
+    }
+
+    // Toggle card expansion (Medic & Doctor collapsible summary)
+    function toggleCard(cardId) {
+      const card = document.getElementById(cardId);
+      card.classList.toggle('open');
+    }
+
+    // Inline field editors
+    function enableFieldEdit(fieldId) {
+      document.getElementById(`text-${fieldId}`).style.display = 'none';
+      document.getElementById(`input-${fieldId}`).style.display = 'block';
+      
+      const cardContent = document.getElementById(`input-${fieldId}`).closest('.collapsible-card-content');
+      const editBtn = cardContent.querySelector('.edit-btn');
+      const saveBtn = cardContent.querySelector('.save-btn');
+      const cancelBtn = cardContent.querySelector('.cancel-btn');
+
+      editBtn.style.display = 'none';
+      saveBtn.style.display = 'block';
+      cancelBtn.style.display = 'block';
+    }
+
+    function saveFieldEdit(fieldId) {
+      const inputVal = document.getElementById(`input-${fieldId}`).value;
+      document.getElementById(`text-${fieldId}`).innerText = inputVal;
+      
+      document.getElementById(`text-${fieldId}`).style.display = 'block';
+      document.getElementById(`input-${fieldId}`).style.display = 'none';
+      
+      const cardContent = document.getElementById(`input-${fieldId}`).closest('.collapsible-card-content');
+      const editBtn = cardContent.querySelector('.edit-btn');
+      const saveBtn = cardContent.querySelector('.save-btn');
+      const cancelBtn = cardContent.querySelector('.cancel-btn');
+
+      editBtn.style.display = 'block';
+      saveBtn.style.display = 'none';
+      cancelBtn.style.display = 'none';
+
+      // Update badge to Human edited
+      const badge = cardContent.querySelector('.source-badge');
+      badge.className = 'source-badge source-human';
+      badge.innerText = 'Human Edited';
+    }
+
+    function cancelFieldEdit(fieldId) {
+      const originalText = document.getElementById(`text-${fieldId}`).innerText;
+      document.getElementById(`input-${fieldId}`).value = originalText;
+
+      document.getElementById(`text-${fieldId}`).style.display = 'block';
+      document.getElementById(`input-${fieldId}`).style.display = 'none';
+      
+      const cardContent = document.getElementById(`input-${fieldId}`).closest('.collapsible-card-content');
+      const editBtn = cardContent.querySelector('.edit-btn');
+      const saveBtn = cardContent.querySelector('.save-btn');
+      const cancelBtn = cardContent.querySelector('.cancel-btn');
+
+      editBtn.style.display = 'block';
+      saveBtn.style.display = 'none';
+      cancelBtn.style.display = 'none';
+    }
+
+    // Voice Simulation Actions
+    let isListening = true;
+    function toggleListening() {
+      const btn = document.getElementById('patient-mic-btn');
+      const badge = document.getElementById('listening-badge');
+      
+      isListening = !isListening;
+      
+      if (isListening) {
+        btn.classList.add('listening');
+        badge.innerHTML = `<i class="fa-solid fa-circle-dot"></i> <span data-en="LISTENING... SPEAK NOW" data-bn="শুনছি... এখন কথা বলুন">${currentLanguage === 'en' ? 'LISTENING... SPEAK NOW' : 'শুনছি... এখন কথা বলুন'}</span>`;
+      } else {
+        btn.classList.remove('listening');
+        badge.innerHTML = `<i class="fa-solid fa-circle"></i> <span data-en="PROCESSING SPEECH..." data-bn="প্রক্রিয়াকরণ করা হচ্ছে...">${currentLanguage === 'en' ? 'PROCESSING SPEECH...' : 'প্রক্রিয়াকরণ করা হচ্ছে...'}</span>`;
+        // Simulate auto advanced after a second
+        setTimeout(() => {
+          simulateNextQuestion();
+        }, 1500);
+      }
+    }
+
+    function showTextFallback() {
+      const area = document.getElementById('fallback-input-area');
+      area.style.display = area.style.display === 'block' ? 'none' : 'block';
+    }
+
+    const questionList = [
+      {
+        en: "Do you have any associated symptoms like fever, sweating or breathing difficulties?",
+        bn: "আপনার কি কোনো জ্বর, অতিরিক্ত ঘাম বা শ্বাসকষ্টের মতো অন্য কোনো উপসর্গ আছে?"
+      },
+      {
+        en: "Are you currently taking any prescription medications?",
+        bn: "আপনি কি বর্তমানে কোনো প্রেসক্রিপশন অনুযায়ী নিয়মিত ওষুধ সেবন করছেন?"
+      }
+    ];
+
+    const answerList = [
+      {
+        en: "No fever, but I've been sweating a bit from the pain. Breathing is okay.",
+        bn: "জ্বর নেই, তবে ব্যথার কারণে কিছুটা ঘাম হচ্ছে। শ্বাসকষ্ট হচ্ছে না।"
+      },
+      {
+        en: "Only Tab Seclo for my gastritis, which I buy directly from the pharmacy.",
+        bn: "শুধু গ্যাস্ট্রিকের জন্য ট্যাব সেকলো খাই, যা ফার্মেসি থেকে সরাসরি কিনি।"
+      }
+    ];
+
+    let questionIdx = 0;
+    function simulateNextQuestion() {
+      if (questionIdx < questionList.length) {
+        // Change text
+        const nextQ = questionList[questionIdx];
+        const nextA = answerList[questionIdx];
+
+        document.getElementById('voice-question-text').setAttribute('data-en', nextQ.en);
+        document.getElementById('voice-question-text').setAttribute('data-bn', nextQ.bn);
+        
+        document.getElementById('patient-transcript-text').setAttribute('data-en', nextA.en);
+        document.getElementById('patient-transcript-text').setAttribute('data-bn', nextA.bn);
+        
+        // Update progress bar
+        const progressPercent = 30 + ((questionIdx + 1) * 20);
+        document.querySelector('.progress-fill').style.width = `${progressPercent}%`;
+        document.querySelector('.progress-bar-container span:last-child').innerText = `Question ${3 + questionIdx} of ~6`;
+        
+        // Reset mic state
+        isListening = false;
+        toggleListening();
+
+        questionIdx++;
+      } else {
+        goToPatientSummary();
+      }
+    }
+
+    function simulatePreviousQuestion() {
+      if (questionIdx > 0) {
+        questionIdx--;
+        const prevQ = questionIdx === 0 ? 
+          { en: "How long have you been feeling this severe burning chest pain?", bn: "আপনার এই তীব্র বুক জ্বালাপোড়া ও ব্যথা কতদিন যাবত হচ্ছে?" } :
+          questionList[questionIdx - 1];
+
+        const prevA = questionIdx === 0 ?
+          { en: "It started last Monday. Every time I eat spicy food, it burns like fire and goes up to my neck...", bn: "গত সোমবার থেকে শুরু হয়েছে। যখনই ঝাল খাবার খাই, বুকের ভেতর আগুনের মতো জ্বলে আর ঘাড় পর্যন্ত উঠে আসে..." } :
+          answerList[questionIdx - 1];
+
+        document.getElementById('voice-question-text').setAttribute('data-en', prevQ.en);
+        document.getElementById('voice-question-text').setAttribute('data-bn', prevQ.bn);
+        
+        document.getElementById('patient-transcript-text').setAttribute('data-en', prevA.en);
+        document.getElementById('patient-transcript-text').setAttribute('data-bn', prevA.bn);
+        
+        const progressPercent = 30 + (questionIdx * 20);
+        document.querySelector('.progress-fill').style.width = `${progressPercent}%`;
+        document.querySelector('.progress-bar-container span:last-child').innerText = `Question ${2 + questionIdx} of ~6`;
+
+        setLanguage(currentLanguage);
+      }
+    }
+
+    // Text to Speech Simulation (Rule 3 and Rule 4 requirement)
+    function speakVoiceQuestion() {
+      if ('speechSynthesis' in window) {
+        const text = currentLanguage === 'en' ? 
+          document.getElementById('voice-question-text').getAttribute('data-en') : 
+          document.getElementById('voice-question-text').getAttribute('data-bn');
+        
+        const utterance = new SpeechSynthesisUtterance(text);
+        utterance.lang = currentLanguage === 'en' ? 'en-US' : 'bn-BD';
+        window.speechSynthesis.speak(utterance);
+      }
+    }
+
+    // Patient Logout Flow (Rule 4: Auto-logout)
+    let logoutTimer;
+    function showPatientLogoutModal() {
+      document.getElementById('patient-logout-modal').style.display = 'flex';
+      
+      let count = 5;
+      document.getElementById('auto-logout-timer').innerText = count;
+      
+      logoutTimer = setInterval(() => {
+        count--;
+        document.getElementById('auto-logout-timer').innerText = count;
+        if (count <= 0) {
+          clearInterval(logoutTimer);
+          closePatientSession();
+        }
+      }, 1000);
+    }
+
+    function closePatientSession() {
+      clearInterval(logoutTimer);
+      document.getElementById('patient-logout-modal').style.display = 'none';
+      
+      // Reset inputs & direct back to start
+      document.getElementById('p-phone').value = '';
+      questionIdx = 0;
+      
+      // Reset voice interface texts
+      document.getElementById('voice-question-text').setAttribute('data-en', "How long have you been feeling this severe burning chest pain?");
+      document.getElementById('voice-question-text').setAttribute('data-bn', "আপনার এই তীব্র বুক জ্বালাপোড়া ও ব্যথা কতদিন যাবত হচ্ছে?");
+      
+      document.getElementById('patient-transcript-text').setAttribute('data-en', "It started last Monday. Every time I eat spicy food, it burns like fire and goes up to my neck...");
+      document.getElementById('patient-transcript-text').setAttribute('data-bn', "গত সোমবার থেকে শুরু হয়েছে। যখনই ঝাল খাবার খাই, বুকের ভেতর আগুনের মতো জ্বলে আর ঘাড় পর্যন্ত উঠে আসে...");
+      
+      document.querySelector('.progress-fill').style.width = `30%`;
+      
+      switchPortal('patient');
+    }
+
+    // Staff actions alerts
+    function submitCaseAssignment(role) {
+      alert(`${role} Summary Verification Saved! Case committed to EHR secure storage.`);
+      if (role === 'Medic') {
+        goToMedicDashboard();
+      } else {
+        goToDoctorDashboard();
+      }
+    }
+
+    // Admin Panel Logs auto-scroller
+    setInterval(() => {
+      const stream = document.getElementById('admin-log-stream');
+      if (stream && currentPortal === 'admin') {
+        const time = new Date().toTimeString().split(' ')[0];
+        const lines = [
+          `INFO: Heartbeat signal validated for Kiosk #05 (Region: Dhaka).`,
+          `INFO: Direct phone lookup queried: "+8801715984632". Match found in cache.`,
+          `WARN: Database lock held by active batch process. Retrying connection...`,
+          `INFO: Successfully connected to local clinic server repository.`
+        ];
+        const randomLine = lines[Math.floor(Math.random() * lines.length)];
+        const isWarn = randomLine.includes('WARN');
+        const levelSpan = isWarn ? `<span class="log-level-warn">WARN:</span>` : `<span class="log-level-info">INFO:</span>`;
+        
+        stream.innerHTML += `<div class="log-line"><span class="log-time">[${time}]</span> ${levelSpan} ${randomLine}</div>`;
+        stream.scrollTop = stream.scrollHeight;
+      }
+    }, 4000);
+
+  </script>
+</body>
+</html>
