@@ -4,20 +4,19 @@
 > Update the status when a module's state changes. Keep the "Done means" line
 > honest and testable — not "works well", but a real, checkable definition.
 
-**Status keys:** ⬜ Not started · 🟨 In progress · 🟦 Blocked · ✅ Done · ⛔ Retired
+**Status keys:** ⬜ Not started · 🟨 In progress · 🟦 Blocked · ✅ Done
 
-**Last updated:** 2026-06-25 (Session 7 — architect planning lock)
-**Current phase:** Phase 0 (quick demo) — browser-only STT; about to start **Phase A** (add TTS).
-**Module in focus:** Module 1 (Speech-to-Text, working) + Module 7 groundwork (browser TTS).
-**Progress:** Session 7 was planning-only (no code). The plan is now LOCKED: the standalone
-**Emergency module (old M5) is RETIRED** and its safety job moves into **Module 10 as a
-rule-based red-flag check** (Critical-tier escalation + a Red Flags section in the M12 report);
-constitution rule #3 was revised to "surface red flags; never reassure falsely". The stack is
-CONFIRMED with **browser TTS added** for M7; each LLM module now has a free-tier API + fallback
-(ADR-0026); patient interaction is **voice-only** and follow-ups display **text + audio together**
-(ADR-0027/0028). The running code is unchanged from Session 6: single STT path (browser Web
-Speech API), Mintlify UI, two separate raw/corrected `.docx`, Alembic-managed schema, **19 tests
-pass**. Module 1 stays 🟨 until the human live mic test + ~50 samples + latency/WER are recorded.
+**Last updated:** 2026-06-21 (Session 6 — two separate raw/corrected .docx + Alembic migration)
+**Current phase:** Phase 0 (quick demo) — browser-only STT.
+**Module in focus:** Module 1 — Speech-to-Text (+ document-export groundwork).
+**Progress:** Single STT path (browser Web Speech API) + Mintlify UI with fixed-height
+scrollable panels. NEW this session: RAW and CORRECTED are now exported as TWO separate,
+independently downloadable Word `.docx` files (raw on Stop, corrected on Correct) via a
+`documents.kind` column behind the existing writer/storage/format seams; and the DB schema
+is now managed by **Alembic** (auto-migrate at startup), which FIXED the live
+`no column named stt_provider` error in place without deleting the DB (2 real rows preserved).
+**19 tests pass**; the manual-text → raw-.docx flow verified end-to-end in the browser.
+Module 1 stays 🟨 until the human live mic test + ~50 samples + latency/WER are recorded.
 
 ---
 
@@ -29,14 +28,14 @@ pass**. Module 1 stays 🟨 until the human live mic test + ~50 samples + latenc
 | 2 | Text Processing & Normalization | ⬜ | Given raw text, a separate cleaned/normalized field is produced (spelling, fillers removed, sentence boundaries); raw is never modified; measured on a small test set. |
 | 3 | Information Extraction | ⬜ | From normalized text, symptoms / body part / duration / severity / meds / history are extracted as structured fields; precision & recall recorded in test_log. |
 | 4 | Initial Clinical Summary | ⬜ | A 2–4 sentence chief-complaint summary is generated from extracted fields and shown to the doctor. |
-| 5 | ~~Emergency Detection~~ | ⛔ | **RETIRED (Session 7, ADR-0024).** The standalone module + its flowchart diamond/alert are removed. Its job is now a **rule-based red-flag check inside Module 10** (see M10). Number 5 is left as a permanent gap so M6–M15 keep their IDs. |
-| 6 | Missing Information Analysis | ⬜ | System outputs a checklist of present vs. missing data points for the case. Now fed **directly by M4** (M4→M6, no emergency branch). |
-| 7 | Follow-up Question Generation | ⬜ | System generates prioritized follow-up questions (Bangla/English) for the gaps, no repeats of answered items; each question is **shown as text AND spoken via TTS**, and the patient replies **by voice only** (ADR-0027/0028). |
+| 5 | Emergency Detection | ⬜ | Red-flag symptoms trigger an alert before the rest of the pipeline; tested against a list of known emergency phrases with recorded hit rate. |
+| 6 | Missing Information Analysis | ⬜ | System outputs a checklist of present vs. missing data points for the case. |
+| 7 | Follow-up Question Generation | ⬜ | System generates prioritized follow-up questions (Bangla/English) for the gaps, no repeats of answered items. |
 | 8 | Response Processing & Profile Update | ⬜ | Patient answers are re-processed and merged into the profile with conflict handling. |
 | 9 | Case Completion Check | ⬜ | A completeness score is computed; loops back to Module 7 until threshold or max turns reached. |
-| 10 | Risk Assessment Engine | ⬜ | Each case is classified Low/Medium/High/Critical from rules + model; **a rule-based red-flag check forces Critical for clearly life-threatening symptoms (chest pain, stroke signs, severe breathing difficulty, loss of consciousness) and surfaces them prominently**; accuracy + red-flag recall recorded on a labeled test set. |
+| 10 | Risk Assessment Engine | ⬜ | Each case is classified Low/Medium/High/Critical from rules + model; accuracy recorded on a labeled test set. |
 | 11 | Explainable AI (XAI) | ⬜ | Every risk output has a plain-language reason listing the contributing factors. |
-| 12 | Structured Clinical Report | ⬜ | A full report (all sections) is generated and exportable as PDF + dashboard view; contains **no diagnosis**; includes a **Red Flags** section sourced from M10. |
+| 12 | Structured Clinical Report | ⬜ | A full report (all sections) is generated and exportable as PDF + dashboard view; contains no diagnosis. |
 | 13 | EHR Database | ⬜ | Transcripts, profiles, reports, and audit logs are stored and retrievable by patient ID/date; data encrypted. |
 | 14 | Doctor Dashboard | ⬜ | Web UI shows report, risk, flags, XAI; doctor can override/annotate; high/critical cases alerted. |
 | 15 | Feedback & Continuous Learning | ⬜ | Doctor feedback is collected and usable to retrain/fine-tune; regression check before deploying updates. |
@@ -47,7 +46,7 @@ pass**. Module 1 stays 🟨 until the human live mic test + ~50 samples + latenc
 
 These come from the build plan. Each phase has a clear "move on when" gate.
 
-### Phase 0 — Quick working demo  ⬅️ WE ARE HERE (planning locked; starting Phase A next)
+### Phase 0 — Quick working demo  ⬅️ WE ARE HERE
 **Goal:** Prove the whole loop (live voice → raw text → corrected text → screen)
 with zero ML setup, using the browser Web Speech API + one free LLM for correction.
 **Move on when:** I can speak Bangla/Banglish into the browser, see the raw text
@@ -55,12 +54,7 @@ live, see a corrected version beside it, and the raw text is stored unchanged.
 (Also: ~50 real sample utterances collected for later testing.)
 **Build steps (6):** 1 scaffolding ✅ · 2 backend skeleton ✅ · 3 correction service ✅
 · 4 API routes + static serving ✅ · 5 frontend (mic + boxes + fallback) ✅
-· 6 end-to-end live test + collect ~50 samples ⬜ (human-driven, still pending).
-
-**Session 7 (architect lock):** flowchart updated (Emergency removed, M4→M6 direct); stack +
-per-module API strategy + voice model locked; all tracking docs rewritten. No code. The full
-sequential build plan (Phases A–I) now lives in the architect output / the build plan; the
-**first coding step is Phase A / Step A1 — add browser TTS to the frontend.**
+· 6 end-to-end live test + collect ~50 samples ⬜ (human-driven, next).
 
 **Multi-provider STT (Session 3):** built — then REMOVED in Session 4 (scope
 simplified to browser-only for Module 1; may return in a later module).
@@ -107,6 +101,3 @@ mobile app. Optional speaker separation (doctor vs patient).
   is written in `test_log.md`.
 - If a later module is tempting to start early, check the dependency column in
   `constitution.md` first.
-- **Emergency safety did not go away** — it moved into Module 10 as a rule-based red-flag
-  check (ADR-0024). A medical pre-screening tool must never present a falsely reassuring
-  picture (Open Flag 1 if the student wants to revisit this).

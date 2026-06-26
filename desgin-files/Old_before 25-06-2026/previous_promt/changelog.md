@@ -16,42 +16,6 @@
 
 ---
 
-## Session 7 — 2026-06-25 — Architect planning lock: flowchart + final stack + per-module API strategy + voice model
-- Did: A planning-only session (NO code). Locked the FINAL project plan ahead of vibe-coding.
-  (A) **Flowchart:** removed the standalone Emergency module from the Patient Journey diagram —
-  deleted node `D1` ("Emergency Detected?"), node `AX` (escalation alert), the `M4→D1`, `D1→No→M6`,
-  `D1→Yes→AX` and the dashed `AX→` continuation arrows; added a direct `M4→M6` arrow; dropped the
-  now-unused `DECA`, `ALTB`, `RA` styles and the "Emergency" legend entry. Reconstructed the whole
-  TikZ source into `update_system_flowchart.md` (the original file was NOT in the uploaded set —
-  marked as a reconstruction to diff against the real one). (B) **Safety preserved:** folded a
-  lightweight **rule-based red-flag check into Module 10 (Risk Assessment)** that forces the
-  **Critical** tier for clearly life-threatening symptoms, with a **Red Flags** section in the M12
-  report; revised constitution rule #3 from "emergency detection runs first" to "surface red flags;
-  never reassure falsely". (C) **Stack:** CONFIRMED the existing stack (no rewrite) and **added
-  browser TTS** for M7 + a deploy path. (D) **API strategy:** assigned each LLM module across three
-  independent free quota buckets (Gemini Flash / Gemini Flash-Lite / Groq) with OpenRouter `:free`
-  as universal fallback. (E) **Voice:** patient input is **voice-only**; M7 questions show as **text
-  AND play as audio (TTS) simultaneously**; manual text box demoted to a mic-failure fallback.
-  (F) Rewrote the tracking docs (CLAUDE.md, constitution.md, Context, decisions.md, changelog.md,
-  current_task.md, milestone_log.md, test_log.md, codebase_map.md; session_protocol.md unchanged).
-- Decided: ADR-0024 (retire Emergency module, fold red-flag check into M10, keep numbering with an
-  M5 gap), ADR-0025 (confirm stack + add browser TTS + deploy path), ADR-0026 (per-module free-API
-  assignment, refines ADR-0003), ADR-0027 (voice model: STT `bn-BD` + `SpeechSynthesis` TTS,
-  voice-only patient replies, manual text = fallback), ADR-0028 (follow-up = on-screen text AND
-  spoken audio simultaneously).
-- Broke / problem: Nothing built, so nothing broke. **Open conflict flagged, not silently resolved:**
-  removing the Emergency module contradicts the *original* non-negotiable rule #3 and the Module
-  10/12 dependency columns — this is a SAFETY-relevant change for a medical tool, so it is recorded
-  as Open Flag 1 (recommended default: keep the rule-based red-flag check in M10, which is how the
-  files are now written). `update_system_flowchart.md` is a reconstruction — node positions / exact
-  fill colours are best-effort and must be diffed against the real file before committing.
-- Deferred: Building any of the new modules (M2–M15) — still Phase 0. The actual M7 TTS code, the
-  per-module provider config wiring, and the OpenRouter $10 top-up decision. Still deferred from
-  S4/S5/S6: the human live mic test + ~50 samples + WER/latency on real speech.
-- Next: First coding task = **Phase A / Step A1** of the build plan — add browser **TTS** to the
-  existing frontend (speak a test Bangla string via `speechSynthesis`, on-screen text stays as
-  fallback), planned-then-approved per CLAUDE.md before any code. See `current_task.md`.
-
 ## Session 6 — 2026-06-21 — Two separate raw/corrected .docx + Alembic migration (fix stt_provider bug)
 - Did: (A) FIXED the live `sqlite3.OperationalError: table utterances has no column named
   stt_provider` by adopting **Alembic**. New `backend/alembic.ini` + `backend/migrations/`

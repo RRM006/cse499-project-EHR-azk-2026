@@ -66,6 +66,19 @@ This is a **15-module** system. We build it one module at a time.
 - Run frontend:  *(TBD)*
 - Run tests:     *(TBD)*
 
+## FRONTEND / TRANSCRIPT UI (follow this)
+
+- Overall visual design follows **`DESIGN-mintlify.md`** (Inter + Geist Mono,
+  black pill buttons, mint-green accent reserved for CTA/active states, 12px cards,
+  hairline borders, flat surfaces).
+- The three transcript panels — **Raw**, **Corrected**, **Manual fallback** — share
+  ONE behavior: fixed-height, vertically scrollable; auto-scroll to the newest line
+  as text is added, but if the user scrolls up, pause auto-scroll and resume only
+  when they scroll back to the bottom.
+- Raw + Corrected are read-only (raw is never modified — rule #1); Manual is editable.
+- Must stay responsive for very long transcripts (1000s of words) — never overflow
+  or break the layout.
+
 ## PROJECT MEMORY FILES — our shared brain (in `agent_docs/`)
 
 **At the START of every session, read these in order:**

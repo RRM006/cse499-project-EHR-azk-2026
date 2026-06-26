@@ -22,11 +22,9 @@
 - **Module 2 (Normalization):** % of fields correctly normalized; raw left intact.
 - **Module 3 (Extraction):** precision & recall for each entity type (symptom,
   duration, severity, medication, etc.).
-- **Module 7 (Follow-up + TTS):** question is shown as text AND spoken; whether a
-  Bangla (`bn-BD`) voice exists per OS; patient voice reply round-trips to text.
-- **Module 10 (Risk + red-flag):** **red-flag recall** on a fixed list of
-  life-threatening phrases (we want to almost never miss one → it must force Critical),
-  plus overall Low/Med/High/Critical accuracy / confusion matrix on labeled cases.
+- **Module 5 (Emergency):** recall on a fixed list of red-flag phrases (we want
+  to almost never miss an emergency).
+- **Module 10 (Risk):** accuracy / confusion matrix on labeled cases.
 
 ## How to measure WER (quick note for later)
 WER = (substitutions + insertions + deletions) / number of words in the reference.
@@ -35,54 +33,7 @@ transcribed by hand (the "ground truth"). Record the model + machine each time.
 
 ---
 
-## Planned test cases (added Session 7 — to run as each step is built)
-
-> These are **not yet executed** — they define what "done" looks like for the new
-> voice + flow + API work so a future session can fill in real numbers.
-
-- **TC-V1 — STT voice input (Module 1, existing):** speak 10 Bangla + 10 Banglish
-  sentences in Chrome; confirm each appends live & verbatim to RAW, raw is stored
-  unchanged, and record rough latency + by-hand WER per sentence. (Still the human's
-  pending live test from S4–S6.)
-- **TC-V2 — TTS playback (Module 7 / Phase A Step A1):** call `speak('আপনার কতদিন
-  ধরে জ্বর হচ্ছে?')`; PASS = audio plays AND the same text is visible on screen.
-  Record per OS (Windows / Arch) whether a `bn-BD` voice was available in
-  `speechSynthesis.getVoices()`; if none, PASS still requires the on-screen text
-  fallback to show (Open Flag 4).
-- **TC-V3 — Voice-only reply loop (Module 7→8):** after a TTS question, speak an
-  answer; PASS = the answer is transcribed to text and accepted with NO keyboard
-  input; the manual text box is used only when the mic is unavailable.
-- **TC-A1 — API fallback chain (ADR-0026):** force the primary provider to fail
-  (bad key / simulated 429); PASS = the request transparently falls back to
-  OpenRouter `:free` and still returns a corrected/structured result; the provider
-  actually used is logged.
-- **TC-F1 — Flow M4→M6 direct (ADR-0024):** with the Emergency module removed,
-  PASS = a case flows M4 → M6 with no emergency branch, and there is no `D1`/`AX`
-  node or "Emergency Detected?" step anywhere in the pipeline or UI.
-- **TC-F2 — Follow-up loop (Module 9→7):** an incomplete profile loops back to M7
-  and asks only for still-missing items (no repeats of answered questions); PASS =
-  loop exits when the completeness threshold or max turns is reached.
-- **TC-R1 — Red-flag check (Module 10, ADR-0024):** feed a fixed list of clearly
-  life-threatening phrases (e.g. "বুকে প্রচণ্ড ব্যথা", severe breathing difficulty,
-  stroke signs, loss of consciousness); PASS = every one is forced to **Critical**
-  and surfaced in the M12 **Red Flags** section. Record red-flag recall (target:
-  no misses on the list).
-
----
-
 ## Test entries (newest first)
-
-## 2026-06-25 — Session 7 — Architect planning lock (no code run)
-- Setup: Planning/documentation session only. No server started, no `pytest` run, no
-  models executed. Working code is unchanged from Session 6 (still 19 tests on disk).
-- Metric(s): none (nothing executed).
-- Result: N/A — see the "Planned test cases" block above for the test contract added this
-  session (TC-V1…TC-R1). The 19-passing-tests figure from 2026-06-21 still stands because no
-  code changed.
-- Notes: The Emergency module was retired and replaced by a rule-based red-flag check in
-  Module 10 (ADR-0024); TC-R1 makes red-flag recall a first-class, measured metric so the
-  safety change is verifiable. Next executable test will be TC-V2 (browser TTS) once Phase A
-  Step A1 is built.
 
 ## 2026-06-21 — Module 1 (+ doc export) — Two separate raw/corrected .docx + Alembic migration
 - Setup: Python 3.14.3 on **Arch Linux**; `.venv`. Added `alembic==1.14.0`. Server run on

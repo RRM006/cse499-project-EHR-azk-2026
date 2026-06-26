@@ -45,7 +45,7 @@
   so swapping providers is easy. Fallback protects against free rate limits.
 - Rejected: Hard-coding a single provider (free limits and availability change
   often). Sending real patient data to any of these (privacy — synthetic only).
-- Status: Accepted (refined per-module by ADR-0026)
+- Status: Accepted
 
 ## ADR-0004 — 2026-06-18 — Backend = FastAPI + WebSocket; browser AudioWorklet capture
 - Decision: Backend is FastAPI with native WebSockets. The browser captures mic
@@ -56,7 +56,7 @@
   can be reused later by the planned mobile app.
 - Rejected: Flask-SocketIO (less clean async); MediaRecorder-only capture (needs
   extra server-side decoding).
-- Status: Accepted (WebSocket capture is Phase 1; Phase 0 STT is browser-side, ADR-0014)
+- Status: Accepted
 
 ## ADR-0005 — 2026-06-18 — Raw transcript is immutable (two-stage capture → normalize)
 - Decision: The raw ASR output is stored unchanged in its own field forever. All
@@ -141,7 +141,8 @@
 - Decision: In Phase 0, live STT runs entirely in the browser (Web Speech API,
   Chrome/Edge, `bn-BD`) talking to Google's cloud. Our FastAPI backend is invoked
   only when the user clicks "Correct" (one Gemini request per click). Talking is
-  effectively unlimited; the real cap is the Gemini free tier.
+  effectively unlimited; the real cap is the Gemini free tier (~15 req/min,
+  ~1,500/day on flash).
 - Why: Matches the Phase 0 goal of a zero-ML-setup demo and the build plan's
   quick-start path. Keeps the loop simple and the backend stateless during speech.
 - Rejected: Streaming audio to the backend in Phase 0 (that is Phase 1 with
@@ -158,7 +159,7 @@
   adding an engine is one new class. Mirrors the existing Corrector pattern (ADR-0003).
 - Rejected: Browser-only STT; true live streaming for all engines (WebSocket+VAD
   chunking — too complex/slow on CPU for Phase 0).
-- Status: Accepted — then superseded by ADR-0019
+- Status: Accepted
 
 ## ADR-0016 — 2026-06-19 — Drop the banglaspeech2text package; use transformers directly
 - Decision: Do NOT install the `banglaspeech2text` PyPI package. Run the same models
@@ -182,7 +183,7 @@
   core light and cross-platform.
 - Rejected: One monolithic requirements-local.txt (caused the conflict); disabling
   providers without explaining why.
-- Status: Accepted — STT installs mooted by ADR-0019 (may return later)
+- Status: Accepted
 
 ## ADR-0018 — 2026-06-19 — Persist raw at transcription; /api/correct works by utterance_id
 - Decision: Raw is created at the transcription step (`/api/transcribe` for server
@@ -286,93 +287,6 @@
   a parallel bare `/transcript/*` route set (mixes two conventions, static-mount edge cases).
 - Status: Accepted (supersedes the single-combined-doc part of ADR-0021; the
   derived-artifact + DB-as-source-of-truth + storage/format seams of ADR-0021 still hold)
-
-## ADR-0024 — 2026-06-25 — Retire the standalone Emergency module; fold a red-flag check into M10; keep module numbering with an M5 gap
-- Decision: Remove the standalone Emergency Detection module (old Module 5), its
-  `D1` decision diamond ("Emergency Detected?"), and the `AX` escalation alert from the
-  Patient Journey flowchart; connect M4 directly to M6. Move the safety responsibility into
-  **Module 10 (Risk Assessment)** as a **rule-based red-flag check** that maps clearly
-  life-threatening symptoms (chest pain, stroke signs, severe breathing difficulty, loss of
-  consciousness) to the **Critical** tier and surfaces them prominently; Module 12's report
-  keeps a **Red Flags** section sourced from M10. Revise constitution rule #3 accordingly
-  ("Surface red flags; never reassure falsely"; autonomous emergency triage/escalation is
-  out of scope for this version). **Keep existing module numbers with a gap at M5** (M6–M15
-  unchanged).
-- Why: The human confirmed simplifying the flow (one fewer decision branch + alert). Folding
-  the check into M10 keeps a medical pre-screening tool honest — it must never present a
-  falsely reassuring picture — without the complexity of a separate parallel module and
-  escalation pathway. Keeping the numbering avoids invalidating ADR-0001…0023 and every
-  M6–M15 cross-reference across nine docs.
-- Rejected: Deleting the emergency *capability* entirely (unsafe for a clinical tool — a
-  red-flag patient could be triaged as Low; flagged as Open Flag 1 for the student to confirm);
-  renumbering M6→M5 etc. (breaks the whole decision/test trail for no benefit); keeping the
-  standalone module (the human explicitly removed it from the flow).
-- Status: Accepted (amends constitution rule #3 and §3 module table)
-
-## ADR-0025 — 2026-06-25 — Final full-stack: CONFIRM the existing stack; ADD browser TTS and a deploy path (no rewrite)
-- Decision: Lock the stack as: Frontend = plain HTML/JS + CSS (Mintlify), served by FastAPI;
-  Backend = Python 3.14 + FastAPI + Uvicorn (REST now, WebSocket reserved for Phase 1);
-  Database = SQLite via SQLAlchemy + Alembic (config-driven URL → Postgres later);
-  AI connector = one OpenAI-compatible client behind a `Corrector`/provider ABC;
-  STT = browser Web Speech API (`bn-BD`); **TTS = browser Web Speech API `SpeechSynthesis`
-  (new)**; Document export = python-docx; Deployment = local `uvicorn` (now), optional single
-  Docker container / free PaaS (later). No microservices.
-- Why: A working Phase 0 codebase (19 passing tests) already embodies ADR-0003/0004/0009/0010/
-  0011/0019/0021/0022. Switching frameworks (React/Postgres/etc.) now would discard working
-  code and violate CLAUDE.md's "small, reviewable changes". TTS via the same browser API that
-  already does STT adds the M7 audio requirement with zero new dependency, no server round-trip,
-  and no key.
-- Rejected: Rewriting the frontend in React now (premature; CLAUDE.md says "React later");
-  Postgres now (SQLite + config-driven URL already covers the swap); a cloud TTS service
-  (adds a key, cost, and a network hop for a feature the browser already provides);
-  microservices / docker-compose multi-service (over-engineering — CONFIRMED CHANGE 4 forbids it).
-- Status: Accepted
-
-## ADR-0026 — 2026-06-25 — Per-module free-API assignment to maximize free-tier longevity (refines ADR-0003)
-- Decision: Assign LLM-dependent modules across THREE independent daily quota buckets so no
-  single limit is the bottleneck: **Gemini 3 Flash** (free, ~1,500 req/day, resets midnight PT)
-  for quality tasks (M2 correction, M4 summary, M11 XAI, M12 prose); **Gemini Flash-Lite**
-  (higher RPM) for cheap structured extraction (M3, M8) to protect the main Flash quota;
-  **Groq Llama 3.3 70B** (very fast LPU, ~1,000 req/day, resets midnight UTC) for live-loop
-  tasks (M6, M7); **OpenRouter `:free`** as the universal fallback for every module
-  (recommend a one-time $10 top-up to raise 50→1,000 req/day). M1 STT, M9 completion check,
-  and M13/M14/M15 are LOCAL / NO-API. All providers are OpenAI-compatible, so the existing
-  single client + a `base_url`/model swap (ADR-0011) implements the whole strategy via config.
-- Why: Maximizes free longevity (priority order: free longevity > demo quality > raw
-  performance). Spreading across buckets that reset at different times effectively multiplies
-  daily capacity; routing quality-critical low-frequency work to Gemini and high-frequency
-  loop work to Groq matches each provider's strength (Bangla quality vs. speed).
-- Rejected: One provider for everything (single point of quota failure); Gemini 2.5 Pro
-  (free tier removed April 2026 — Flash/Flash-Lite only); hard-coding model names in code
-  (config-driven instead). NOTE: free-tier numbers drift — verify in each console
-  (ai.google.dev/gemini-api/docs/rate-limits, console.groq.com/docs/rate-limits,
-  openrouter.ai/docs/api/reference/limits). Synthetic/consented data only (rule #4).
-- Status: Accepted (refines ADR-0003)
-
-## ADR-0027 — 2026-06-25 — Voice interaction model: Web Speech STT (bn-BD) + SpeechSynthesis TTS; patient replies voice-only; manual text is a fallback
-- Decision: Patient input is **voice only** (no keyboard for the patient). STT =
-  `webkitSpeechRecognition`, `lang='bn-BD'`, `continuous=true`, `interimResults=true`
-  (per ADR-0014/0020). TTS = `window.speechSynthesis` + `SpeechSynthesisUtterance`,
-  `lang='bn-BD'`, choosing an installed Bangla voice if present (else default). The manual
-  text box remains ONLY as a developer/accessibility fallback for mic failure.
-- Why: Matches the kiosk/tablet patient experience and CONFIRMED CHANGE 2. Reusing the same
-  browser API for both directions keeps it free, key-less, and cross-platform.
-- Rejected: Keyboard input for patients (defeats the voice-first goal); a cloud TTS
-  (unnecessary cost/dependency); removing the manual fallback (would break Module 1's
-  required mic-failure path, constitution Module 1).
-- Status: Accepted
-
-## ADR-0028 — 2026-06-25 — Follow-up question presentation: on-screen text AND spoken audio simultaneously
-- Decision: At M7, each follow-up question is **displayed as text on screen AND played as
-  audio via TTS at the same time**. The patient answers by voice; their answer is captured
-  by STT and sent to M8. The S7 flowchart node carries the subtitle
-  "(Audio + Text display | Voice reply only)".
-- Why: Dual presentation aids comprehension across literacy/accent/age ranges and keeps the
-  question visible if the Bangla TTS voice is unavailable or low quality (the text is the
-  built-in fallback). Required by CONFIRMED CHANGE 2.
-- Rejected: Audio-only (fails when no Bangla voice is installed or in a noisy clinic);
-  text-only (defeats the voice-first, low-literacy-friendly goal).
-- Status: Accepted
 
 ## ADR-0008 — 2026-06-18 — Default Whisper model is small/base; upgrade to a Bangla fine-tune later
 - Decision: Start with Whisper `small` (or `base` if we need a snappier live feel)
