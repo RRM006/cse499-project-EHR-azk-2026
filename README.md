@@ -57,16 +57,15 @@ The system coordinates fifteen modules to transform noisy verbal inputs into hig
                                     v
                 [Module 4: Initial Clinical Summary]
                                     |
-                   +----------------+----------------+
-                   |                                 |
-                   v                                 v
-     [Module 5: Emergency Detection]   [Module 6: Missing Info Analysis]
-             | (Parallel Triage)                     |
-             v                                       v
-      [ALERT IF CRITICAL]              [Module 7: Follow-up Question Gen]
-             |                                       |
-    (Medical Staff Alert)                            v
-                                              Patient Answers
+                                    v
+                  [Module 6: Missing Info Analysis]
+                                    |
+                                    v
+                 [Module 7: Follow-up Question Gen]
+              (Audio + Text display | Voice reply only)
+                                    |
+                                    v
+                               Patient Answers
                                                      |
                                                      v
                                        [Module 8: Response Processing]
@@ -103,9 +102,8 @@ The system coordinates fifteen modules to transform noisy verbal inputs into hig
 2. **M2: Text Processing & Normalisation**: Performs spelling correction, Banglish normalization, punctuation restoration, and sentence boundary detection.
 3. **M3: Information Extraction (Medical NER)**: Extracts clinical entities (symptoms, body parts, duration, severity, medications, allergies, age, etc.).
 4. **M4: Initial Clinical Summary**: Generates a concise human-readable summary of the initial chief complaint.
-5. **M5: Emergency Detection**: Parallel safety check flagging red-flag symptoms (e.g., chest pain, stroke signs, severe breathing difficulties) to alert medical staff immediately.
 6. **M6: Missing Information Analysis**: Checks extracted clinical data against expected symptoms per disease template to generate a structured gap report.
-7. **M7: Dynamic Follow-up Question Generation**: Generates contextual questions in Bangla or English to systematically collect missing information.
+7. **M7: Dynamic Follow-up Question Generation**: Generates contextual questions in Bangla or English to systematically collect missing information (Audio + Text display | Voice reply only).
 8. **M8: Response Processing & Profile Update**: Processes the patient's answers to update the overall clinical profile and resolve contradictions.
 9. **M9: Case Completion Check**: Evaluates if the collected profile is complete enough for clinical assessment; loops back to M7 up to a configured turn limit.
 10. **M10: Risk Assessment**: Assigns a risk level (**Low / Medium / High / Critical**) using clinical decision rules and a weighted scoring engine.
@@ -123,7 +121,6 @@ The system coordinates fifteen modules to transform noisy verbal inputs into hig
 |:---|:---|:---|
 | **Interaction Model** | Single-pass, stateless transcription pipeline. | Stateful, interactive conversational loop. |
 | **Handling Gaps** | None (incomplete data passed to doctor). | Active gap analysis (M6) and follow-up (M7–M9). |
-| **Emergency Triage** | Not supported. | Dedicated parallel triage module (M5) with staff alerts. |
 | **Risk Stratification** | Differential diagnostic hints only. | 4-tier risk classification (Low, Medium, High, Critical). |
 | **Reasoning Audit** | Not supported. | Dedicated Explainable AI module (M11) using SHAP/LIME. |
 | **Language Support** | Standard Bangla and Bangla-English code-mixed. | Bangla, Banglish, and regional dialects (Dhaka, Sylhet, Barishal). |
