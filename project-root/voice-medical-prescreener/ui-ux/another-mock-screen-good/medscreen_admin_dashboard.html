@@ -1,0 +1,359 @@
+
+<style>
+*{box-sizing:border-box;margin:0;padding:0}
+:root{
+  --navy:#0B2545;--navy-mid:#1B3A6B;--navy-light:#2E5090;
+  --accent:#1A6FBF;--accent-light:#E8F1FB;
+  --success:#0E7C5A;--success-bg:#E6F4F0;--success-border:#B7DDD4;
+  --warn:#8B5E00;--warn-bg:#FFF8E6;--warn-border:#E8CC7A;
+  --danger:#B91C1C;--danger-bg:#FEF2F2;--danger-border:#FECACA;
+  --med:#1D5FAD;--med-bg:#EEF5FD;--med-border:#B5D4F4;
+  --surface:#F2F5FA;--card:#FFFFFF;
+  --border:#D1DCF0;--border-strong:#A0B4D6;
+  --text:#0B1F3A;--text-sec:#4A607A;--text-muted:#7A91A8;
+  --radius:10px;--font:'Inter',system-ui,sans-serif;
+}
+body{font-family:var(--font);background:var(--surface);color:var(--text);font-size:14px;display:flex;min-height:700px}
+.sidebar{width:220px;background:#060F1E;flex-shrink:0;display:flex;flex-direction:column}
+.sb-logo{padding:18px 16px;border-bottom:0.5px solid rgba(255,255,255,0.06);display:flex;align-items:center;gap:10px}
+.sb-logo .mark{width:32px;height:32px;background:rgba(26,111,191,0.3);border-radius:8px;display:flex;align-items:center;justify-content:center}
+.sb-logo .mark i{color:#60A5FA;font-size:16px}
+.sb-logo .name{font-size:13px;font-weight:500;color:#fff}
+.sb-logo .role{font-size:11px;color:#3D5A7A}
+.sb-sec{padding:12px 10px 4px;font-size:10px;font-weight:600;color:#2A4060;letter-spacing:0.1em;text-transform:uppercase}
+.sb-item{display:flex;align-items:center;gap:10px;padding:9px 12px;border-radius:8px;margin:1px 8px;cursor:pointer;color:#6A8AB0;font-size:13px;transition:all .15s}
+.sb-item:hover{background:rgba(255,255,255,0.05);color:#A0B8D8}
+.sb-item.active{background:rgba(26,111,191,0.2);color:#60A5FA}
+.sb-item i{font-size:16px;flex-shrink:0}
+.sb-bottom{margin-top:auto;padding:12px 8px;border-top:0.5px solid rgba(255,255,255,0.06)}
+.sb-user{display:flex;align-items:center;gap:10px;padding:8px 12px}
+.sb-user .avatar{width:32px;height:32px;background:rgba(26,111,191,0.3);border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:12px;font-weight:500;color:#60A5FA;flex-shrink:0}
+.sb-user .info .name{font-size:12px;color:#A0B8D8;font-weight:500}
+.sb-user .info .spec{font-size:11px;color:#2A4060}
+.main{flex:1;display:flex;flex-direction:column;min-width:0;overflow:hidden}
+.topbar{background:#fff;border-bottom:0.5px solid var(--border);padding:12px 24px;display:flex;align-items:center;gap:12px}
+.topbar-title{font-size:16px;font-weight:500;color:var(--navy);flex:1}
+.status-dot{width:8px;height:8px;border-radius:50%;background:#22c55e;animation:pulse 2s infinite}
+.content{flex:1;padding:20px 24px;overflow-y:auto;display:flex;flex-direction:column;gap:16px}
+.card{background:var(--card);border:0.5px solid var(--border);border-radius:12px;padding:20px}
+.card-sm{background:var(--card);border:0.5px solid var(--border);border-radius:12px;padding:16px}
+.sec-label{font-size:11px;font-weight:600;color:var(--text-muted);letter-spacing:0.08em;text-transform:uppercase;margin-bottom:12px}
+.kpi-grid{display:grid;grid-template-columns:repeat(6,1fr);gap:10px}
+.kpi{background:var(--card);border:0.5px solid var(--border);border-radius:10px;padding:14px 12px;text-align:center}
+.kpi .num{font-size:22px;font-weight:500;color:var(--navy)}
+.kpi .lbl{font-size:11px;color:var(--text-muted);margin-top:3px;line-height:1.3}
+.kpi .sub{font-size:10px;margin-top:4px}
+.three-col{display:grid;grid-template-columns:1fr 1fr 1fr;gap:14px}
+.two-col{display:grid;grid-template-columns:1fr 1fr;gap:14px}
+.sys-table{width:100%;border-collapse:collapse}
+.sys-table th{font-size:11px;font-weight:600;color:var(--text-muted);text-align:left;padding:8px 10px;border-bottom:0.5px solid var(--border);text-transform:uppercase;letter-spacing:0.05em}
+.sys-table td{padding:9px 10px;border-bottom:0.5px solid var(--border);font-size:12px;color:var(--text);vertical-align:middle}
+.sys-table tr:last-child td{border-bottom:none}
+.sys-table tr:hover td{background:var(--surface)}
+.health-item{display:flex;align-items:center;justify-content:space-between;padding:8px 0;border-bottom:0.5px solid var(--border)}
+.health-item:last-child{border-bottom:none}
+.health-name{font-size:13px;color:var(--text);display:flex;align-items:center;gap:8px}
+.health-status{font-size:12px;font-weight:500;display:flex;align-items:center;gap:5px}
+.hs-ok{color:var(--success)}
+.hs-warn{color:var(--warn)}
+.hs-err{color:var(--danger)}
+.dot-ok{width:7px;height:7px;border-radius:50%;background:var(--success);flex-shrink:0}
+.dot-warn{width:7px;height:7px;border-radius:50%;background:#D97706;flex-shrink:0}
+.dot-err{width:7px;height:7px;border-radius:50%;background:var(--danger);flex-shrink:0}
+.audit-row{display:flex;gap:12px;padding:8px 0;border-bottom:0.5px solid var(--border);align-items:flex-start}
+.audit-row:last-child{border-bottom:none}
+.audit-time{font-size:11px;color:var(--text-muted);min-width:58px;flex-shrink:0;margin-top:1px}
+.audit-icon{width:24px;height:24px;border-radius:6px;display:flex;align-items:center;justify-content:center;flex-shrink:0}
+.audit-icon.info{background:var(--accent-light)}
+.audit-icon.warn{background:var(--warn-bg)}
+.audit-icon.ok{background:var(--success-bg)}
+.audit-icon.err{background:var(--danger-bg)}
+.audit-text{font-size:12px;color:var(--text);line-height:1.4}
+.audit-user{font-size:11px;color:var(--text-muted);margin-top:2px}
+.bar-wrap{width:100%;height:8px;background:var(--surface);border-radius:4px;overflow:hidden;margin-top:6px}
+.bar-fill{height:100%;border-radius:4px;transition:width .5s}
+.user-row{display:flex;align-items:center;gap:10px;padding:8px 0;border-bottom:0.5px solid var(--border)}
+.user-row:last-child{border-bottom:none}
+.u-avatar{width:30px;height:30px;border-radius:8px;display:flex;align-items:center;justify-content:center;font-size:11px;font-weight:500;color:#fff;flex-shrink:0}
+.u-name{font-size:13px;color:var(--text);font-weight:500}
+.u-meta{font-size:11px;color:var(--text-muted)}
+.u-badge{margin-left:auto;font-size:11px;padding:2px 8px;border-radius:10px;font-weight:500}
+.ub-active{background:var(--success-bg);color:var(--success)}
+.ub-idle{background:var(--surface);color:var(--text-muted);border:0.5px solid var(--border)}
+.ub-admin{background:var(--med-bg);color:var(--med)}
+</style>
+
+<div style="display:flex;min-height:700px">
+<div class="sidebar">
+  <div class="sb-logo">
+    <div class="mark"><i class="ti ti-shield-check" aria-hidden="true"></i></div>
+    <div><div class="name">MediScreen BD</div><div class="role">Admin & management</div></div>
+  </div>
+  <div class="sb-sec">System</div>
+  <div class="sb-item active"><i class="ti ti-layout-dashboard" aria-hidden="true"></i>Overview</div>
+  <div class="sb-item"><i class="ti ti-heart-rate-monitor" aria-hidden="true"></i>System health</div>
+  <div class="sb-item"><i class="ti ti-database" aria-hidden="true"></i>EHR database</div>
+  <div class="sb-item"><i class="ti ti-lock" aria-hidden="true"></i>Encryption status</div>
+  <div class="sb-sec">People</div>
+  <div class="sb-item"><i class="ti ti-users" aria-hidden="true"></i>User accounts</div>
+  <div class="sb-item"><i class="ti ti-stethoscope" aria-hidden="true"></i>Doctor registry</div>
+  <div class="sb-item"><i class="ti ti-user-shield" aria-hidden="true"></i>Access control</div>
+  <div class="sb-sec">Audit</div>
+  <div class="sb-item"><i class="ti ti-file-text" aria-hidden="true"></i>Audit log</div>
+  <div class="sb-item"><i class="ti ti-chart-line" aria-hidden="true"></i>Performance</div>
+  <div class="sb-item"><i class="ti ti-settings" aria-hidden="true"></i>Configuration</div>
+  <div class="sb-bottom">
+    <div class="sb-user">
+      <div class="avatar">AD</div>
+      <div class="info"><div class="name">Admin</div><div class="spec">System administrator</div></div>
+    </div>
+  </div>
+</div>
+
+<div class="main">
+  <div class="topbar">
+    <div class="topbar-title">System administration — overview</div>
+    <div style="display:flex;align-items:center;gap:8px;font-size:12px;color:var(--success)">
+      <div class="status-dot"></div>All systems operational
+    </div>
+    <div style="font-size:12px;color:var(--text-muted);margin-left:8px"><i class="ti ti-calendar" style="margin-right:4px" aria-hidden="true"></i>26 June 2026, 11:14 AM</div>
+    <div style="font-size:12px;background:var(--med-bg);color:var(--med);border:0.5px solid var(--med-border);border-radius:6px;padding:4px 10px;margin-left:8px;display:flex;align-items:center;gap:5px">
+      <i class="ti ti-lock" style="font-size:13px" aria-hidden="true"></i>Admin session
+    </div>
+  </div>
+
+  <div class="content">
+    <div class="kpi-grid">
+      <div class="kpi"><div class="num">14</div><div class="lbl">Patients today</div><div class="sub" style="color:var(--success)">↑ 3 from yesterday</div></div>
+      <div class="kpi"><div class="num" style="color:var(--success)">98.4%</div><div class="lbl">System uptime</div><div class="sub" style="color:var(--text-muted)">Last 30 days</div></div>
+      <div class="kpi"><div class="num">7</div><div class="lbl">Active doctors</div><div class="sub" style="color:var(--text-muted)">3 on shift</div></div>
+      <div class="kpi"><div class="num">4</div><div class="lbl">Active medics</div><div class="sub" style="color:var(--text-muted)">All on shift</div></div>
+      <div class="kpi"><div class="num" style="color:var(--danger)">2</div><div class="lbl">Critical cases</div><div class="sub" style="color:var(--danger)">Attention needed</div></div>
+      <div class="kpi"><div class="num" style="color:var(--success)">0</div><div class="lbl">System errors</div><div class="sub" style="color:var(--success)">All pipelines OK</div></div>
+    </div>
+
+    <div class="three-col">
+      <div class="card-sm">
+        <div class="sec-label">System health</div>
+        <div class="health-item">
+          <div class="health-name"><div class="dot-ok"></div>Voice capture pipeline</div>
+          <div class="health-status hs-ok"><i class="ti ti-check" aria-hidden="true"></i>Operational</div>
+        </div>
+        <div class="health-item">
+          <div class="health-name"><div class="dot-ok"></div>Transcription service</div>
+          <div class="health-status hs-ok"><i class="ti ti-check" aria-hidden="true"></i>Operational</div>
+        </div>
+        <div class="health-item">
+          <div class="health-name"><div class="dot-ok"></div>Clinical extraction</div>
+          <div class="health-status hs-ok"><i class="ti ti-check" aria-hidden="true"></i>Operational</div>
+        </div>
+        <div class="health-item">
+          <div class="health-name"><div class="dot-ok"></div>Risk assessment engine</div>
+          <div class="health-status hs-ok"><i class="ti ti-check" aria-hidden="true"></i>Operational</div>
+        </div>
+        <div class="health-item">
+          <div class="health-name"><div class="dot-ok"></div>Report generation</div>
+          <div class="health-status hs-ok"><i class="ti ti-check" aria-hidden="true"></i>Operational</div>
+        </div>
+        <div class="health-item">
+          <div class="health-name"><div class="dot-ok"></div>EHR database</div>
+          <div class="health-status hs-ok"><i class="ti ti-check" aria-hidden="true"></i>Encrypted · Online</div>
+        </div>
+        <div class="health-item">
+          <div class="health-name"><div class="dot-warn"></div>Feedback pipeline</div>
+          <div class="health-status hs-warn"><i class="ti ti-alert-triangle" aria-hidden="true"></i>Retraining queued</div>
+        </div>
+        <div class="health-item">
+          <div class="health-name"><div class="dot-ok"></div>SMS / OTP gateway</div>
+          <div class="health-status hs-ok"><i class="ti ti-check" aria-hidden="true"></i>Operational</div>
+        </div>
+      </div>
+
+      <div class="card-sm">
+        <div class="sec-label">Active users</div>
+        <div class="user-row">
+          <div class="u-avatar" style="background:var(--navy)">DR</div>
+          <div><div class="u-name">Dr. Rahman</div><div class="u-meta">Internal Medicine · Logged in 09:12</div></div>
+          <span class="u-badge ub-active">Active</span>
+        </div>
+        <div class="user-row">
+          <div class="u-avatar" style="background:#1D5FAD">DC</div>
+          <div><div class="u-name">Dr. Chowdhury</div><div class="u-meta">Cardiology · Logged in 08:55</div></div>
+          <span class="u-badge ub-active">Active</span>
+        </div>
+        <div class="user-row">
+          <div class="u-avatar" style="background:#0E7C5A">SA</div>
+          <div><div class="u-name">Sadia Akter</div><div class="u-meta">Medic · Logged in 08:30</div></div>
+          <span class="u-badge ub-active">Active</span>
+        </div>
+        <div class="user-row">
+          <div class="u-avatar" style="background:#6B21A8">AD</div>
+          <div><div class="u-name">Admin</div><div class="u-meta">System admin · Current session</div></div>
+          <span class="u-badge ub-admin">Admin</span>
+        </div>
+        <div class="user-row">
+          <div class="u-avatar" style="background:var(--text-muted)">DH</div>
+          <div><div class="u-name">Dr. Hasan</div><div class="u-meta">General Practice · Last seen 10:44</div></div>
+          <span class="u-badge ub-idle">Idle</span>
+        </div>
+        <div style="margin-top:12px;padding-top:10px;border-top:0.5px solid var(--border)">
+          <div style="display:flex;justify-content:space-between;font-size:12px;color:var(--text-muted)">
+            <span>Registered doctors</span><strong style="color:var(--text)">7</strong>
+          </div>
+          <div style="display:flex;justify-content:space-between;font-size:12px;color:var(--text-muted);margin-top:6px">
+            <span>Registered medics</span><strong style="color:var(--text)">4</strong>
+          </div>
+        </div>
+      </div>
+
+      <div class="card-sm">
+        <div class="sec-label">Today's session metrics</div>
+        <div style="display:flex;flex-direction:column;gap:12px">
+          <div>
+            <div style="display:flex;justify-content:space-between;font-size:12px;margin-bottom:4px"><span style="color:var(--text-sec)">Sessions complete</span><span style="font-weight:500">9 / 14</span></div>
+            <div class="bar-wrap"><div class="bar-fill" style="width:64%;background:var(--success)"></div></div>
+          </div>
+          <div>
+            <div style="display:flex;justify-content:space-between;font-size:12px;margin-bottom:4px"><span style="color:var(--text-sec)">Avg. session duration</span><span style="font-weight:500">8.4 min</span></div>
+            <div class="bar-wrap"><div class="bar-fill" style="width:56%;background:var(--accent)"></div></div>
+          </div>
+          <div>
+            <div style="display:flex;justify-content:space-between;font-size:12px;margin-bottom:4px"><span style="color:var(--text-sec)">Transcription accuracy</span><span style="font-weight:500">94.2%</span></div>
+            <div class="bar-wrap"><div class="bar-fill" style="width:94%;background:var(--success)"></div></div>
+          </div>
+          <div>
+            <div style="display:flex;justify-content:space-between;font-size:12px;margin-bottom:4px"><span style="color:var(--text-sec)">Reports accepted by doctors</span><span style="font-weight:500">7 / 9</span></div>
+            <div class="bar-wrap"><div class="bar-fill" style="width:78%;background:var(--med)"></div></div>
+          </div>
+          <div>
+            <div style="display:flex;justify-content:space-between;font-size:12px;margin-bottom:4px"><span style="color:var(--text-sec)">Risk flag accuracy (feedback)</span><span style="font-weight:500">91.7%</span></div>
+            <div class="bar-wrap"><div class="bar-fill" style="width:92%;background:var(--warn)"></div></div>
+          </div>
+          <div>
+            <div style="display:flex;justify-content:space-between;font-size:12px;margin-bottom:4px"><span style="color:var(--text-sec)">Encryption compliance</span><span style="font-weight:500;color:var(--success)">100%</span></div>
+            <div class="bar-wrap"><div class="bar-fill" style="width:100%;background:var(--success)"></div></div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div class="two-col">
+      <div class="card">
+        <div class="sec-label">Audit log — recent events</div>
+        <div class="audit-row">
+          <div class="audit-time">11:08 AM</div>
+          <div class="audit-icon ok"><i class="ti ti-login" style="font-size:13px;color:var(--success)" aria-hidden="true"></i></div>
+          <div><div class="audit-text">Patient session started — Jasim Uddin (ID: JS-2026-014)</div><div class="audit-user">Voice capture pipeline · Kiosk-01</div></div>
+        </div>
+        <div class="audit-row">
+          <div class="audit-time">11:02 AM</div>
+          <div class="audit-icon ok"><i class="ti ti-login" style="font-size:13px;color:var(--success)" aria-hidden="true"></i></div>
+          <div><div class="audit-text">Patient session started — Nusrat Sultana (ID: NS-2026-013)</div><div class="audit-user">OTP verified · +880 01811 234567</div></div>
+        </div>
+        <div class="audit-row">
+          <div class="audit-time">10:58 AM</div>
+          <div class="audit-icon info"><i class="ti ti-user-check" style="font-size:13px;color:var(--accent)" aria-hidden="true"></i></div>
+          <div><div class="audit-text">Doctor assigned — Karim Ahmed → Dr. Hasan (General Practice)</div><div class="audit-user">Assigned by: Sadia Akter (Medic)</div></div>
+        </div>
+        <div class="audit-row">
+          <div class="audit-time">10:51 AM</div>
+          <div class="audit-icon warn"><i class="ti ti-alert-triangle" style="font-size:13px;color:var(--warn)" aria-hidden="true"></i></div>
+          <div><div class="audit-text">High-risk flag raised — Rahim Hossain · Fever + night sweats · Diabetic comorbidity</div><div class="audit-user">Risk assessment engine · Notified Dr. Rahman</div></div>
+        </div>
+        <div class="audit-row">
+          <div class="audit-time">10:42 AM</div>
+          <div class="audit-icon err"><i class="ti ti-alert-octagon" style="font-size:13px;color:var(--danger)" aria-hidden="true"></i></div>
+          <div><div class="audit-text">Critical flag raised — Fatema Begum · Chest pain, breathlessness · Unassigned</div><div class="audit-user">Risk assessment engine · Alert sent to medic station</div></div>
+        </div>
+        <div class="audit-row">
+          <div class="audit-time">10:36 AM</div>
+          <div class="audit-icon ok"><i class="ti ti-database" style="font-size:13px;color:var(--success)" aria-hidden="true"></i></div>
+          <div><div class="audit-text">Report stored to EHR — Mariam Khatun (ID: MK-2026-011) · AES-256 encrypted</div><div class="audit-user">EHR database · Storage confirmed</div></div>
+        </div>
+        <div class="audit-row">
+          <div class="audit-time">10:24 AM</div>
+          <div class="audit-icon info"><i class="ti ti-login" style="font-size:13px;color:var(--accent)" aria-hidden="true"></i></div>
+          <div><div class="audit-text">Doctor login — Dr. Rahman · Role: Internal Medicine · IP: 192.168.1.42</div><div class="audit-user">Auth service · Session token issued</div></div>
+        </div>
+        <div class="audit-row">
+          <div class="audit-time">09:12 AM</div>
+          <div class="audit-icon ok"><i class="ti ti-shield-check" style="font-size:13px;color:var(--success)" aria-hidden="true"></i></div>
+          <div><div class="audit-text">Daily system health check passed — all pipelines operational</div><div class="audit-user">Automated monitor · No anomalies detected</div></div>
+        </div>
+      </div>
+
+      <div style="display:flex;flex-direction:column;gap:14px">
+        <div class="card-sm">
+          <div class="sec-label">EHR data compliance</div>
+          <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:12px">
+            <div style="background:var(--surface);border-radius:var(--radius);padding:10px;text-align:center">
+              <div style="font-size:18px;font-weight:500;color:var(--success)">AES-256</div>
+              <div style="font-size:11px;color:var(--text-muted);margin-top:3px">Encryption at rest</div>
+            </div>
+            <div style="background:var(--surface);border-radius:var(--radius);padding:10px;text-align:center">
+              <div style="font-size:18px;font-weight:500;color:var(--success)">TLS 1.3</div>
+              <div style="font-size:11px;color:var(--text-muted);margin-top:3px">Encryption in transit</div>
+            </div>
+          </div>
+          <div style="display:flex;flex-direction:column;gap:8px">
+            <div style="display:flex;justify-content:space-between;align-items:center">
+              <span style="font-size:12px;color:var(--text-sec)">Consent records collected</span>
+              <span style="font-size:12px;font-weight:500;color:var(--success)">14 / 14</span>
+            </div>
+            <div style="display:flex;justify-content:space-between;align-items:center">
+              <span style="font-size:12px;color:var(--text-sec)">Auto-logout enforced</span>
+              <span style="font-size:12px;font-weight:500;color:var(--success)">All sessions</span>
+            </div>
+            <div style="display:flex;justify-content:space-between;align-items:center">
+              <span style="font-size:12px;color:var(--text-sec)">Audit trail complete</span>
+              <span style="font-size:12px;font-weight:500;color:var(--success)">100%</span>
+            </div>
+            <div style="display:flex;justify-content:space-between;align-items:center">
+              <span style="font-size:12px;color:var(--text-sec)">Last DB backup</span>
+              <span style="font-size:12px;font-weight:500;color:var(--text)">11:00 AM today</span>
+            </div>
+          </div>
+        </div>
+
+        <div class="card-sm">
+          <div class="sec-label">Risk distribution today</div>
+          <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:8px;margin-bottom:10px">
+            <div style="background:var(--danger-bg);border:0.5px solid var(--danger-border);border-radius:8px;padding:10px;text-align:center">
+              <div style="font-size:20px;font-weight:500;color:var(--danger)">2</div>
+              <div style="font-size:10px;color:var(--danger);margin-top:3px">Critical</div>
+            </div>
+            <div style="background:var(--warn-bg);border:0.5px solid var(--warn-border);border-radius:8px;padding:10px;text-align:center">
+              <div style="font-size:20px;font-weight:500;color:var(--warn)">4</div>
+              <div style="font-size:10px;color:var(--warn);margin-top:3px">High</div>
+            </div>
+            <div style="background:var(--med-bg);border:0.5px solid var(--med-border);border-radius:8px;padding:10px;text-align:center">
+              <div style="font-size:20px;font-weight:500;color:var(--med)">5</div>
+              <div style="font-size:10px;color:var(--med);margin-top:3px">Medium</div>
+            </div>
+            <div style="background:var(--success-bg);border:0.5px solid var(--success-border);border-radius:8px;padding:10px;text-align:center">
+              <div style="font-size:20px;font-weight:500;color:var(--success)">3</div>
+              <div style="font-size:10px;color:var(--success);margin-top:3px">Low</div>
+            </div>
+          </div>
+          <div style="font-size:12px;color:var(--text-muted)">Total sessions assessed: 14 · Flagged for immediate attention: 2</div>
+        </div>
+
+        <div class="card-sm">
+          <div class="sec-label">Registered doctor accounts</div>
+          <table class="sys-table" style="font-size:12px">
+            <thead><tr><th>Doctor</th><th>Specialisation</th><th>Status</th></tr></thead>
+            <tbody>
+              <tr><td>Dr. Rahman</td><td>Internal Medicine</td><td style="color:var(--success)">Active</td></tr>
+              <tr><td>Dr. Chowdhury</td><td>Cardiology</td><td style="color:var(--success)">Active</td></tr>
+              <tr><td>Dr. Hasan</td><td>General Practice</td><td style="color:var(--text-muted)">Idle</td></tr>
+              <tr><td>Dr. Islam</td><td>Pulmonology</td><td style="color:var(--text-muted)">Off shift</td></tr>
+              <tr><td>Dr. Ahmed</td><td>Paediatrics</td><td style="color:var(--text-muted)">Off shift</td></tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+</div>
+<style>@keyframes pulse{0%,100%{opacity:1}50%{opacity:.3}}</style>

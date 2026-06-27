@@ -1,0 +1,321 @@
+
+<style>
+*{box-sizing:border-box;margin:0;padding:0}
+:root{
+  --navy:#0B2545;--navy-mid:#1B3A6B;--navy-light:#2E5090;
+  --accent:#1A6FBF;--accent-light:#E8F1FB;
+  --success:#0E7C5A;--success-bg:#E6F4F0;--success-border:#B7DDD4;
+  --warn:#8B5E00;--warn-bg:#FFF8E6;--warn-border:#E8CC7A;
+  --danger:#B91C1C;--danger-bg:#FEF2F2;--danger-border:#FECACA;
+  --med:#1D5FAD;--med-bg:#EEF5FD;--med-border:#B5D4F4;
+  --surface:#F2F5FA;--card:#FFFFFF;
+  --border:#D1DCF0;--border-strong:#A0B4D6;
+  --text:#0B1F3A;--text-sec:#4A607A;--text-muted:#7A91A8;
+  --radius:10px;--font:'Inter',system-ui,sans-serif;
+}
+body{font-family:var(--font);background:var(--surface);color:var(--text);font-size:14px;display:flex;min-height:700px}
+.sidebar{width:220px;background:var(--navy);flex-shrink:0;display:flex;flex-direction:column}
+.sb-logo{padding:18px 16px;border-bottom:0.5px solid rgba(255,255,255,0.08);display:flex;align-items:center;gap:10px}
+.sb-logo .mark{width:32px;height:32px;background:#0D47A1;border-radius:8px;display:flex;align-items:center;justify-content:center}
+.sb-logo .mark i{color:#90CAF9;font-size:16px}
+.sb-logo .name{font-size:13px;font-weight:500;color:#fff}
+.sb-logo .role{font-size:11px;color:#7A99C0}
+.sb-sec{padding:12px 10px 4px;font-size:10px;font-weight:600;color:#4A6885;letter-spacing:0.1em;text-transform:uppercase}
+.sb-item{display:flex;align-items:center;gap:10px;padding:9px 12px;border-radius:8px;margin:1px 8px;cursor:pointer;color:#A0B8D8;font-size:13px;transition:all .15s}
+.sb-item:hover{background:rgba(255,255,255,0.07);color:#CBD8EC}
+.sb-item.active{background:rgba(26,111,191,0.25);color:#7EB8F5}
+.sb-item i{font-size:16px;flex-shrink:0}
+.sb-item .badge{margin-left:auto;background:var(--danger);color:#fff;border-radius:10px;padding:1px 7px;font-size:10px;font-weight:600}
+.sb-bottom{margin-top:auto;padding:12px 8px;border-top:0.5px solid rgba(255,255,255,0.08)}
+.sb-user{display:flex;align-items:center;gap:10px;padding:8px 12px;border-radius:8px}
+.sb-user .avatar{width:32px;height:32px;background:#0D47A1;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:12px;font-weight:500;color:#90CAF9;flex-shrink:0}
+.sb-user .info .name{font-size:12px;color:#CBD8EC;font-weight:500}
+.sb-user .info .spec{font-size:11px;color:#4A6885}
+.main{flex:1;display:flex;flex-direction:column;min-width:0}
+.topbar{background:#fff;border-bottom:0.5px solid var(--border);padding:12px 24px;display:flex;align-items:center;gap:12px}
+.topbar-title{font-size:16px;font-weight:500;color:var(--navy);flex:1}
+.lang-toggle{display:flex;background:var(--surface);border-radius:6px;border:0.5px solid var(--border);overflow:hidden}
+.lang-btn{padding:5px 12px;font-size:12px;color:var(--text-sec);border:none;background:transparent;cursor:pointer;transition:all .2s;font-family:var(--font)}
+.lang-btn.active{background:var(--navy);color:#fff}
+.content{flex:1;padding:20px 24px;overflow-y:auto;display:flex;flex-direction:column;gap:16px}
+.stats-strip{display:grid;grid-template-columns:repeat(5,1fr);gap:10px}
+.stat-card{background:var(--card);border:0.5px solid var(--border);border-radius:10px;padding:14px 16px}
+.stat-card .num{font-size:24px;font-weight:500;color:var(--navy)}
+.stat-card .lbl{font-size:11px;color:var(--text-muted);margin-top:3px}
+.stat-card .delta{font-size:11px;color:var(--success);margin-top:4px}
+.queue-section{display:grid;grid-template-columns:1fr 320px;gap:16px}
+.card{background:var(--card);border:0.5px solid var(--border);border-radius:12px;padding:20px}
+.card-sm{background:var(--card);border:0.5px solid var(--border);border-radius:12px;padding:16px}
+.sec-label{font-size:11px;font-weight:600;color:var(--text-muted);letter-spacing:0.08em;text-transform:uppercase;margin-bottom:12px}
+.table-wrap{width:100%;border-collapse:collapse}
+.table-wrap th{font-size:11px;font-weight:600;color:var(--text-muted);text-align:left;padding:8px 12px;border-bottom:0.5px solid var(--border);letter-spacing:0.05em;text-transform:uppercase}
+.table-wrap td{padding:10px 12px;border-bottom:0.5px solid var(--border);vertical-align:middle;font-size:13px;color:var(--text)}
+.table-wrap tr:last-child td{border-bottom:none}
+.table-wrap tr:hover td{background:var(--surface)}
+.risk-pill{padding:3px 10px;border-radius:20px;font-size:11px;font-weight:500;display:inline-flex;align-items:center;gap:4px;white-space:nowrap}
+.risk-high{background:var(--warn-bg);color:var(--warn);border:0.5px solid var(--warn-border)}
+.risk-critical{background:var(--danger-bg);color:var(--danger);border:0.5px solid var(--danger-border)}
+.risk-medium{background:var(--med-bg);color:var(--med);border:0.5px solid var(--med-border)}
+.risk-low{background:var(--success-bg);color:var(--success);border:0.5px solid var(--success-border)}
+.status-pill{padding:3px 10px;border-radius:20px;font-size:11px;font-weight:500;display:inline-flex;align-items:center;gap:4px}
+.status-done{background:var(--success-bg);color:var(--success)}
+.status-progress{background:var(--accent-light);color:var(--accent)}
+.status-waiting{background:var(--surface);color:var(--text-muted);border:0.5px solid var(--border)}
+.status-assigned{background:#F3E8FF;color:#6B21A8}
+.btn-row{display:flex;gap:6px}
+.btn-xs{padding:5px 10px;border-radius:6px;font-size:12px;cursor:pointer;font-family:var(--font);border:none;display:flex;align-items:center;gap:4px;transition:all .15s}
+.btn-navy{background:var(--navy);color:#fff}
+.btn-navy:hover{background:var(--navy-mid)}
+.btn-outline{background:#fff;color:var(--text-sec);border:0.5px solid var(--border-strong)}
+.btn-outline:hover{background:var(--accent-light);color:var(--accent)}
+.btn-red{background:var(--danger-bg);color:var(--danger);border:0.5px solid var(--danger-border)}
+.assign-form{background:var(--surface);border-radius:var(--radius);padding:14px;margin-top:12px;display:none}
+.assign-form.open{display:block}
+.field-label{font-size:12px;font-weight:500;color:var(--text-sec);margin-bottom:6px;display:block}
+.field-select{width:100%;padding:8px 10px;border:0.5px solid var(--border-strong);border-radius:var(--radius);font-size:13px;font-family:var(--font);color:var(--text);background:#fff;outline:none;margin-bottom:10px}
+.field-select:focus{border-color:var(--accent)}
+.patient-detail{background:var(--surface);border-radius:var(--radius);padding:14px;margin-bottom:12px}
+.detail-row{display:flex;justify-content:space-between;padding:6px 0;border-bottom:0.5px solid var(--border);font-size:13px}
+.detail-row:last-child{border-bottom:none}
+.detail-row .key{color:var(--text-sec)}
+.detail-row .val{color:var(--text);font-weight:500;text-align:right}
+.alert-item{display:flex;gap:10px;padding:10px 12px;border-radius:8px;border:0.5px solid;margin-bottom:8px;cursor:pointer;transition:all .15s}
+.alert-item:hover{filter:brightness(0.97)}
+.alert-crit{background:var(--danger-bg);border-color:var(--danger-border)}
+.alert-warn{background:var(--warn-bg);border-color:var(--warn-border)}
+.alert-info{background:var(--accent-light);border-color:var(--med-border)}
+.phone-lookup{display:flex;gap:8px;margin-bottom:16px}
+.phone-lookup input{flex:1;padding:9px 12px;border:0.5px solid var(--border-strong);border-radius:var(--radius);font-size:13px;font-family:var(--font);outline:none}
+.phone-lookup input:focus{border-color:var(--accent)}
+</style>
+
+<div style="display:flex;min-height:700px">
+<div class="sidebar">
+  <div class="sb-logo">
+    <div class="mark"><i class="ti ti-activity" aria-hidden="true"></i></div>
+    <div><div class="name">MediScreen BD</div><div class="role" id="sb-role">Medic portal</div></div>
+  </div>
+  <div class="sb-sec" id="sb-nav">Navigation</div>
+  <div class="sb-item active"><i class="ti ti-layout-dashboard" aria-hidden="true"></i><span id="sb-monitor">Live monitor</span></div>
+  <div class="sb-item"><i class="ti ti-users" aria-hidden="true"></i><span id="sb-all">All patients</span><span class="badge">2</span></div>
+  <div class="sb-item"><i class="ti ti-user-plus" aria-hidden="true"></i><span id="sb-assign">Assign doctors</span></div>
+  <div class="sb-item"><i class="ti ti-report-medical" aria-hidden="true"></i><span id="sb-reports">Reports</span></div>
+  <div class="sb-sec" id="sb-tools">Tools</div>
+  <div class="sb-item"><i class="ti ti-search" aria-hidden="true"></i><span id="sb-lookup">Patient lookup</span></div>
+  <div class="sb-item"><i class="ti ti-chart-line" aria-hidden="true"></i><span id="sb-stats">Statistics</span></div>
+  <div class="sb-item"><i class="ti ti-settings" aria-hidden="true"></i><span id="sb-settings">Settings</span></div>
+  <div class="sb-bottom">
+    <div class="lang-toggle" style="margin:0 8px 10px;width:calc(100% - 16px)">
+      <button class="lang-btn active" onclick="setLang('en')" style="flex:1">EN</button>
+      <button class="lang-btn" onclick="setLang('bn')" style="flex:1">বাং</button>
+    </div>
+    <div class="sb-user">
+      <div class="avatar">SA</div>
+      <div class="info"><div class="name">Sadia Akter</div><div class="spec" id="m-spec">Senior Medic</div></div>
+    </div>
+  </div>
+</div>
+
+<div class="main">
+  <div class="topbar">
+    <div class="topbar-title" id="tb-title">Live pre-screening monitor</div>
+    <div style="font-size:12px;color:var(--text-sec);display:flex;align-items:center;gap:6px">
+      <span style="width:8px;height:8px;background:#22c55e;border-radius:50%;animation:pulse 2s infinite;display:inline-block"></span>
+      <span id="tb-live">System operational</span>
+    </div>
+    <div style="font-size:12px;color:var(--text-sec)"><i class="ti ti-calendar" style="margin-right:4px" aria-hidden="true"></i><span id="tb-date">26 June 2026</span></div>
+    <div class="lang-toggle" style="margin-left:8px">
+      <button class="lang-btn active" onclick="setLang('en')">EN</button>
+      <button class="lang-btn" onclick="setLang('bn')">বাং</button>
+    </div>
+  </div>
+
+  <div class="content">
+    <div class="stats-strip">
+      <div class="stat-card"><div class="num">14</div><div class="lbl" id="st-total">Total patients today</div><div class="delta">↑ 3 from yesterday</div></div>
+      <div class="stat-card"><div class="num" style="color:var(--success)">9</div><div class="lbl" id="st-complete">Pre-screening complete</div></div>
+      <div class="stat-card"><div class="num" style="color:var(--accent)">3</div><div class="lbl" id="st-progress">In session</div></div>
+      <div class="stat-card"><div class="num" style="color:var(--danger)">2</div><div class="lbl" id="st-critical">Critical flag</div></div>
+      <div class="stat-card"><div class="num" style="color:var(--warn)">4</div><div class="lbl" id="st-unassigned">Unassigned</div></div>
+    </div>
+
+    <div style="background:var(--danger-bg);border:0.5px solid var(--danger-border);border-radius:var(--radius);padding:12px 16px;display:flex;align-items:center;gap:10px;font-size:13px;color:var(--danger)">
+      <i class="ti ti-alert-octagon" style="font-size:16px;flex-shrink:0" aria-hidden="true"></i>
+      <strong id="alert-title">2 patients require immediate attention —</strong>
+      <span id="alert-msg">Fatema Begum (critical risk, unassigned) and Kamal Uddin (critical risk, assigned to Dr. Chowdhury). Review now.</span>
+    </div>
+
+    <div class="queue-section">
+      <div class="card" style="padding:0;overflow:hidden">
+        <div style="padding:16px 20px;border-bottom:0.5px solid var(--border);display:flex;align-items:center;justify-content:space-between">
+          <div class="sec-label" style="margin:0" id="tbl-label">Patient pre-screening queue</div>
+          <div class="phone-lookup" style="margin:0">
+            <input type="tel" placeholder="+880 01X XXXX XXXX" id="phone-input" oninput="lookupPhone()">
+            <button class="btn-xs btn-navy" onclick="lookupPhone()"><i class="ti ti-search" aria-hidden="true"></i></button>
+          </div>
+        </div>
+        <table class="table-wrap">
+          <thead>
+            <tr>
+              <th id="col-patient">Patient</th>
+              <th id="col-risk">Risk</th>
+              <th id="col-status">Status</th>
+              <th id="col-assigned">Assigned to</th>
+              <th id="col-time">Time</th>
+              <th id="col-actions">Actions</th>
+            </tr>
+          </thead>
+          <tbody id="patient-table"></tbody>
+        </table>
+      </div>
+
+      <div style="display:flex;flex-direction:column;gap:12px">
+        <div class="card-sm">
+          <div class="sec-label" id="alerts-label">Urgent alerts</div>
+          <div class="alert-item alert-crit">
+            <i class="ti ti-alert-octagon" style="color:var(--danger);flex-shrink:0;font-size:16px;margin-top:1px" aria-hidden="true"></i>
+            <div><div style="font-size:13px;font-weight:500;color:var(--danger)" id="a1-title">Fatema Begum — unassigned critical</div><div style="font-size:12px;color:#EF4444;margin-top:2px" id="a1-msg">Chest pain, breathlessness. Needs doctor immediately.</div></div>
+          </div>
+          <div class="alert-item alert-warn">
+            <i class="ti ti-alert-triangle" style="color:var(--warn);flex-shrink:0;font-size:16px;margin-top:1px" aria-hidden="true"></i>
+            <div><div style="font-size:13px;font-weight:500;color:var(--warn)" id="a2-title">Rahim Hossain — high risk</div><div style="font-size:12px;color:var(--warn);margin-top:2px" id="a2-msg">Fever + night sweats. Assigned to Dr. Rahman.</div></div>
+          </div>
+          <div class="alert-item alert-info">
+            <i class="ti ti-info-circle" style="color:var(--accent);flex-shrink:0;font-size:16px;margin-top:1px" aria-hidden="true"></i>
+            <div><div style="font-size:13px;font-weight:500;color:var(--accent)" id="a3-title">3 sessions in progress</div><div style="font-size:12px;color:var(--text-sec);margin-top:2px" id="a3-msg">Karim Ahmed, Nusrat Sultana, Jasim Uddin</div></div>
+          </div>
+        </div>
+
+        <div class="card-sm" id="assign-panel">
+          <div class="sec-label" id="assign-label">Assign to doctor</div>
+          <div class="patient-detail">
+            <div class="detail-row"><span class="key" id="ad-name-lbl">Patient</span><span class="val" id="ad-name">Fatema Begum</span></div>
+            <div class="detail-row"><span class="key" id="ad-risk-lbl">Risk level</span><span class="val" style="color:var(--danger)" id="ad-risk">Critical</span></div>
+            <div class="detail-row"><span class="key" id="ad-chief-lbl">Chief complaint</span><span class="val" id="ad-chief">Chest pain, breathlessness</span></div>
+          </div>
+          <label class="field-label" id="ad-dr-lbl">Select doctor</label>
+          <select class="field-select" id="dr-select">
+            <option id="dr-opt0">— Select —</option>
+            <option>Dr. Rahman (Internal Medicine)</option>
+            <option>Dr. Chowdhury (Cardiology)</option>
+            <option>Dr. Hasan (General Practice)</option>
+            <option>Dr. Islam (Pulmonology)</option>
+          </select>
+          <label class="field-label" id="ad-priority-lbl">Priority</label>
+          <select class="field-select">
+            <option id="pr-opt1">Urgent — see immediately</option>
+            <option id="pr-opt2">High — within 15 minutes</option>
+            <option id="pr-opt3">Standard</option>
+          </select>
+          <div style="display:flex;gap:8px">
+            <button class="btn-xs btn-navy" style="flex:1;justify-content:center" id="btn-assign"><i class="ti ti-user-check" aria-hidden="true"></i> <span id="assign-btn-txt">Assign doctor</span></button>
+            <button class="btn-xs btn-outline" id="btn-notify"><i class="ti ti-bell" aria-hidden="true"></i> <span id="notify-btn-txt">Notify</span></button>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+</div>
+<style>@keyframes pulse{0%,100%{opacity:1}50%{opacity:.3}}</style>
+
+<script>
+var lang='en';
+var patients=[
+  {id:'FB',name:'Fatema Begum',gender:'F',age:38,risk:'critical',status:'complete',doctor:null,time:'10:42 AM',chief:'Chest pain, breathlessness'},
+  {id:'RH',name:'Rahim Hossain',gender:'M',age:52,risk:'high',status:'assigned',doctor:'Dr. Rahman',time:'10:24 AM',chief:'Fever, dry cough'},
+  {id:'KA',name:'Karim Ahmed',gender:'M',age:34,risk:'medium',status:'progress',doctor:'Dr. Hasan',time:'10:51 AM',chief:'Headache, dizziness'},
+  {id:'NS',name:'Nusrat Sultana',gender:'F',age:28,risk:'low',status:'progress',doctor:null,time:'11:02 AM',chief:'Cough, mild fever'},
+  {id:'JU',name:'Jasim Uddin',gender:'M',age:61,risk:'high',status:'progress',doctor:null,time:'11:08 AM',chief:'Chest tightness'},
+  {id:'MK',name:'Mariam Khatun',gender:'F',age:45,risk:'medium',status:'complete',doctor:'Dr. Islam',time:'09:58 AM',chief:'Joint pain'},
+  {id:'SK',name:'Shamim Khan',gender:'M',age:30,risk:'low',status:'complete',doctor:'Dr. Hasan',time:'09:30 AM',chief:'Stomach ache'},
+];
+var texts={
+  en:{
+    'sb-role':'Medic portal','sb-nav':'Navigation','sb-monitor':'Live monitor','sb-all':'All patients',
+    'sb-assign':'Assign doctors','sb-reports':'Reports','sb-tools':'Tools','sb-lookup':'Patient lookup',
+    'sb-stats':'Statistics','sb-settings':'Settings','m-spec':'Senior Medic',
+    'tb-title':'Live pre-screening monitor','tb-live':'System operational','tb-date':'26 June 2026',
+    'st-total':'Total patients today','st-complete':'Pre-screening complete','st-progress':'In session',
+    'st-critical':'Critical flag','st-unassigned':'Unassigned',
+    'alert-title':'2 patients require immediate attention —',
+    'alert-msg':'Fatema Begum (critical, unassigned) and Kamal Uddin (critical, assigned to Dr. Chowdhury). Review now.',
+    'tbl-label':'Patient pre-screening queue',
+    'col-patient':'Patient','col-risk':'Risk','col-status':'Status','col-assigned':'Assigned to',
+    'col-time':'Time','col-actions':'Actions',
+    'alerts-label':'Urgent alerts',
+    'a1-title':'Fatema Begum — unassigned critical','a1-msg':'Chest pain, breathlessness. Needs doctor immediately.',
+    'a2-title':'Rahim Hossain — high risk','a2-msg':'Fever + night sweats. Assigned to Dr. Rahman.',
+    'a3-title':'3 sessions in progress','a3-msg':'Karim Ahmed, Nusrat Sultana, Jasim Uddin',
+    'assign-label':'Assign to doctor','ad-name-lbl':'Patient','ad-risk-lbl':'Risk level',
+    'ad-chief-lbl':'Chief complaint','ad-name':'Fatema Begum','ad-risk':'Critical','ad-chief':'Chest pain, breathlessness',
+    'ad-dr-lbl':'Select doctor','dr-opt0':'— Select —',
+    'pr-opt1':'Urgent — see immediately','pr-opt2':'High — within 15 minutes','pr-opt3':'Standard',
+    'ad-priority-lbl':'Priority','btn-assign':'Assign doctor','assign-btn-txt':'Assign doctor','notify-btn-txt':'Notify',
+    riskLabels:{critical:'Critical',high:'High',medium:'Medium',low:'Low'},
+    statusLabels:{complete:'Complete',progress:'In session',assigned:'Assigned',waiting:'Waiting'},
+    btnView:'View report',btnAssign:'Assign',btnFlag:'Flag',
+  },
+  bn:{
+    'sb-role':'মেডিক পোর্টাল','sb-nav':'নেভিগেশন','sb-monitor':'লাইভ মনিটর','sb-all':'সকল রোগী',
+    'sb-assign':'ডাক্তার নির্ধারণ','sb-reports':'রিপোর্ট','sb-tools':'টুলস','sb-lookup':'রোগী খুঁজুন',
+    'sb-stats':'পরিসংখ্যান','sb-settings':'সেটিংস','m-spec':'সিনিয়র মেডিক',
+    'tb-title':'লাইভ প্রি-স্ক্রীনিং মনিটর','tb-live':'সিস্টেম সক্রিয়','tb-date':'২৬ জুন ২০২৬',
+    'st-total':'আজকের মোট রোগী','st-complete':'প্রি-স্ক্রীনিং সম্পন্ন','st-progress':'সেশনে আছেন',
+    'st-critical':'জটিল চিহ্নিত','st-unassigned':'অনির্ধারিত',
+    'alert-title':'২ রোগীর তাৎক্ষণিক মনোযোগ প্রয়োজন —',
+    'alert-msg':'ফাতেমা বেগম (জটিল, অনির্ধারিত) এবং কামাল উদ্দিন (জটিল, ডা. চৌধুরীকে নির্ধারিত)। এখনই পর্যালোচনা করুন।',
+    'tbl-label':'রোগীর প্রি-স্ক্রীনিং সারি',
+    'col-patient':'রোগী','col-risk':'ঝুঁকি','col-status':'অবস্থা','col-assigned':'নির্ধারিত ডাক্তার',
+    'col-time':'সময়','col-actions':'কার্যক্রম',
+    'alerts-label':'জরুরি সতর্কতা',
+    'a1-title':'ফাতেমা বেগম — অনির্ধারিত জটিল','a1-msg':'বুকে ব্যথা, শ্বাসকষ্ট। তাৎক্ষণিক ডাক্তার প্রয়োজন।',
+    'a2-title':'রহিম হোসেন — উচ্চ ঝুঁকি','a2-msg':'জ্বর + রাতের ঘাম। ডা. রহমানকে নির্ধারিত।',
+    'a3-title':'৩টি সেশন চলমান','a3-msg':'করিম আহমেদ, নুসরাত সুলতানা, জসিম উদ্দিন',
+    'assign-label':'ডাক্তার নির্ধারণ','ad-name-lbl':'রোগী','ad-risk-lbl':'ঝুঁকির মাত্রা',
+    'ad-chief-lbl':'প্রধান অভিযোগ','ad-name':'ফাতেমা বেগম','ad-risk':'জটিল','ad-chief':'বুকে ব্যথা, শ্বাসকষ্ট',
+    'ad-dr-lbl':'ডাক্তার নির্বাচন করুন','dr-opt0':'— নির্বাচন করুন —',
+    'pr-opt1':'জরুরি — তাৎক্ষণিক দেখুন','pr-opt2':'উচ্চ — ১৫ মিনিটের মধ্যে','pr-opt3':'স্বাভাবিক',
+    'ad-priority-lbl':'অগ্রাধিকার','btn-assign':'ডাক্তার নির্ধারণ','assign-btn-txt':'ডাক্তার নির্ধারণ','notify-btn-txt':'বিজ্ঞাপন',
+    riskLabels:{critical:'জটিল',high:'উচ্চ',medium:'মাঝারি',low:'কম'},
+    statusLabels:{complete:'সম্পন্ন',progress:'সেশনে',assigned:'নির্ধারিত',waiting:'অপেক্ষায়'},
+    btnView:'রিপোর্ট দেখুন',btnAssign:'নির্ধারণ',btnFlag:'চিহ্নিত',
+  }
+};
+function setLang(l){
+  lang=l;
+  document.querySelectorAll('.lang-btn').forEach(b=>{b.classList.toggle('active',b.textContent.trim()===(l==='en'?'EN':'বাং'));});
+  var t=texts[l];
+  Object.keys(t).forEach(function(k){if(typeof t[k]==='string'){var el=document.getElementById(k);if(el)el.textContent=t[k];}});
+  renderTable(patients);
+}
+function riskClass(r){return 'risk-pill risk-'+r;}
+function statusClass(s){return 'status-pill status-'+(s==='assigned'?'assigned':s==='complete'?'done':s==='progress'?'progress':'waiting');}
+function renderTable(data){
+  var t=texts[lang];
+  var tb=document.getElementById('patient-table');
+  tb.innerHTML=data.map(function(p){
+    var rLabel=t.riskLabels[p.risk];
+    var sLabel=t.statusLabels[p.status]||(p.status==='assigned'?t.statusLabels.assigned:'—');
+    return '<tr>'
+      +'<td><div style="font-weight:500">'+p.name+'</div><div style="font-size:11px;color:var(--text-muted)">'+p.gender+'·'+p.age+'y · '+p.chief+'</div></td>'
+      +'<td><span class="'+riskClass(p.risk)+'">'+rLabel+'</span></td>'
+      +'<td><span class="'+statusClass(p.status)+'">'+sLabel+'</span></td>'
+      +'<td style="font-size:12px;color:var(--text-sec)">'+(p.doctor||'<span style="color:var(--danger);font-weight:500">'+t.riskLabels.critical.replace('জটিল','—').replace('Critical','—')+'Unassigned</span>')+'</td>'
+      +'<td style="color:var(--text-muted);font-size:12px">'+p.time+'</td>'
+      +'<td><div class="btn-row">'
+      +'<button class="btn-xs btn-outline" onclick="sendPrompt(\'Show doctor view for '+p.name+'\')"><i class="ti ti-report-medical" aria-hidden="true"></i> '+t.btnView+'</button>'
+      +(!p.doctor?'<button class="btn-xs btn-navy"><i class="ti ti-user-plus" aria-hidden="true"></i> '+t.btnAssign+'</button>':'')
+      +'</div></td>'
+      +'</tr>';
+  }).join('');
+}
+function lookupPhone(){
+  var v=document.getElementById('phone-input').value.replace(/\D/g,'');
+  if(v.length>7){
+    var filtered=patients.filter(function(p){return p.id==='RH';});
+    renderTable(filtered.length?filtered:patients);
+  }else renderTable(patients);
+}
+renderTable(patients);
+</script>

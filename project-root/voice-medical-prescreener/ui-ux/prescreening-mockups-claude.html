@@ -1,0 +1,1050 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>AI-Powered Medical Pre-Screening System — UI Mockups</title>
+<style>
+  :root {
+    --blue: #1A5DA6;
+    --blue-light: #E8F1FB;
+    --blue-mid: #B5D4F4;
+    --blue-dark: #0C447C;
+    --red: #C0392B;
+    --red-light: #FCEBEB;
+    --amber: #D4820A;
+    --amber-light: #FAEEDA;
+    --green: #1E7D52;
+    --green-light: #EAF3DE;
+    --gray-bg: #F7F9FC;
+    --gray-card: #F0F4FB;
+    --gray-border: rgba(0,0,0,0.10);
+    --gray-border-strong: rgba(0,0,0,0.18);
+    --text-primary: #1C1C1A;
+    --text-secondary: #5F5E5A;
+    --text-muted: #888780;
+    --white: #FFFFFF;
+    --sidebar-w: 220px;
+    --radius-sm: 6px;
+    --radius-md: 10px;
+    --radius-lg: 14px;
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', system-ui, sans-serif; background: #E5E9F0; color: var(--text-primary); }
+
+  /* ─── NAVIGATION ─────────────────────────────────────────── */
+  .nav { background: #1C2C42; padding: 0 2rem; display: flex; align-items: center; gap: 1rem; position: sticky; top: 0; z-index: 100; overflow-x: auto; }
+  .nav a { color: rgba(255,255,255,0.7); text-decoration: none; font-size: 12px; font-weight: 500; padding: 14px 10px; white-space: nowrap; border-bottom: 2px solid transparent; }
+  .nav a:hover, .nav a.active { color: #fff; border-bottom-color: #4FA3F7; }
+  .nav-title { color: rgba(255,255,255,0.4); font-size: 11px; font-weight: 600; letter-spacing: 0.08em; text-transform: uppercase; padding: 14px 0; white-space: nowrap; }
+
+  /* ─── SCREEN WRAPPER ─────────────────────────────────────── */
+  .screen-block { display: none; padding: 2rem; }
+  .screen-block.active { display: block; }
+  .screen-label { font-size: 11px; font-weight: 600; letter-spacing: 0.08em; text-transform: uppercase; color: var(--text-muted); margin-bottom: 1rem; }
+  .screen-frame { border-radius: var(--radius-lg); overflow: hidden; box-shadow: 0 2px 12px rgba(0,0,0,0.14); }
+
+  /* ─── SHARED COMPONENTS ──────────────────────────────────── */
+  .btn { display: inline-flex; align-items: center; justify-content: center; gap: 6px; padding: 12px 20px; border-radius: var(--radius-sm); font-size: 15px; font-weight: 500; cursor: pointer; border: none; transition: opacity 0.15s; }
+  .btn-primary { background: var(--blue); color: #fff; }
+  .btn-outline { background: transparent; color: var(--blue); border: 1.5px solid var(--blue); }
+  .btn-ghost { background: transparent; color: var(--text-secondary); border: 1px solid var(--gray-border-strong); }
+  .btn:hover { opacity: 0.88; }
+  .btn-sm { padding: 7px 14px; font-size: 13px; }
+  .btn-lg { padding: 15px 24px; font-size: 16px; width: 100%; }
+
+  .toggle-lang { display: inline-flex; border: 1.5px solid var(--blue); border-radius: 20px; overflow: hidden; }
+  .toggle-lang span { font-size: 12px; font-weight: 600; padding: 4px 12px; cursor: pointer; }
+  .toggle-lang .active-lang { background: var(--blue); color: #fff; }
+  .toggle-lang .inactive-lang { color: var(--blue); background: transparent; }
+
+  .risk-badge { display: inline-flex; align-items: center; gap: 5px; border-radius: var(--radius-sm); padding: 4px 10px; font-size: 12px; font-weight: 600; }
+  .risk-critical { background: var(--red); color: #fff; }
+  .risk-high { background: var(--amber); color: #fff; }
+  .risk-moderate { background: transparent; color: var(--blue); border: 1.5px solid var(--blue); }
+  .risk-low { background: transparent; color: var(--green); border: 1.5px solid var(--green); }
+
+  .ai-chip { display: inline-flex; align-items: center; background: var(--blue); color: #fff; font-size: 10px; font-weight: 700; padding: 2px 7px; border-radius: 4px; letter-spacing: 0.04em; margin-left: 6px; vertical-align: middle; }
+  .edit-chip { display: inline-flex; align-items: center; background: var(--amber-light); color: var(--amber); font-size: 10px; font-weight: 700; padding: 2px 7px; border-radius: 4px; letter-spacing: 0.04em; margin-left: 6px; vertical-align: middle; }
+
+  .field-row { padding: 10px 0; border-bottom: 0.5px solid var(--gray-border); }
+  .field-row:last-child { border-bottom: none; }
+  .field-label { font-size: 12px; color: var(--text-muted); margin-bottom: 3px; }
+  .field-value { font-size: 14px; color: var(--text-primary); }
+  .field-empty { font-size: 14px; color: var(--text-muted); font-style: italic; }
+
+  .accordion-section { border: 0.5px solid var(--gray-border); border-radius: var(--radius-md); margin-bottom: 8px; overflow: hidden; }
+  .accordion-header { display: flex; align-items: center; justify-content: space-between; padding: 12px 16px; background: var(--white); cursor: pointer; }
+  .accordion-header:hover { background: var(--gray-bg); }
+  .accordion-title { font-size: 14px; font-weight: 500; }
+  .accordion-chevron { font-size: 12px; color: var(--text-muted); }
+  .accordion-body { padding: 0 16px 12px; background: var(--white); }
+
+  .severity-bar-wrap { display: flex; align-items: center; gap: 10px; margin-top: 4px; }
+  .severity-bar { height: 8px; border-radius: 4px; background: linear-gradient(to right, #1A5DA6, #D4820A, #C0392B); position: relative; width: 160px; }
+  .severity-marker { position: absolute; top: -3px; width: 14px; height: 14px; border-radius: 50%; background: var(--text-primary); border: 2px solid var(--white); }
+  .severity-label { font-size: 13px; font-weight: 600; }
+
+  .tag-chip { display: inline-flex; align-items: center; background: var(--gray-card); color: var(--text-secondary); font-size: 12px; padding: 3px 9px; border-radius: 12px; margin: 2px; }
+  .tag-chip.red { background: var(--red-light); color: var(--red); }
+  .tag-chip.amber { background: var(--amber-light); color: var(--amber); }
+
+  /* ─── KIOSK SCREENS ──────────────────────────────────────── */
+  .kiosk-outer { min-height: 680px; background: #E8F1FB; display: flex; align-items: center; justify-content: center; padding: 2rem; }
+  .kiosk-card { background: var(--white); border-radius: var(--radius-lg); padding: 2rem; width: 100%; max-width: 440px; box-shadow: 0 4px 24px rgba(0,0,0,0.12); }
+  .kiosk-header { text-align: center; margin-bottom: 1.75rem; }
+  .clinic-logo { display: flex; align-items: center; justify-content: center; gap: 8px; margin-bottom: 0.75rem; }
+  .clinic-logo-icon { width: 36px; height: 36px; background: var(--blue); border-radius: 8px; display: flex; align-items: center; justify-content: center; }
+  .clinic-logo-icon svg { width: 20px; height: 20px; fill: white; }
+  .clinic-name { font-size: 16px; font-weight: 600; color: var(--blue-dark); }
+  .lang-row { display: flex; justify-content: flex-end; margin-bottom: 1rem; }
+  .kiosk-title { font-size: 22px; font-weight: 500; text-align: center; margin-bottom: 0.5rem; }
+  .kiosk-sub { font-size: 14px; color: var(--text-secondary); text-align: center; line-height: 1.6; margin-bottom: 1.5rem; }
+  .input-group { margin-bottom: 1rem; }
+  .input-label { font-size: 13px; color: var(--text-secondary); margin-bottom: 5px; display: block; }
+  .input-field { width: 100%; padding: 14px 16px; border: 1.5px solid var(--gray-border-strong); border-radius: var(--radius-sm); font-size: 16px; color: var(--text-primary); background: var(--white); }
+  .input-field:focus { outline: none; border-color: var(--blue); }
+  .input-prefix { display: flex; gap: 0; }
+  .prefix-box { background: var(--gray-card); border: 1.5px solid var(--gray-border-strong); border-right: none; border-radius: var(--radius-sm) 0 0 var(--radius-sm); padding: 14px 12px; font-size: 15px; font-weight: 500; color: var(--text-secondary); white-space: nowrap; }
+  .input-field.no-left-radius { border-radius: 0 var(--radius-sm) var(--radius-sm) 0; }
+  .otp-row { display: flex; gap: 8px; justify-content: center; margin: 1.5rem 0; }
+  .otp-box { width: 48px; height: 56px; border: 1.5px solid var(--gray-border-strong); border-radius: var(--radius-sm); font-size: 22px; font-weight: 600; text-align: center; color: var(--text-primary); display: flex; align-items: center; justify-content: center; }
+  .otp-box.filled { border-color: var(--blue); background: var(--blue-light); }
+  .otp-box.active { border-color: var(--blue); box-shadow: 0 0 0 3px rgba(26,93,166,0.15); }
+  .resend-row { text-align: center; margin-top: 1rem; }
+  .resend-link { font-size: 13px; color: var(--blue); cursor: pointer; }
+  .resend-timer { font-size: 13px; color: var(--text-muted); }
+  .form-footer { text-align: center; margin-top: 1rem; }
+  .form-footer a { font-size: 12px; color: var(--text-muted); text-decoration: none; }
+  .step-row { display: flex; gap: 0; margin-top: 1.75rem; }
+  .step-item { flex: 1; display: flex; flex-direction: column; align-items: center; text-align: center; position: relative; }
+  .step-item:not(:last-child)::after { content: ''; position: absolute; top: 14px; left: 60%; width: 80%; height: 1px; background: var(--gray-border-strong); }
+  .step-dot { width: 28px; height: 28px; border-radius: 50%; background: var(--blue-light); border: 2px solid var(--blue); display: flex; align-items: center; justify-content: center; font-size: 12px; font-weight: 700; color: var(--blue); margin-bottom: 6px; }
+  .step-text { font-size: 11px; color: var(--text-secondary); line-height: 1.4; padding: 0 4px; }
+  .mic-container { display: flex; flex-direction: column; align-items: center; padding: 1.5rem 0; }
+  .mic-ring { width: 100px; height: 100px; border-radius: 50%; background: var(--blue-light); border: 3px solid var(--blue); display: flex; align-items: center; justify-content: center; margin-bottom: 1rem; position: relative; }
+  .mic-ring-pulse { position: absolute; width: 116px; height: 116px; border-radius: 50%; border: 2px solid rgba(26,93,166,0.3); animation: pulse 1.5s ease-out infinite; }
+  @keyframes pulse { 0%{transform:scale(0.95);opacity:1} 100%{transform:scale(1.15);opacity:0} }
+  .mic-icon { font-size: 36px; }
+  .question-card { background: var(--blue-light); border-radius: var(--radius-md); padding: 1rem 1.25rem; margin-bottom: 1rem; }
+  .question-text { font-size: 19px; font-weight: 500; color: var(--blue-dark); text-align: center; line-height: 1.5; }
+  .transcript-area { background: var(--gray-bg); border-radius: var(--radius-sm); padding: 0.75rem 1rem; margin-top: 0.75rem; }
+  .transcript-label { font-size: 11px; color: var(--text-muted); margin-bottom: 4px; font-weight: 600; }
+  .transcript-text { font-size: 14px; color: var(--text-secondary); }
+  .mic-status { font-size: 13px; color: var(--blue); font-weight: 500; margin-bottom: 0.5rem; display: flex; align-items: center; gap: 6px; }
+  .mic-status-dot { width: 8px; height: 8px; border-radius: 50%; background: var(--blue); animation: pulse 1s infinite; }
+  .progress-pill { display: inline-flex; align-items: center; background: var(--gray-bg); border: 1px solid var(--gray-border-strong); border-radius: 20px; padding: 4px 14px; font-size: 12px; color: var(--text-secondary); margin-bottom: 1.25rem; }
+  .fallback-link { font-size: 12px; color: var(--text-muted); text-align: center; margin-top: 1.5rem; text-decoration: underline; cursor: pointer; }
+  .summary-card { background: var(--white); border: 0.5px solid var(--gray-border); border-radius: var(--radius-md); margin-bottom: 10px; overflow: hidden; }
+  .summary-card-header { background: var(--gray-bg); padding: 10px 14px; font-size: 13px; font-weight: 600; color: var(--text-secondary); text-transform: uppercase; letter-spacing: 0.05em; }
+  .summary-card-body { padding: 12px 14px; }
+  .patient-severity-bar { height: 10px; background: linear-gradient(to right, #1A5DA6 0%, #D4820A 50%, #C0392B 100%); border-radius: 5px; width: 100%; position: relative; }
+  .patient-severity-dot { position: absolute; top: -4px; left: 65%; width: 18px; height: 18px; border-radius: 50%; background: var(--text-primary); border: 2.5px solid #fff; box-shadow: 0 1px 3px rgba(0,0,0,0.2); }
+  .confirm-buttons { display: flex; gap: 10px; margin-top: 1.5rem; }
+  .confirm-buttons .btn { flex: 1; }
+  .success-screen { text-align: center; padding: 2rem 1.5rem; }
+  .checkmark-circle { width: 72px; height: 72px; border-radius: 50%; background: var(--green-light); border: 3px solid var(--green); display: flex; align-items: center; justify-content: center; margin: 0 auto 1.25rem; font-size: 32px; }
+  .countdown-note { font-size: 13px; color: var(--text-muted); margin-top: 1rem; }
+
+  /* ─── APP SHELL (STAFF/DOCTOR/ADMIN) ─────────────────────── */
+  .app-shell { display: flex; height: 700px; background: var(--white); }
+  .app-sidebar { width: var(--sidebar-w); background: #1C2C42; display: flex; flex-direction: column; flex-shrink: 0; }
+  .app-sidebar-header { padding: 1rem; border-bottom: 1px solid rgba(255,255,255,0.08); }
+  .sidebar-clinic { font-size: 13px; font-weight: 600; color: rgba(255,255,255,0.9); }
+  .sidebar-user { font-size: 11px; color: rgba(255,255,255,0.45); margin-top: 2px; }
+  .sidebar-nav { padding: 0.75rem 0; flex: 1; }
+  .sidebar-nav-item { display: flex; align-items: center; gap: 10px; padding: 9px 1rem; font-size: 13px; color: rgba(255,255,255,0.55); cursor: pointer; border-left: 3px solid transparent; }
+  .sidebar-nav-item:hover { color: rgba(255,255,255,0.85); background: rgba(255,255,255,0.05); }
+  .sidebar-nav-item.active { color: #fff; background: rgba(255,255,255,0.1); border-left-color: #4FA3F7; }
+  .sidebar-lookup { padding: 0.75rem 1rem; border-top: 1px solid rgba(255,255,255,0.08); }
+  .sidebar-lookup-label { font-size: 10px; font-weight: 700; color: rgba(255,255,255,0.35); letter-spacing: 0.08em; text-transform: uppercase; margin-bottom: 7px; }
+  .sidebar-lookup-row { display: flex; gap: 6px; }
+  .sidebar-lookup input { flex: 1; background: rgba(255,255,255,0.08); border: 1px solid rgba(255,255,255,0.12); border-radius: var(--radius-sm); padding: 7px 9px; font-size: 12px; color: rgba(255,255,255,0.8); width: 0; }
+  .sidebar-lookup input::placeholder { color: rgba(255,255,255,0.3); }
+  .sidebar-lookup button { background: rgba(255,255,255,0.15); border: none; border-radius: var(--radius-sm); padding: 7px 10px; color: rgba(255,255,255,0.7); font-size: 12px; cursor: pointer; white-space: nowrap; }
+  .sidebar-logout { padding: 0.75rem 1rem; border-top: 1px solid rgba(255,255,255,0.08); }
+  .sidebar-logout button { font-size: 12px; color: rgba(255,255,255,0.35); background: none; border: none; cursor: pointer; }
+  .sidebar-logout button:hover { color: rgba(255,255,255,0.7); }
+
+  .app-main { flex: 1; display: flex; flex-direction: column; overflow: hidden; }
+  .app-topbar { background: var(--white); border-bottom: 0.5px solid var(--gray-border-strong); padding: 0.75rem 1.5rem; display: flex; align-items: center; justify-content: space-between; flex-shrink: 0; }
+  .app-topbar-title { font-size: 16px; font-weight: 500; }
+  .app-content { flex: 1; overflow-y: auto; padding: 1.25rem 1.5rem; background: var(--gray-bg); }
+
+  /* ─── QUEUE TABLE ────────────────────────────────────────── */
+  .queue-table { width: 100%; border-collapse: collapse; }
+  .queue-table th { font-size: 11px; font-weight: 600; color: var(--text-muted); text-transform: uppercase; letter-spacing: 0.06em; padding: 9px 12px; text-align: left; border-bottom: 1px solid var(--gray-border-strong); background: var(--white); }
+  .queue-table td { font-size: 13px; padding: 11px 12px; border-bottom: 0.5px solid var(--gray-border); background: var(--white); color: var(--text-primary); vertical-align: middle; }
+  .queue-table tr:hover td { background: var(--gray-bg); cursor: pointer; }
+  .queue-table tr.critical td { border-left: 4px solid var(--red); }
+  .queue-table tr.critical td:first-child { padding-left: 8px; }
+  .patient-name { font-weight: 500; }
+  .patient-phone { font-size: 12px; color: var(--text-muted); margin-top: 2px; }
+  .status-pill { display: inline-flex; align-items: center; background: var(--gray-card); color: var(--text-secondary); font-size: 11px; padding: 3px 10px; border-radius: 12px; font-weight: 500; }
+  .status-pill.pending { background: #FFF7ED; color: var(--amber); }
+  .assign-btn { font-size: 12px; padding: 5px 12px; }
+  .filter-row { display: flex; align-items: center; gap: 10px; margin-bottom: 1rem; flex-wrap: wrap; }
+  .filter-tab { font-size: 12px; padding: 5px 14px; border: 1px solid var(--gray-border-strong); border-radius: 20px; cursor: pointer; background: var(--white); color: var(--text-secondary); }
+  .filter-tab.active { background: var(--blue); color: #fff; border-color: var(--blue); }
+  .section-heading { font-size: 14px; font-weight: 500; color: var(--text-primary); margin-bottom: 0.75rem; display: flex; align-items: center; gap: 8px; }
+  .count-badge { background: var(--blue-light); color: var(--blue-dark); font-size: 11px; font-weight: 700; padding: 2px 8px; border-radius: 10px; }
+  .refresh-note { font-size: 11px; color: var(--text-muted); }
+
+  /* ─── CRITICAL BANNER ─────────────────────────────────────── */
+  .critical-banner { background: var(--red); color: #fff; padding: 10px 1.5rem; font-size: 13px; font-weight: 500; display: flex; align-items: center; gap: 10px; }
+  .critical-banner .icon { font-size: 16px; }
+
+  /* ─── PATIENT DETAIL LAYOUT ──────────────────────────────── */
+  .detail-layout { display: flex; gap: 1rem; height: 100%; }
+  .detail-left { flex: 1; overflow-y: auto; }
+  .detail-right { width: 240px; flex-shrink: 0; }
+  .detail-header { background: var(--white); border: 0.5px solid var(--gray-border); border-radius: var(--radius-md); padding: 1rem; margin-bottom: 0.75rem; display: flex; align-items: center; justify-content: space-between; }
+  .patient-info-block { }
+  .patient-info-name { font-size: 17px; font-weight: 500; }
+  .patient-info-meta { font-size: 12px; color: var(--text-secondary); margin-top: 3px; }
+  .back-link { font-size: 13px; color: var(--blue); cursor: pointer; display: flex; align-items: center; gap: 4px; margin-bottom: 0.75rem; }
+
+  /* ─── RISK PANEL ─────────────────────────────────────────── */
+  .risk-panel { background: var(--white); border: 0.5px solid var(--gray-border); border-radius: var(--radius-md); overflow: hidden; margin-bottom: 0.75rem; position: sticky; top: 0; }
+  .risk-panel-header { padding: 10px 14px; font-size: 12px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.07em; color: var(--text-muted); background: var(--gray-bg); border-bottom: 0.5px solid var(--gray-border); }
+  .risk-panel-body { padding: 14px; }
+  .risk-level-display { display: flex; align-items: center; gap: 10px; margin-bottom: 14px; padding-bottom: 12px; border-bottom: 0.5px solid var(--gray-border); }
+  .risk-level-badge-lg { font-size: 16px; font-weight: 700; padding: 6px 16px; border-radius: var(--radius-sm); }
+  .risk-amber { background: var(--amber); color: #fff; }
+  .risk-red { background: var(--red); color: #fff; }
+  .risk-blue { background: var(--blue); color: #fff; }
+  .risk-green { background: var(--green); color: #fff; }
+  .risk-section-label { font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.07em; color: var(--text-muted); margin-bottom: 7px; display: flex; align-items: center; gap: 5px; }
+  .red-flag-item { font-size: 13px; color: var(--red); padding: 4px 0; border-left: 3px solid var(--red); padding-left: 8px; margin-bottom: 5px; line-height: 1.4; }
+  .xai-item { font-size: 12px; color: var(--text-secondary); padding: 4px 0; padding-left: 8px; border-left: 3px solid var(--blue-mid); margin-bottom: 5px; line-height: 1.4; }
+
+  /* ─── ACTION PANEL ────────────────────────────────────────── */
+  .action-panel { background: var(--white); border: 0.5px solid var(--gray-border); border-radius: var(--radius-md); padding: 14px; margin-bottom: 0.75rem; }
+  .action-panel-title { font-size: 12px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.07em; color: var(--text-muted); margin-bottom: 12px; }
+  .select-field { width: 100%; padding: 8px 10px; border: 1px solid var(--gray-border-strong); border-radius: var(--radius-sm); font-size: 13px; color: var(--text-primary); background: var(--white); margin-bottom: 8px; }
+  .textarea-field { width: 100%; padding: 8px 10px; border: 1px solid var(--gray-border-strong); border-radius: var(--radius-sm); font-size: 12px; color: var(--text-primary); background: var(--white); resize: vertical; min-height: 70px; }
+
+  /* ─── ADMIN DASHBOARD ────────────────────────────────────── */
+  .metric-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 10px; margin-bottom: 1rem; }
+  .metric-card { background: var(--white); border: 0.5px solid var(--gray-border); border-radius: var(--radius-md); padding: 14px; }
+  .metric-value { font-size: 26px; font-weight: 500; margin-bottom: 4px; }
+  .metric-label { font-size: 11px; color: var(--text-muted); }
+  .metric-card.alert .metric-value { color: var(--red); }
+  .metric-card.warn .metric-value { color: var(--amber); }
+  .status-bar { background: var(--white); border: 0.5px solid var(--gray-border); border-radius: var(--radius-md); padding: 12px 16px; display: flex; align-items: center; gap: 1.5rem; margin-bottom: 1rem; flex-wrap: wrap; }
+  .status-indicator { display: flex; align-items: center; gap: 7px; font-size: 13px; }
+  .status-dot { width: 9px; height: 9px; border-radius: 50%; }
+  .status-dot.green { background: var(--green); }
+  .status-dot.amber { background: var(--amber); }
+  .status-dot.red { background: var(--red); }
+  .two-col { display: grid; grid-template-columns: 1fr 1fr; gap: 1rem; }
+  .panel-card { background: var(--white); border: 0.5px solid var(--gray-border); border-radius: var(--radius-md); overflow: hidden; }
+  .panel-card-header { padding: 10px 14px; font-size: 12px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.07em; color: var(--text-muted); background: var(--gray-bg); border-bottom: 0.5px solid var(--gray-border); display: flex; align-items: center; justify-content: space-between; }
+  .log-row { display: flex; align-items: flex-start; gap: 8px; padding: 9px 14px; border-bottom: 0.5px solid var(--gray-border); font-size: 12px; }
+  .log-row:last-child { border-bottom: none; }
+  .log-time { color: var(--text-muted); white-space: nowrap; width: 70px; flex-shrink: 0; }
+  .log-event { color: var(--text-secondary); flex: 1; }
+  .log-status { font-size: 11px; font-weight: 600; padding: 2px 8px; border-radius: 10px; white-space: nowrap; }
+  .log-status.active { background: var(--red-light); color: var(--red); }
+  .log-status.resolved { background: var(--green-light); color: var(--green); }
+
+  /* ─── LOGIN SCREENS ─────────────────────────────────────── */
+  .login-outer { min-height: 700px; background: #1C2C42; display: flex; align-items: center; justify-content: center; padding: 2rem; }
+  .login-card { background: var(--white); border-radius: var(--radius-lg); padding: 2rem; width: 100%; max-width: 380px; }
+
+  /* ─── Chart placeholder ──────────────────────────────────── */
+  .chart-placeholder { padding: 14px; height: 160px; display: flex; flex-direction: column; justify-content: flex-end; gap: 3px; }
+  .chart-bars { display: flex; align-items: flex-end; gap: 4px; height: 120px; }
+  .chart-bar { flex: 1; background: var(--blue-light); border-radius: 3px 3px 0 0; border: 1px solid var(--blue-mid); min-height: 4px; }
+  .chart-bar.highlight { background: var(--blue); border-color: var(--blue-dark); }
+  .chart-x { display: flex; justify-content: space-between; font-size: 9px; color: var(--text-muted); margin-top: 5px; padding: 0 2px; }
+</style>
+</head>
+<body>
+
+<nav class="nav">
+  <span class="nav-title">Mockups</span>
+  <a href="#" class="active" onclick="show('s1')">Patient Login</a>
+  <a href="#" onclick="show('s2')">Patient OTP</a>
+  <a href="#" onclick="show('s3')">Voice Interaction</a>
+  <a href="#" onclick="show('s4')">Patient Summary</a>
+  <a href="#" onclick="show('s5')">Medic Dashboard</a>
+  <a href="#" onclick="show('s6')">Medic Detail</a>
+  <a href="#" onclick="show('s7')">Doctor Dashboard</a>
+  <a href="#" onclick="show('s8')">Doctor Detail + Risk Panel</a>
+  <a href="#" onclick="show('s9')">Admin Dashboard</a>
+</nav>
+
+<!-- ═══════════════════════════════════════════════════════════ -->
+<!-- SCREEN 1: Patient — Phone Number Entry -->
+<!-- ═══════════════════════════════════════════════════════════ -->
+<div id="s1" class="screen-block active">
+  <p class="screen-label">Screen 1 — Patient · Phone number entry (kiosk/tablet)</p>
+  <div class="screen-frame">
+    <div class="kiosk-outer">
+      <div class="kiosk-card">
+        <div class="lang-row">
+          <div class="toggle-lang">
+            <span class="active-lang">বাংলা</span>
+            <span class="inactive-lang">EN</span>
+          </div>
+        </div>
+        <div class="kiosk-header">
+          <div class="clinic-logo">
+            <div class="clinic-logo-icon">
+              <svg viewBox="0 0 20 20"><path d="M10 2a8 8 0 100 16A8 8 0 0010 2zm1 5v2h2v2h-2v2H9v-2H7V9h2V7h2z"/></svg>
+            </div>
+            <span class="clinic-name">ঢাকা সিটি ক্লিনিক</span>
+          </div>
+        </div>
+        <h2 class="kiosk-title">আপনার ফোন নম্বর দিন</h2>
+        <p class="kiosk-sub">আপনার ভিজিটের তথ্য নিরাপদ রাখতে আমরা একটি যাচাই কোড পাঠাব।</p>
+        <div class="input-group">
+          <label class="input-label">মোবাইল নম্বর / Mobile number</label>
+          <div class="input-prefix">
+            <span class="prefix-box">+880</span>
+            <input class="input-field no-left-radius" type="tel" placeholder="01XXXXXXXXX" value="01712" />
+          </div>
+        </div>
+        <button class="btn btn-primary btn-lg" style="margin-top:0.5rem;">কোড পাঠান — Send code</button>
+        <div class="step-row" style="margin-top:1.75rem;">
+          <div class="step-item">
+            <div class="step-dot">১</div>
+            <span class="step-text">লক্ষণ বলুন<br/><span style="color:var(--text-muted)">Describe symptoms</span></span>
+          </div>
+          <div class="step-item">
+            <div class="step-dot">২</div>
+            <span class="step-text">প্রশ্নের উত্তর দিন<br/><span style="color:var(--text-muted)">Answer questions</span></span>
+          </div>
+          <div class="step-item">
+            <div class="step-dot">৩</div>
+            <span class="step-text">সারাংশ দেখুন<br/><span style="color:var(--text-muted)">Review summary</span></span>
+          </div>
+        </div>
+        <div class="form-footer" style="margin-top:1.25rem;">
+          <a href="#">প্রাইভেসি নীতি · Privacy policy</a>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ═══════════════════════════════════════════════════════════ -->
+<!-- SCREEN 2: Patient — OTP Verification -->
+<!-- ═══════════════════════════════════════════════════════════ -->
+<div id="s2" class="screen-block">
+  <p class="screen-label">Screen 2 — Patient · OTP verification (kiosk/tablet)</p>
+  <div class="screen-frame">
+    <div class="kiosk-outer">
+      <div class="kiosk-card">
+        <div class="lang-row">
+          <div class="toggle-lang">
+            <span class="active-lang">বাংলা</span>
+            <span class="inactive-lang">EN</span>
+          </div>
+        </div>
+        <div class="kiosk-header">
+          <div class="clinic-logo">
+            <div class="clinic-logo-icon">
+              <svg viewBox="0 0 20 20"><path d="M10 2a8 8 0 100 16A8 8 0 0010 2zm1 5v2h2v2h-2v2H9v-2H7V9h2V7h2z"/></svg>
+            </div>
+            <span class="clinic-name">ঢাকা সিটি ক্লিনিক</span>
+          </div>
+        </div>
+        <h2 class="kiosk-title">আপনার কোড লিখুন</h2>
+        <p class="kiosk-sub">আমরা <strong>01712-XXXXX</strong> নম্বরে একটি ৬-সংখ্যার কোড পাঠিয়েছি।<br/><em style="font-size:13px;color:var(--text-muted)">We sent a 6-digit code to 01712-XXXXX</em></p>
+        <div class="otp-row">
+          <div class="otp-box filled">3</div>
+          <div class="otp-box filled">7</div>
+          <div class="otp-box filled">2</div>
+          <div class="otp-box active"></div>
+          <div class="otp-box"></div>
+          <div class="otp-box"></div>
+        </div>
+        <div class="resend-row">
+          <span class="resend-timer">কোড পাননি? আবার পাঠান — Didn't get a code? Resend (<strong>00:22</strong>)</span>
+        </div>
+        <div style="text-align:center;margin-top:1.25rem;">
+          <a href="#" style="font-size:13px;color:var(--blue);text-decoration:none;">← ফোন নম্বর পরিবর্তন করুন · Change phone number</a>
+        </div>
+        <div class="form-footer" style="margin-top:1rem;">
+          <a href="#">প্রাইভেসি নীতি · Privacy policy</a>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ═══════════════════════════════════════════════════════════ -->
+<!-- SCREEN 3: Patient — Voice Interaction -->
+<!-- ═══════════════════════════════════════════════════════════ -->
+<div id="s3" class="screen-block">
+  <p class="screen-label">Screen 3 — Patient · Voice interaction screen (kiosk/tablet)</p>
+  <div class="screen-frame">
+    <div class="kiosk-outer" style="background:#F0F4FB;">
+      <div class="kiosk-card" style="max-width:480px;">
+        <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:1rem;">
+          <a href="#" style="font-size:13px;color:var(--text-muted);text-decoration:none;">✕ বাতিল</a>
+          <div class="toggle-lang">
+            <span class="active-lang">বাংলা</span>
+            <span class="inactive-lang">EN</span>
+          </div>
+        </div>
+        <div style="text-align:center;margin-bottom:1rem;">
+          <div class="progress-pill">প্রশ্ন ৩ / ~৬ &nbsp;·&nbsp; Question 3 of ~6</div>
+        </div>
+        <div class="question-card">
+          <p class="question-text">আপনার ব্যথা কোথায় অনুভব হচ্ছে?</p>
+          <p style="font-size:14px;color:var(--blue);text-align:center;margin-top:6px;font-style:italic;">Where exactly do you feel the pain?</p>
+        </div>
+        <div class="mic-container">
+          <div class="mic-ring">
+            <div class="mic-ring-pulse"></div>
+            <span class="mic-icon">🎙</span>
+          </div>
+          <div class="mic-status">
+            <span class="mic-status-dot"></span>
+            শুনছি... — Listening...
+          </div>
+        </div>
+        <div class="transcript-area">
+          <div class="transcript-label">আপনি বললেন: / You said:</div>
+          <div class="transcript-text">"বুকের বাম দিকে, মাঝে মাঝে বাম হাতে যায়..."</div>
+        </div>
+        <div style="display:flex;justify-content:center;gap:8px;margin-top:1rem;">
+          <div style="width:8px;height:8px;border-radius:50%;background:var(--blue);"></div>
+          <div style="width:8px;height:8px;border-radius:50%;background:var(--blue);"></div>
+          <div style="width:8px;height:8px;border-radius:50%;background:var(--blue);opacity:0.3;"></div>
+          <div style="width:8px;height:8px;border-radius:50%;background:var(--blue);opacity:0.3;"></div>
+          <div style="width:8px;height:8px;border-radius:50%;background:var(--blue);opacity:0.3;"></div>
+          <div style="width:8px;height:8px;border-radius:50%;background:var(--blue);opacity:0.3;"></div>
+        </div>
+        <div class="fallback-link">মাইক্রোফোনে সমস্যা? টাইপ করুন · Trouble with mic? Type instead</div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ═══════════════════════════════════════════════════════════ -->
+<!-- SCREEN 4: Patient — Final Summary -->
+<!-- ═══════════════════════════════════════════════════════════ -->
+<div id="s4" class="screen-block">
+  <p class="screen-label">Screen 4 — Patient · Pre-screening summary review (kiosk/tablet)</p>
+  <div class="screen-frame">
+    <div style="min-height:680px;background:#F0F4FB;overflow-y:auto;padding:1.5rem;">
+      <div style="max-width:520px;margin:0 auto;">
+        <div style="display:flex;justify-content:flex-end;margin-bottom:0.75rem;">
+          <div class="toggle-lang"><span class="active-lang">বাংলা</span><span class="inactive-lang">EN</span></div>
+        </div>
+        <h2 style="font-size:20px;font-weight:500;margin-bottom:0.35rem;">আপনার প্রি-স্ক্রিনিং সারাংশ</h2>
+        <p style="font-size:13px;color:var(--text-secondary);margin-bottom:1rem;">আপনার কথা থেকে তৈরি করা হয়েছে। দয়া করে পর্যালোচনা করুন। <em>Prepared from what you told us. Please review.</em></p>
+        
+        <div class="summary-card">
+          <div class="summary-card-header">১. প্রধান সমস্যা · Main problem</div>
+          <div class="summary-card-body"><div class="field-value">বুকে ব্যথা এবং শ্বাস নিতে কষ্ট হচ্ছে — Chest pain with difficulty breathing</div></div>
+        </div>
+        <div class="summary-card">
+          <div class="summary-card-header">২. কখন শুরু হয়েছে · When it started</div>
+          <div class="summary-card-body">
+            <div class="field-row"><div class="field-label">শুরুর তারিখ / Start date</div><div class="field-value">২৫ জুন ২০২৬ — 25 June 2026</div></div>
+            <div class="field-row" style="border-bottom:none;"><div class="field-label">স্থায়িত্ব / Duration</div><div class="field-value">২ দিন — 2 days</div></div>
+          </div>
+        </div>
+        <div class="summary-card">
+          <div class="summary-card-header">৩. লক্ষণ · Symptoms</div>
+          <div class="summary-card-body">
+            <div class="field-row"><div class="field-label">প্রধান লক্ষণ / Main symptom</div><div class="field-value">বুকে ব্যথা — Chest pain</div></div>
+            <div class="field-row">
+              <div class="field-label">তীব্রতা / Severity</div>
+              <div class="severity-bar-wrap">
+                <div class="severity-bar" style="width:140px;height:10px;border-radius:5px;"><div class="patient-severity-dot" style="left:65%;"></div></div>
+                <span class="severity-label">৭ / ১০</span>
+              </div>
+            </div>
+            <div class="field-row"><div class="field-label">অবস্থান / Location</div><div class="field-value">বুকের বাম দিকে, বাম হাতে ছড়িয়ে যায় — Left chest, radiating to left arm</div></div>
+            <div class="field-row"><div class="field-label">ধরন / Character</div><div class="field-value">চাপের মতো — Pressure-like</div></div>
+            <div class="field-row"><div class="field-label">কী বাড়ায় / What makes it worse</div><div class="field-value">পরিশ্রম করলে — Physical exertion</div></div>
+            <div class="field-row" style="border-bottom:none;"><div class="field-label">কী কমায় / What makes it better</div><div class="field-value">বিশ্রাম নিলে — Rest</div></div>
+          </div>
+        </div>
+        <div class="summary-card">
+          <div class="summary-card-header">৪. সংশ্লিষ্ট লক্ষণ · Associated symptoms</div>
+          <div class="summary-card-body" style="padding-top:10px;">
+            <span class="tag-chip amber">জ্বর / Fever</span>
+            <span class="tag-chip red">শ্বাস কষ্ট / Shortness of breath</span>
+            <span class="tag-chip">মাথা ঘুরানো / Dizziness</span>
+            <span class="tag-chip">ঘাম / Sweating</span>
+          </div>
+        </div>
+        <div class="summary-card">
+          <div class="summary-card-header">৫. প্রাসঙ্গিক চিকিৎসা ইতিহাস · Relevant medical history</div>
+          <div class="summary-card-body">
+            <div class="field-row"><div class="field-label">বিদ্যমান রোগ / Existing diseases</div><div class="field-value">উচ্চ রক্তচাপ — Hypertension</div></div>
+            <div class="field-row"><div class="field-label">আগের একই সমস্যা / Previous similar problem</div><div class="field-value">না — No</div></div>
+            <div class="field-row" style="border-bottom:none;"><div class="field-label">সাম্প্রতিক পরীক্ষা / Recent tests</div><div class="field-value field-empty">জানা নেই — Not provided</div></div>
+          </div>
+        </div>
+        <div class="summary-card">
+          <div class="summary-card-header">৬. বর্তমান ওষুধ · Medicines currently taking</div>
+          <div class="summary-card-body"><div class="field-value">Amlodipine 5mg (প্রতিদিন) — Amlodipine 5mg (daily)</div></div>
+        </div>
+        <div class="summary-card">
+          <div class="summary-card-header">৭. অ্যালার্জি · Allergies</div>
+          <div class="summary-card-body"><div class="field-value">পরিচিত কোনো অ্যালার্জি নেই — No known allergies</div></div>
+        </div>
+        <div class="summary-card">
+          <div class="summary-card-header">৮. সাম্প্রতিক পরিবর্তন / এক্সপোজার · Recent changes or exposures</div>
+          <div class="summary-card-body"><div class="field-value">গত সপ্তাহে ভারী পরিশ্রম — Heavy exertion last week</div></div>
+        </div>
+        <div class="summary-card">
+          <div class="summary-card-header">৯. এখন পর্যন্ত কী করা হয়েছে · What has already been done</div>
+          <div class="summary-card-body"><div class="field-value">বিশ্রাম নেওয়া হয়েছে, কোনো ওষুধ নেওয়া হয়নি — Rest taken, no medicines tried</div></div>
+        </div>
+        <div class="summary-card">
+          <div class="summary-card-header">১০. বর্তমান প্রশ্ন/উদ্বেগ · Current concern for the doctor</div>
+          <div class="summary-card-body"><div class="field-value">ব্যথার কারণ জানতে চাই এবং কোনো পরীক্ষা দরকার কিনা — Want to know the cause and whether any tests are needed</div></div>
+        </div>
+
+        <div class="confirm-buttons" style="margin-top:1.5rem;padding-bottom:1.5rem;">
+          <button class="btn btn-outline" style="flex:1;">পরিবর্তন করুন<br/><span style="font-size:11px;font-weight:400;">I need to make a change</span></button>
+          <button class="btn btn-primary" style="flex:1;">হ্যাঁ, নিশ্চিত করুন<br/><span style="font-size:11px;font-weight:400;">Yes, confirm</span></button>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ═══════════════════════════════════════════════════════════ -->
+<!-- SCREEN 5: Medic — Dashboard / Queue -->
+<!-- ═══════════════════════════════════════════════════════════ -->
+<div id="s5" class="screen-block">
+  <p class="screen-label">Screen 5 — Medic · Dashboard / patient queue</p>
+  <div class="screen-frame">
+    <div class="app-shell">
+      <div class="app-sidebar">
+        <div class="app-sidebar-header">
+          <div class="sidebar-clinic">ঢাকা সিটি ক্লিনিক</div>
+          <div class="sidebar-user">Fatima Begum · Pre-screening staff</div>
+        </div>
+        <div class="sidebar-nav">
+          <div class="sidebar-nav-item active">📋 ড্যাশবোর্ড · Dashboard</div>
+          <div class="sidebar-nav-item">📂 সব রেকর্ড · All records</div>
+        </div>
+        <div class="sidebar-lookup">
+          <div class="sidebar-lookup-label">ফোন দিয়ে খুঁজুন · Phone lookup</div>
+          <div class="sidebar-lookup-row">
+            <input placeholder="01XXXXXXXXX" />
+            <button>খুঁজুন</button>
+          </div>
+        </div>
+        <div style="padding:0.5rem 1rem;">
+          <div class="toggle-lang" style="display:inline-flex;border-color:rgba(255,255,255,0.25);">
+            <span style="font-size:11px;font-weight:600;padding:3px 10px;background:rgba(255,255,255,0.2);color:#fff;">বাংলা</span>
+            <span style="font-size:11px;font-weight:600;padding:3px 10px;color:rgba(255,255,255,0.5);">EN</span>
+          </div>
+        </div>
+        <div class="sidebar-logout"><button>লগ আউট · Log out</button></div>
+      </div>
+      <div class="app-main">
+        <div class="critical-banner">
+          <span class="icon">⚠</span>
+          <span>১টি জরুরি রোগী — তাৎক্ষণিক মনোযোগ প্রয়োজন। — <strong>1 critical patient requires immediate attention.</strong></span>
+        </div>
+        <div class="app-topbar">
+          <span class="app-topbar-title">অপেক্ষমাণ রোগী · Patients awaiting review <span class="count-badge">7</span></span>
+          <span class="refresh-note">সর্বশেষ আপডেট: ২ মিনিট আগে · Last updated 2 min ago ↻</span>
+        </div>
+        <div class="app-content">
+          <div class="filter-row">
+            <span class="filter-tab active">আজ · Today</span>
+            <span class="filter-tab">এই সপ্তাহ · This week</span>
+            <span class="filter-tab">সব · All</span>
+            <div style="flex:1;"></div>
+            <span class="filter-tab active">সব ঝুঁকি · All risk</span>
+            <span class="filter-tab">জরুরি · Critical</span>
+            <span class="filter-tab">উচ্চ · High</span>
+          </div>
+          <div style="background:var(--white);border-radius:var(--radius-md);border:0.5px solid var(--gray-border);overflow:hidden;">
+            <table class="queue-table">
+              <thead>
+                <tr>
+                  <th>সময় · Time</th>
+                  <th>রোগী · Patient</th>
+                  <th>ঝুঁকি · Risk</th>
+                  <th>প্রধান সমস্যা · Chief complaint</th>
+                  <th>অবস্থা · Status</th>
+                  <th></th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr class="critical" style="cursor:pointer;">
+                  <td style="font-size:12px;color:var(--text-muted);">09:14</td>
+                  <td><div class="patient-name">রহিম উদ্দিন</div><div class="patient-phone">0171-***-**23</div></td>
+                  <td><span class="risk-badge risk-critical">জরুরি · Critical</span></td>
+                  <td style="font-size:13px;color:var(--text-secondary);">বুকে ব্যথা, শ্বাস কষ্ট</td>
+                  <td><span class="status-pill pending">পর্যালোচনা বাকি · Awaiting review</span></td>
+                  <td><button class="btn btn-sm btn-primary">খুলুন · Open</button></td>
+                </tr>
+                <tr>
+                  <td style="font-size:12px;color:var(--text-muted);">09:31</td>
+                  <td><div class="patient-name">করিমা খানম</div><div class="patient-phone">0181-***-**07</div></td>
+                  <td><span class="risk-badge risk-high">উচ্চ · High</span></td>
+                  <td style="font-size:13px;color:var(--text-secondary);">জ্বর ও মাথা ব্যথা, ৩ দিন</td>
+                  <td><span class="status-pill pending">পর্যালোচনা বাকি · Awaiting review</span></td>
+                  <td><button class="btn btn-sm btn-outline">খুলুন · Open</button></td>
+                </tr>
+                <tr>
+                  <td style="font-size:12px;color:var(--text-muted);">09:47</td>
+                  <td><div class="patient-name">Md. Hasan Ali</div><div class="patient-phone">0191-***-**55</div></td>
+                  <td><span class="risk-badge risk-moderate">মাঝারি · Moderate</span></td>
+                  <td style="font-size:13px;color:var(--text-secondary);">পেটে ব্যথা, বমি বমি ভাব</td>
+                  <td><span class="status-pill">পর্যালোচিত · Reviewed</span></td>
+                  <td><button class="btn btn-sm btn-ghost">খুলুন · Open</button></td>
+                </tr>
+                <tr>
+                  <td style="font-size:12px;color:var(--text-muted);">10:02</td>
+                  <td><div class="patient-name">Nasrin Akter</div><div class="patient-phone">0171-***-**41</div></td>
+                  <td><span class="risk-badge risk-low">কম · Low</span></td>
+                  <td style="font-size:13px;color:var(--text-secondary);">ঠান্ডা, গলা ব্যথা</td>
+                  <td><span class="status-pill" style="background:var(--green-light);color:var(--green);">বরাদ্দ · Assigned</span></td>
+                  <td><button class="btn btn-sm btn-ghost">খুলুন · Open</button></td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ═══════════════════════════════════════════════════════════ -->
+<!-- SCREEN 6: Medic — Patient Detail View -->
+<!-- ═══════════════════════════════════════════════════════════ -->
+<div id="s6" class="screen-block">
+  <p class="screen-label">Screen 6 — Medic · Patient detail / Medical Problem Summary</p>
+  <div class="screen-frame">
+    <div class="app-shell">
+      <div class="app-sidebar">
+        <div class="app-sidebar-header"><div class="sidebar-clinic">ঢাকা সিটি ক্লিনিক</div><div class="sidebar-user">Fatima Begum · Pre-screening staff</div></div>
+        <div class="sidebar-nav">
+          <div class="sidebar-nav-item">📋 ড্যাশবোর্ড · Dashboard</div>
+          <div class="sidebar-nav-item">📂 সব রেকর্ড · All records</div>
+        </div>
+        <div class="sidebar-lookup">
+          <div class="sidebar-lookup-label">ফোন দিয়ে খুঁজুন · Phone lookup</div>
+          <div class="sidebar-lookup-row"><input placeholder="01XXXXXXXXX" /><button>খুঁজুন</button></div>
+        </div>
+        <div style="padding:0.5rem 1rem;"><div class="toggle-lang" style="display:inline-flex;border-color:rgba(255,255,255,0.25);"><span style="font-size:11px;font-weight:600;padding:3px 10px;background:rgba(255,255,255,0.2);color:#fff;">বাংলা</span><span style="font-size:11px;font-weight:600;padding:3px 10px;color:rgba(255,255,255,0.5);">EN</span></div></div>
+        <div class="sidebar-logout"><button>লগ আউট · Log out</button></div>
+      </div>
+      <div class="app-main">
+        <div class="critical-banner"><span class="icon">⚠</span><strong>জরুরি · Critical</strong> — এই রোগী তাৎক্ষণিক মনোযোগ প্রয়োজন — This patient requires immediate attention.</div>
+        <div class="app-topbar" style="border-bottom:0.5px solid var(--gray-border-strong);">
+          <div style="display:flex;align-items:center;gap:12px;">
+            <span class="back-link" style="margin:0;">← ড্যাশবোর্ড · Dashboard</span>
+            <span style="color:var(--gray-border-strong);">|</span>
+            <div class="patient-info-name" style="font-size:15px;">রহিম উদ্দিন</div>
+            <span class="risk-badge risk-critical">জরুরি · Critical</span>
+          </div>
+          <span style="font-size:12px;color:var(--text-muted);">09:14 AM · 26 Jun 2026</span>
+        </div>
+        <div class="app-content">
+          <div class="detail-layout">
+            <div class="detail-left">
+              <div class="accordion-section">
+                <div class="accordion-header"><span class="accordion-title">১. প্রধান সমস্যা · Main problem</span><span class="accordion-chevron">▲</span></div>
+                <div class="accordion-body">
+                  <div style="display:flex;align-items:flex-start;justify-content:space-between;padding:4px 0;">
+                    <span class="field-value">বুকে ব্যথা এবং শ্বাস নিতে কষ্ট হচ্ছে</span>
+                    <div><span class="ai-chip">AI</span></div>
+                  </div>
+                </div>
+              </div>
+              <div class="accordion-section">
+                <div class="accordion-header"><span class="accordion-title">২. কখন শুরু হয়েছে · When it started</span><span class="accordion-chevron">▲</span></div>
+                <div class="accordion-body">
+                  <div class="field-row" style="display:flex;justify-content:space-between;align-items:center;">
+                    <div><div class="field-label">শুরুর তারিখ / Start date</div><div class="field-value">২৫ জুন ২০২৬</div></div>
+                    <span class="ai-chip">AI</span>
+                  </div>
+                  <div class="field-row" style="display:flex;justify-content:space-between;align-items:center;border-bottom:none;">
+                    <div><div class="field-label">স্থায়িত্ব / Duration</div><div class="field-value">২ দিন</div></div>
+                    <span class="ai-chip">AI</span>
+                  </div>
+                </div>
+              </div>
+              <div class="accordion-section">
+                <div class="accordion-header"><span class="accordion-title">৩. লক্ষণ · Symptoms</span><span class="accordion-chevron">▲</span></div>
+                <div class="accordion-body">
+                  <div class="field-row" style="display:flex;justify-content:space-between;align-items:center;">
+                    <div><div class="field-label">তীব্রতা / Severity</div><div style="display:flex;align-items:center;gap:8px;margin-top:3px;"><div class="severity-bar" style="width:120px;height:8px;"><div class="severity-marker" style="left:65%;"></div></div><span class="severity-label">৭/১০</span></div></div>
+                    <span class="ai-chip">AI</span>
+                  </div>
+                  <div class="field-row" style="display:flex;justify-content:space-between;align-items:center;">
+                    <div><div class="field-label">অবস্থান / Location</div><div class="field-value">বুকের বাম দিকে, বাম হাতে ছড়িয়ে যায়</div></div>
+                    <span class="ai-chip">AI</span>
+                  </div>
+                  <div class="field-row" style="display:flex;justify-content:space-between;align-items:center;">
+                    <div><div class="field-label">ধরন / Character</div><div class="field-value">চাপের মতো</div></div>
+                    <span class="edit-chip">✎ সম্পাদিত</span>
+                  </div>
+                  <div class="field-row" style="display:flex;justify-content:space-between;align-items:center;">
+                    <div><div class="field-label">কী বাড়ায় / Aggravating factor</div><div class="field-value">পরিশ্রম করলে</div></div>
+                    <span class="ai-chip">AI</span>
+                  </div>
+                  <div class="field-row" style="display:flex;justify-content:space-between;align-items:center;border-bottom:none;">
+                    <div><div class="field-label">কী কমায় / Relieving factor</div><div class="field-value">বিশ্রাম নিলে</div></div>
+                    <span class="ai-chip">AI</span>
+                  </div>
+                </div>
+              </div>
+              <div class="accordion-section">
+                <div class="accordion-header"><span class="accordion-title">৪. সংশ্লিষ্ট লক্ষণ · Associated symptoms</span><span class="accordion-chevron">▲</span></div>
+                <div class="accordion-body" style="padding-top:8px;">
+                  <span class="tag-chip amber">জ্বর</span><span class="tag-chip red">শ্বাস কষ্ট</span><span class="tag-chip">মাথা ঘুরানো</span><span class="tag-chip">ঘাম</span>
+                  <span class="ai-chip" style="margin-left:8px;">AI</span>
+                </div>
+              </div>
+              <div class="accordion-section">
+                <div class="accordion-header"><span class="accordion-title">৫. প্রাসঙ্গিক চিকিৎসা ইতিহাস · Relevant medical history</span><span class="accordion-chevron">▼</span></div>
+              </div>
+              <div class="accordion-section">
+                <div class="accordion-header"><span class="accordion-title">৬. বর্তমান ওষুধ · Medicines currently taking</span><span class="accordion-chevron">▼</span></div>
+              </div>
+              <div class="accordion-section">
+                <div class="accordion-header"><span class="accordion-title">৭. অ্যালার্জি · Allergies</span><span class="accordion-chevron">▼</span></div>
+              </div>
+              <div class="accordion-section">
+                <div class="accordion-header"><span class="accordion-title">৮. সাম্প্রতিক পরিবর্তন · Recent changes or exposures</span><span class="accordion-chevron">▼</span></div>
+              </div>
+              <div class="accordion-section">
+                <div class="accordion-header"><span class="accordion-title">৯. এখন পর্যন্ত কী করা হয়েছে · What has already been done</span><span class="accordion-chevron">▼</span></div>
+              </div>
+              <div class="accordion-section">
+                <div class="accordion-header"><span class="accordion-title">১০. বর্তমান প্রশ্ন/উদ্বেগ · Current concern for the doctor</span><span class="accordion-chevron">▼</span></div>
+              </div>
+            </div>
+            <div class="detail-right">
+              <div class="action-panel">
+                <div class="action-panel-title">ডাক্তার বরাদ্দ · Assign doctor</div>
+                <select class="select-field">
+                  <option>ডাক্তার নির্বাচন করুন...</option>
+                  <option>ডা. করিম — Dr. A. Karim</option>
+                  <option>ডা. রাহেলা — Dr. Rahela H.</option>
+                </select>
+                <button class="btn btn-primary btn-sm" style="width:100%;">নিশ্চিত করুন · Confirm</button>
+              </div>
+              <div class="action-panel">
+                <div class="action-panel-title">স্টাফ নোট · Staff notes</div>
+                <textarea class="textarea-field" placeholder="অভ্যন্তরীণ নোট লিখুন... · Add internal notes..."></textarea>
+                <button class="btn btn-ghost btn-sm" style="width:100%;margin-top:6px;">সংরক্ষণ · Save note</button>
+              </div>
+              <div class="action-panel">
+                <button class="btn btn-ghost btn-sm" style="width:100%;">✓ সম্পন্ন হিসেবে চিহ্নিত · Mark as reviewed</button>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ═══════════════════════════════════════════════════════════ -->
+<!-- SCREEN 7: Doctor — Dashboard -->
+<!-- ═══════════════════════════════════════════════════════════ -->
+<div id="s7" class="screen-block">
+  <p class="screen-label">Screen 7 — Doctor · Dashboard / assigned patient queue</p>
+  <div class="screen-frame">
+    <div class="app-shell">
+      <div class="app-sidebar">
+        <div class="app-sidebar-header"><div class="sidebar-clinic">ঢাকা সিটি ক্লিনিক</div><div class="sidebar-user">Dr. Abdul Karim · Doctor</div></div>
+        <div class="sidebar-nav">
+          <div class="sidebar-nav-item active">📋 আমার রোগী · My patients</div>
+          <div class="sidebar-nav-item">📂 সব রেকর্ড · All records</div>
+        </div>
+        <div class="sidebar-lookup">
+          <div class="sidebar-lookup-label">ফোন দিয়ে খুঁজুন · Phone lookup</div>
+          <div class="sidebar-lookup-row"><input placeholder="01XXXXXXXXX" /><button>খুঁজুন</button></div>
+        </div>
+        <div style="padding:0.5rem 1rem;"><div class="toggle-lang" style="display:inline-flex;border-color:rgba(255,255,255,0.25);"><span style="font-size:11px;font-weight:600;padding:3px 10px;background:rgba(255,255,255,0.2);color:#fff;">বাংলা</span><span style="font-size:11px;font-weight:600;padding:3px 10px;color:rgba(255,255,255,0.5);">EN</span></div></div>
+        <div class="sidebar-logout"><button>লগ আউট · Log out</button></div>
+      </div>
+      <div class="app-main">
+        <div class="critical-banner"><span class="icon">⚠</span><strong>১টি জরুরি রোগী</strong> — তাৎক্ষণিক মনোযোগ প্রয়োজন। — <strong>1 critical patient requires immediate attention.</strong></div>
+        <div class="app-topbar">
+          <span class="app-topbar-title">আমার রোগীর তালিকা · My patient list <span class="count-badge">5</span></span>
+          <span style="font-size:12px;color:var(--text-muted);">সর্বশেষ আপডেট: ১ মিনিট আগে ↻</span>
+        </div>
+        <div class="app-content">
+          <div style="background:var(--white);border-radius:var(--radius-md);border:0.5px solid var(--gray-border);overflow:hidden;">
+            <table class="queue-table">
+              <thead>
+                <tr>
+                  <th>সময় · Time</th>
+                  <th>রোগী · Patient</th>
+                  <th>ঝুঁকি · Risk</th>
+                  <th>প্রধান অভিযোগ · Chief complaint</th>
+                  <th>অবস্থা · Status</th>
+                  <th></th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr class="critical">
+                  <td style="font-size:12px;color:var(--text-muted);">09:14</td>
+                  <td><div class="patient-name">রহিম উদ্দিন</div><div class="patient-phone">0171-***-**23</div></td>
+                  <td><span class="risk-badge risk-critical">জরুরি · Critical</span></td>
+                  <td style="font-size:13px;">বুকে ব্যথা, শ্বাস কষ্ট</td>
+                  <td><span class="status-pill pending">পর্যালোচনা বাকি</span></td>
+                  <td><button class="btn btn-sm btn-primary">খুলুন · Open</button></td>
+                </tr>
+                <tr>
+                  <td style="font-size:12px;color:var(--text-muted);">09:31</td>
+                  <td><div class="patient-name">করিমা খানম</div><div class="patient-phone">0181-***-**07</div></td>
+                  <td><span class="risk-badge risk-high">উচ্চ · High</span></td>
+                  <td style="font-size:13px;">জ্বর ও মাথা ব্যথা</td>
+                  <td><span class="status-pill pending">পর্যালোচনা বাকি</span></td>
+                  <td><button class="btn btn-sm btn-outline">খুলুন · Open</button></td>
+                </tr>
+                <tr>
+                  <td style="font-size:12px;color:var(--text-muted);">10:02</td>
+                  <td><div class="patient-name">Nasrin Akter</div><div class="patient-phone">0191-***-**41</div></td>
+                  <td><span class="risk-badge risk-moderate">মাঝারি · Moderate</span></td>
+                  <td style="font-size:13px;">পেটে ব্যথা, বমি বমি ভাব</td>
+                  <td><span class="status-pill">পর্যালোচিত · Reviewed</span></td>
+                  <td><button class="btn btn-sm btn-ghost">খুলুন · Open</button></td>
+                </tr>
+                <tr>
+                  <td style="font-size:12px;color:var(--text-muted);">10:28</td>
+                  <td><div class="patient-name">Md. Hasan Ali</div><div class="patient-phone">0171-***-**55</div></td>
+                  <td><span class="risk-badge risk-low">কম · Low</span></td>
+                  <td style="font-size:13px;">ঠান্ডা, গলা ব্যথা</td>
+                  <td><span class="status-pill" style="background:var(--green-light);color:var(--green);">সম্পন্ন · Completed</span></td>
+                  <td><button class="btn btn-sm btn-ghost">খুলুন · Open</button></td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ═══════════════════════════════════════════════════════════ -->
+<!-- SCREEN 8: Doctor — Patient Detail + Risk/Red Flag/XAI Panel -->
+<!-- ═══════════════════════════════════════════════════════════ -->
+<div id="s8" class="screen-block">
+  <p class="screen-label">Screen 8 — Doctor · Patient detail with Risk / Red Flag / XAI panel</p>
+  <div class="screen-frame">
+    <div class="app-shell">
+      <div class="app-sidebar">
+        <div class="app-sidebar-header"><div class="sidebar-clinic">ঢাকা সিটি ক্লিনিক</div><div class="sidebar-user">Dr. Abdul Karim · Doctor</div></div>
+        <div class="sidebar-nav">
+          <div class="sidebar-nav-item">📋 আমার রোগী · My patients</div>
+          <div class="sidebar-nav-item">📂 সব রেকর্ড · All records</div>
+        </div>
+        <div class="sidebar-lookup">
+          <div class="sidebar-lookup-label">ফোন দিয়ে খুঁজুন · Phone lookup</div>
+          <div class="sidebar-lookup-row"><input placeholder="01XXXXXXXXX" /><button>খুঁজুন</button></div>
+        </div>
+        <div style="padding:0.5rem 1rem;"><div class="toggle-lang" style="display:inline-flex;border-color:rgba(255,255,255,0.25);"><span style="font-size:11px;font-weight:600;padding:3px 10px;background:rgba(255,255,255,0.2);color:#fff;">বাংলা</span><span style="font-size:11px;font-weight:600;padding:3px 10px;color:rgba(255,255,255,0.5);">EN</span></div></div>
+        <div class="sidebar-logout"><button>লগ আউট · Log out</button></div>
+      </div>
+      <div class="app-main">
+        <div class="critical-banner"><span class="icon">⚠</span><strong>জরুরি · Critical</strong> — রহিম উদ্দিন — তাৎক্ষণিক মনোযোগ প্রয়োজন।</div>
+        <div class="app-topbar">
+          <div style="display:flex;align-items:center;gap:10px;">
+            <span class="back-link" style="margin:0;">← আমার রোগী</span>
+            <span style="color:var(--gray-border-strong);">|</span>
+            <span style="font-size:15px;font-weight:500;">রহিম উদ্দিন</span>
+            <span class="risk-badge risk-critical">জরুরি · Critical</span>
+          </div>
+          <div style="display:flex;align-items:center;gap:8px;">
+            <button class="btn btn-ghost btn-sm">মন্তব্য · Annotate</button>
+            <button class="btn btn-primary btn-sm">যাচাই করুন · Validate</button>
+          </div>
+        </div>
+        <div class="app-content" style="display:flex;gap:1rem;">
+          <!-- Left: Medical Problem Summary -->
+          <div style="flex:1;overflow-y:auto;">
+            <div class="accordion-section" style="border-left:3px solid var(--red);">
+              <div class="accordion-header"><span class="accordion-title">১. প্রধান সমস্যা · Main problem</span><span class="accordion-chevron">▲</span></div>
+              <div class="accordion-body">
+                <div style="display:flex;justify-content:space-between;align-items:center;padding:2px 0;">
+                  <span class="field-value">বুকে ব্যথা এবং শ্বাস নিতে কষ্ট হচ্ছে — Chest pain with difficulty breathing</span>
+                  <span class="ai-chip">AI</span>
+                </div>
+              </div>
+            </div>
+            <div class="accordion-section">
+              <div class="accordion-header"><span class="accordion-title">২. কখন শুরু হয়েছে · When it started</span><span class="accordion-chevron">▲</span></div>
+              <div class="accordion-body">
+                <div class="field-row" style="display:flex;justify-content:space-between;align-items:center;"><div><div class="field-label">শুরুর তারিখ / Start date</div><div class="field-value">২৫ জুন ২০২৬</div></div><span class="ai-chip">AI</span></div>
+                <div class="field-row" style="display:flex;justify-content:space-between;align-items:center;border-bottom:none;"><div><div class="field-label">স্থায়িত্ব / Duration</div><div class="field-value">২ দিন</div></div><span class="ai-chip">AI</span></div>
+              </div>
+            </div>
+            <div class="accordion-section">
+              <div class="accordion-header"><span class="accordion-title">৩. লক্ষণ · Symptoms</span><span class="accordion-chevron">▲</span></div>
+              <div class="accordion-body">
+                <div class="field-row" style="display:flex;justify-content:space-between;align-items:center;">
+                  <div><div class="field-label">তীব্রতা / Severity</div><div style="display:flex;align-items:center;gap:8px;margin-top:3px;"><div class="severity-bar" style="width:100px;height:7px;"><div class="severity-marker" style="left:65%;"></div></div><span style="font-size:13px;font-weight:600;color:var(--red);">৭/১০ ⚑</span></div></div>
+                  <span class="ai-chip">AI</span>
+                </div>
+                <div class="field-row" style="display:flex;justify-content:space-between;align-items:center;"><div><div class="field-label">অবস্থান / Location</div><div class="field-value">বুকের বাম দিকে, বাম হাতে ছড়িয়ে — Left chest, radiating to left arm ⚑</div></div><span class="ai-chip">AI</span></div>
+                <div class="field-row" style="display:flex;justify-content:space-between;align-items:center;"><div><div class="field-label">ধরন / Character</div><div class="field-value">চাপের মতো — Pressure-like</div></div><span class="edit-chip">✎ ডাক্তার সম্পাদিত</span></div>
+                <div class="field-row" style="display:flex;justify-content:space-between;align-items:center;border-bottom:none;"><div><div class="field-label">কী বাড়ায় / Aggravating</div><div class="field-value">পরিশ্রম — Exertion</div></div><span class="ai-chip">AI</span></div>
+              </div>
+            </div>
+            <div class="accordion-section">
+              <div class="accordion-header"><span class="accordion-title">৪. সংশ্লিষ্ট লক্ষণ · Associated symptoms</span><span class="accordion-chevron">▲</span></div>
+              <div class="accordion-body" style="padding-top:8px;"><span class="tag-chip amber">জ্বর</span><span class="tag-chip red">শ্বাস কষ্ট ⚑</span><span class="tag-chip">মাথা ঘুরানো</span><span class="tag-chip">ঘাম</span><span class="ai-chip" style="margin-left:8px;">AI</span></div>
+            </div>
+            <div class="accordion-section"><div class="accordion-header"><span class="accordion-title">৫. প্রাসঙ্গিক চিকিৎসা ইতিহাস · Relevant medical history</span><span class="accordion-chevron">▲</span></div><div class="accordion-body"><div class="field-row" style="display:flex;justify-content:space-between;"><div><div class="field-label">বিদ্যমান রোগ / Existing conditions</div><div class="field-value">উচ্চ রক্তচাপ — Hypertension</div></div><span class="ai-chip">AI</span></div></div></div>
+            <div class="accordion-section"><div class="accordion-header"><span class="accordion-title">৬. বর্তমান ওষুধ · Medicines currently taking</span><span class="accordion-chevron">▲</span></div><div class="accordion-body"><div style="display:flex;justify-content:space-between;align-items:center;"><span class="field-value">Amlodipine 5mg (daily)</span><span class="ai-chip">AI</span></div></div></div>
+            <div class="accordion-section"><div class="accordion-header"><span class="accordion-title">৭. অ্যালার্জি · Allergies</span><span class="accordion-chevron">▲</span></div><div class="accordion-body"><div style="display:flex;justify-content:space-between;align-items:center;"><span class="field-value">পরিচিত কোনো অ্যালার্জি নেই — No known allergies</span><span class="ai-chip">AI</span></div></div></div>
+            <div class="accordion-section"><div class="accordion-header"><span class="accordion-title">৮. সাম্প্রতিক পরিবর্তন / এক্সপোজার · Recent changes or exposures</span><span class="accordion-chevron">▲</span></div><div class="accordion-body"><div style="display:flex;justify-content:space-between;align-items:center;"><span class="field-value">গত সপ্তাহে ভারী পরিশ্রম — Heavy exertion last week</span><span class="ai-chip">AI</span></div></div></div>
+            <div class="accordion-section"><div class="accordion-header"><span class="accordion-title">৯. এখন পর্যন্ত কী করা হয়েছে · What has already been done</span><span class="accordion-chevron">▲</span></div><div class="accordion-body"><div style="display:flex;justify-content:space-between;align-items:center;"><span class="field-value">বিশ্রাম, কোনো ওষুধ নয় — Rest only, no medicines</span><span class="ai-chip">AI</span></div></div></div>
+            <div class="accordion-section"><div class="accordion-header"><span class="accordion-title">১০. বর্তমান প্রশ্ন/উদ্বেগ · Current concern for the doctor</span><span class="accordion-chevron">▲</span></div><div class="accordion-body"><div style="display:flex;justify-content:space-between;align-items:center;"><span class="field-value">ব্যথার কারণ ও পরীক্ষা দরকার কিনা — Cause of pain and whether tests are needed</span><span class="ai-chip">AI</span></div></div></div>
+          </div>
+
+          <!-- Right: Risk Assessment Panel (sticky) -->
+          <div style="width:230px;flex-shrink:0;display:flex;flex-direction:column;gap:0.75rem;">
+            <div class="risk-panel" style="border-left:4px solid var(--red);">
+              <div class="risk-panel-header">রিস্ক অ্যাসেসমেন্ট · Risk assessment</div>
+              <div class="risk-panel-body">
+                <div class="risk-level-display">
+                  <span class="risk-level-badge-lg risk-red">জরুরি · Critical</span>
+                </div>
+                <div class="risk-section-label">⚑ রেড ফ্ল্যাগ · Red flags</div>
+                <div class="red-flag-item">বুকে ব্যথা বাম হাতে ছড়িয়ে যাচ্ছে — Chest pain radiating to left arm</div>
+                <div class="red-flag-item">তীব্রতা ৭/১০, চাপের মতো ব্যথা — Severity 7/10, pressure-like</div>
+                <div class="red-flag-item">শ্বাস কষ্ট ও ঘাম একসাথে — Shortness of breath with sweating</div>
+                <div class="red-flag-item">উচ্চ রক্তচাপের ইতিহাস — History of hypertension</div>
+                <div style="margin-top:12px;padding-top:10px;border-top:0.5px solid var(--gray-border);">
+                  <div class="risk-section-label">💡 এই মূল্যায়নের কারণ · Why this risk level</div>
+                  <div class="xai-item">রোগী বুকে চাপের মতো ব্যথা অনুভব করছেন যা বাম হাতে ছড়িয়ে যাচ্ছে — এটি তীব্র করোনারি উপসর্গের সাথে সামঞ্জস্যপূর্ণ।</div>
+                  <div class="xai-item">পরিশ্রমে ব্যথা বৃদ্ধি পাচ্ছে এবং বিশ্রামে কমছে।</div>
+                  <div class="xai-item">উচ্চ রক্তচাপের পূর্ব ইতিহাস ঝুঁকি বাড়ায়।</div>
+                  <div class="xai-item">শ্বাস কষ্ট ও ঘাম একই সময়ে দেখা দেওয়া উদ্বেগজনক।</div>
+                </div>
+              </div>
+            </div>
+            <div class="action-panel">
+              <div class="action-panel-title">ডাক্তারের মন্তব্য · Doctor annotation</div>
+              <textarea class="textarea-field" placeholder="মন্তব্য লিখুন... · Write annotation..." style="min-height:60px;"></textarea>
+              <button class="btn btn-ghost btn-sm" style="width:100%;margin-top:6px;">সংরক্ষণ · Save</button>
+            </div>
+            <div class="action-panel" style="display:flex;gap:6px;flex-direction:column;">
+              <button class="btn btn-primary btn-sm" style="width:100%;">✓ যাচাই করুন · Validate</button>
+              <button class="btn btn-ghost btn-sm" style="width:100%;">সম্পন্ন · Mark complete</button>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ═══════════════════════════════════════════════════════════ -->
+<!-- SCREEN 9: Admin — System Monitoring Dashboard -->
+<!-- ═══════════════════════════════════════════════════════════ -->
+<div id="s9" class="screen-block">
+  <p class="screen-label">Screen 9 — Admin · System monitoring dashboard</p>
+  <div class="screen-frame">
+    <div class="app-shell">
+      <div class="app-sidebar">
+        <div class="app-sidebar-header"><div class="sidebar-clinic">ঢাকা সিটি ক্লিনিক</div><div class="sidebar-user">System Admin · Management</div></div>
+        <div class="sidebar-nav">
+          <div class="sidebar-nav-item active">📊 সিস্টেম মনিটর · System monitor</div>
+          <div class="sidebar-nav-item">👥 ব্যবহারকারী · Users & accounts</div>
+          <div class="sidebar-nav-item">📋 অডিট লগ · Audit log</div>
+        </div>
+        <div style="padding:0.5rem 1rem;"><div class="toggle-lang" style="display:inline-flex;border-color:rgba(255,255,255,0.25);"><span style="font-size:11px;font-weight:600;padding:3px 10px;color:rgba(255,255,255,0.5);">বাংলা</span><span style="font-size:11px;font-weight:600;padding:3px 10px;background:rgba(255,255,255,0.2);color:#fff;">EN</span></div></div>
+        <div class="sidebar-logout"><button>Log out</button></div>
+      </div>
+      <div class="app-main">
+        <div style="background:var(--amber-light);border-bottom:1px solid rgba(212,130,10,0.3);padding:10px 1.5rem;font-size:13px;color:var(--amber);display:flex;align-items:center;gap:8px;font-weight:500;">
+          ⚠ একটি সার্ভিস সমস্যা সক্রিয় — EHR integration degraded. Review below. — A service issue is active.
+        </div>
+        <div class="app-topbar"><span class="app-topbar-title">System monitoring</span><span style="font-size:12px;color:var(--text-muted);">26 Jun 2026, 10:41 AM ↻</span></div>
+        <div class="app-content">
+          <!-- Service status bar -->
+          <div class="status-bar" style="margin-bottom:1rem;">
+            <span style="font-size:11px;font-weight:700;color:var(--text-muted);text-transform:uppercase;letter-spacing:0.07em;">সার্ভিস স্ট্যাটাস · Service status</span>
+            <span class="status-indicator"><span class="status-dot green"></span>ভয়েস ট্রান্সক্রিপশন · Voice transcription: Online</span>
+            <span class="status-indicator"><span class="status-dot green"></span>ডেটা প্রসেসিং · Data processing: Online</span>
+            <span class="status-indicator"><span class="status-dot amber"></span>ইএইচআর ইন্টিগ্রেশন · EHR integration: Degraded</span>
+          </div>
+          <!-- Metric grid -->
+          <div class="metric-grid" style="margin-bottom:1rem;">
+            <div class="metric-card"><div class="metric-value">47</div><div class="metric-label">আজকের প্রি-স্ক্রিনিং · Pre-screenings today</div></div>
+            <div class="metric-card"><div class="metric-value" style="color:var(--green);">43</div><div class="metric-label">সম্পন্ন কেস · Cases completed (91%)</div></div>
+            <div class="metric-card alert"><div class="metric-value">3</div><div class="metric-label">ব্যর্থ ট্রান্সক্রিপশন · Failed transcriptions</div></div>
+            <div class="metric-card"><div class="metric-value">8.4<span style="font-size:14px;color:var(--text-muted);">min</span></div><div class="metric-label">গড় সেশন সময় · Avg session time</div></div>
+            <div class="metric-card"><div class="metric-value">12</div><div class="metric-label">সক্রিয় ব্যবহারকারী · Active users</div></div>
+            <div class="metric-card"><div class="metric-value">6.2<span style="font-size:14px;color:var(--text-muted);">min</span></div><div class="metric-label">গড় কিউ অপেক্ষা · Avg queue wait</div></div>
+            <div class="metric-card warn"><div class="metric-value">4</div><div class="metric-label">ডাক্তারবিহীন কেস · Unassigned cases</div></div>
+            <div class="metric-card"><div class="metric-value">99.7<span style="font-size:14px;color:var(--text-muted);">%</span></div><div class="metric-label">সিস্টেম আপটাইম · System uptime (7d)</div></div>
+          </div>
+          <!-- Charts + logs -->
+          <div class="two-col">
+            <div class="panel-card">
+              <div class="panel-card-header">কিউ থ্রুপুট · Queue throughput (last 24h) <span style="font-size:11px;color:var(--text-muted);">pre-screenings / hr</span></div>
+              <div class="chart-placeholder">
+                <div class="chart-bars">
+                  <div class="chart-bar" style="height:10%;"></div>
+                  <div class="chart-bar" style="height:5%;"></div>
+                  <div class="chart-bar" style="height:8%;"></div>
+                  <div class="chart-bar" style="height:20%;"></div>
+                  <div class="chart-bar" style="height:40%;"></div>
+                  <div class="chart-bar highlight" style="height:72%;"></div>
+                  <div class="chart-bar highlight" style="height:88%;"></div>
+                  <div class="chart-bar highlight" style="height:95%;"></div>
+                  <div class="chart-bar highlight" style="height:85%;"></div>
+                  <div class="chart-bar highlight" style="height:100%;"></div>
+                  <div class="chart-bar highlight" style="height:92%;"></div>
+                  <div class="chart-bar" style="height:50%;"></div>
+                </div>
+                <div class="chart-x">
+                  <span>00:00</span><span>02:00</span><span>04:00</span><span>06:00</span><span>08:00</span><span>10:00 ←now</span>
+                </div>
+              </div>
+            </div>
+            <div class="panel-card">
+              <div class="panel-card-header">
+                সাম্প্রতিক ঘটনা · Recent events
+                <div style="display:flex;gap:6px;">
+                  <span class="filter-tab active" style="font-size:10px;padding:3px 9px;">সব · All</span>
+                  <span class="filter-tab" style="font-size:10px;padding:3px 9px;">সক্রিয় · Active</span>
+                </div>
+              </div>
+              <div class="log-row"><span class="log-time">10:38</span><span class="log-event">EHR sync error — session #4471 not pushed</span><span class="log-status active">Active</span></div>
+              <div class="log-row"><span class="log-time">10:22</span><span class="log-event">Transcription failure — session #4469 (mic timeout)</span><span class="log-status resolved">Resolved</span></div>
+              <div class="log-row"><span class="log-time">09:55</span><span class="log-event">EHR sync error — session #4461 retry succeeded</span><span class="log-status resolved">Resolved</span></div>
+              <div class="log-row"><span class="log-time">09:31</span><span class="log-event">Transcription failure — session #4455 (noise floor high)</span><span class="log-status resolved">Resolved</span></div>
+              <div class="log-row"><span class="log-time">09:14</span><span class="log-event">Transcription failure — session #4452 (mic not detected)</span><span class="log-status resolved">Resolved</span></div>
+              <div style="padding:10px 14px;border-top:0.5px solid var(--gray-border);">
+                <button class="btn btn-ghost btn-sm" style="font-size:12px;">সব লগ রপ্তানি · Export all logs</button>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script>
+  function show(id) {
+    document.querySelectorAll('.screen-block').forEach(b => b.classList.remove('active'));
+    document.querySelector('#' + id).classList.add('active');
+    document.querySelectorAll('.nav a').forEach(a => a.classList.remove('active'));
+    const map = {s1:0,s2:1,s3:2,s4:3,s5:4,s6:5,s7:6,s8:7,s9:8};
+    document.querySelectorAll('.nav a')[map[id]].classList.add('active');
+    window.scrollTo(0,0);
+  }
+</script>
+</body>
+</html>

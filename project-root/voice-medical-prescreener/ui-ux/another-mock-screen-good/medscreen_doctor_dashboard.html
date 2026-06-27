@@ -1,0 +1,437 @@
+
+<style>
+*{box-sizing:border-box;margin:0;padding:0}
+:root{
+  --navy:#0B2545;--navy-mid:#1B3A6B;--navy-light:#2E5090;
+  --accent:#1A6FBF;--accent-light:#E8F1FB;
+  --success:#0E7C5A;--success-bg:#E6F4F0;--success-border:#B7DDD4;
+  --warn:#8B5E00;--warn-bg:#FFF8E6;--warn-border:#E8CC7A;
+  --danger:#B91C1C;--danger-bg:#FEF2F2;--danger-border:#FECACA;
+  --med:#1D5FAD;--med-bg:#EEF5FD;--med-border:#B5D4F4;
+  --surface:#F2F5FA;--card:#FFFFFF;
+  --border:#D1DCF0;--border-strong:#A0B4D6;
+  --text:#0B1F3A;--text-sec:#4A607A;--text-muted:#7A91A8;
+  --radius:10px;--font:'Inter',system-ui,sans-serif;
+  --sidebar:220px;
+}
+body{font-family:var(--font);background:var(--surface);color:var(--text);font-size:14px;display:flex;min-height:100vh}
+.sidebar{width:var(--sidebar);background:var(--navy);flex-shrink:0;display:flex;flex-direction:column;padding:0}
+.sb-logo{padding:18px 16px;border-bottom:0.5px solid rgba(255,255,255,0.08);display:flex;align-items:center;gap:10px}
+.sb-logo .mark{width:32px;height:32px;background:var(--accent);border-radius:8px;display:flex;align-items:center;justify-content:center}
+.sb-logo .mark i{color:#fff;font-size:16px}
+.sb-logo .name{font-size:13px;font-weight:500;color:#fff;line-height:1.2}
+.sb-logo .role{font-size:11px;color:#7A99C0}
+.sb-section{padding:12px 10px 4px;font-size:10px;font-weight:600;color:#4A6885;letter-spacing:0.1em;text-transform:uppercase}
+.sb-item{display:flex;align-items:center;gap:10px;padding:9px 12px;border-radius:8px;margin:1px 8px;cursor:pointer;color:#A0B8D8;font-size:13px;transition:all .15s}
+.sb-item:hover{background:rgba(255,255,255,0.07);color:#CBD8EC}
+.sb-item.active{background:rgba(26,111,191,0.25);color:#7EB8F5}
+.sb-item i{font-size:16px;flex-shrink:0}
+.sb-item .badge{margin-left:auto;background:var(--danger);color:#fff;border-radius:10px;padding:1px 7px;font-size:10px;font-weight:600}
+.sb-item .badge-warn{background:var(--warn-bg);color:var(--warn);border:0.5px solid var(--warn-border);border-radius:10px;padding:1px 7px;font-size:10px;font-weight:600}
+.sb-bottom{margin-top:auto;padding:12px 8px;border-top:0.5px solid rgba(255,255,255,0.08)}
+.sb-user{display:flex;align-items:center;gap:10px;padding:8px 12px;border-radius:8px}
+.sb-user .avatar{width:32px;height:32px;background:var(--accent);border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:12px;font-weight:500;color:#fff;flex-shrink:0}
+.sb-user .info .name{font-size:12px;color:#CBD8EC;font-weight:500}
+.sb-user .info .spec{font-size:11px;color:#4A6885}
+.main{flex:1;display:flex;flex-direction:column;min-width:0}
+.topbar{background:#fff;border-bottom:0.5px solid var(--border);padding:12px 24px;display:flex;align-items:center;gap:16px}
+.topbar-title{font-size:16px;font-weight:500;color:var(--navy);flex:1}
+.lang-toggle{display:flex;background:var(--surface);border-radius:6px;border:0.5px solid var(--border);overflow:hidden}
+.lang-btn{padding:5px 12px;font-size:12px;color:var(--text-sec);border:none;background:transparent;cursor:pointer;transition:all .2s;font-family:var(--font)}
+.lang-btn.active{background:var(--navy);color:#fff}
+.alert-bar{background:var(--danger-bg);border-bottom:0.5px solid var(--danger-border);padding:10px 24px;display:flex;align-items:center;gap:10px;font-size:13px;color:var(--danger)}
+.alert-bar i{font-size:16px}
+.content{flex:1;padding:20px 24px;overflow-y:auto;display:grid;grid-template-columns:1fr 340px;gap:16px}
+.col-main{display:flex;flex-direction:column;gap:14px}
+.col-side{display:flex;flex-direction:column;gap:14px}
+.card{background:var(--card);border:0.5px solid var(--border);border-radius:12px;padding:20px}
+.card-sm{background:var(--card);border:0.5px solid var(--border);border-radius:12px;padding:16px}
+.sec-label{font-size:11px;font-weight:600;color:var(--text-muted);letter-spacing:0.08em;text-transform:uppercase;margin-bottom:12px}
+.patient-header{display:flex;align-items:center;gap:14px;margin-bottom:16px;padding-bottom:16px;border-bottom:0.5px solid var(--border)}
+.p-avatar{width:48px;height:48px;background:var(--navy);border-radius:12px;display:flex;align-items:center;justify-content:center;color:#fff;font-size:18px;font-weight:500;flex-shrink:0}
+.p-name{font-size:17px;font-weight:500;color:var(--navy)}
+.p-meta{font-size:13px;color:var(--text-sec);margin-top:3px}
+.risk-badge{margin-left:auto;text-align:center}
+.risk-pill{padding:6px 16px;border-radius:20px;font-size:13px;font-weight:500;display:inline-flex;align-items:center;gap:6px}
+.risk-high{background:var(--warn-bg);color:var(--warn);border:0.5px solid var(--warn-border)}
+.risk-critical{background:var(--danger-bg);color:var(--danger);border:0.5px solid var(--danger-border)}
+.risk-medium{background:var(--med-bg);color:var(--med);border:0.5px solid var(--med-border)}
+.risk-low{background:var(--success-bg);color:var(--success);border:0.5px solid var(--success-border)}
+.risk-label{font-size:11px;color:var(--text-muted);margin-top:4px}
+.info-grid{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:16px}
+.info-item{background:var(--surface);border-radius:var(--radius);padding:10px 12px}
+.info-item .lbl{font-size:11px;color:var(--text-muted);margin-bottom:3px}
+.info-item .val{font-size:13px;color:var(--text);font-weight:500}
+.section-title{font-size:14px;font-weight:500;color:var(--navy);margin-bottom:10px;display:flex;align-items:center;gap:8px}
+.section-title i{font-size:16px;color:var(--text-sec)}
+.symptom-list{display:flex;flex-direction:column;gap:6px}
+.symptom-row{display:flex;align-items:flex-start;gap:10px;padding:8px 10px;border-radius:8px;border:0.5px solid var(--border)}
+.symptom-dot{width:8px;height:8px;border-radius:50%;flex-shrink:0;margin-top:4px}
+.symptom-dot.primary{background:#E24B4A}
+.symptom-dot.secondary{background:#F5C97A}
+.symptom-dot.associated{background:#7EB8F5}
+.symptom-detail{flex:1}
+.symptom-name{font-size:13px;font-weight:500;color:var(--text)}
+.symptom-meta{font-size:12px;color:var(--text-sec);margin-top:2px}
+.symptom-badge{font-size:11px;padding:2px 8px;border-radius:10px;white-space:nowrap}
+.redflag-box{background:var(--danger-bg);border:0.5px solid var(--danger-border);border-radius:var(--radius);padding:12px 14px;margin-bottom:14px;display:flex;gap:10px}
+.redflag-box i{color:var(--danger);flex-shrink:0;margin-top:1px;font-size:16px}
+.redflag-text{font-size:13px;color:var(--danger);font-weight:500}
+.redflag-sub{font-size:12px;color:#EF4444;margin-top:3px}
+.xai-box{background:var(--med-bg);border:0.5px solid var(--med-border);border-radius:var(--radius);padding:14px;font-size:13px;color:var(--text-sec);line-height:1.6}
+.xai-box .xai-title{font-weight:500;color:var(--navy);margin-bottom:6px;display:flex;align-items:center;gap:6px}
+.xai-box .xai-title i{color:var(--accent)}
+.summary-section{margin-bottom:16px}
+.summary-num{font-size:12px;font-weight:600;color:var(--accent);min-width:20px}
+.summary-row{display:flex;gap:8px;align-items:baseline;padding:6px 0;border-bottom:0.5px solid var(--border)}
+.summary-row:last-child{border-bottom:none}
+.summary-label{font-size:12px;color:var(--text-sec);min-width:120px;flex-shrink:0}
+.summary-val{font-size:13px;color:var(--text);flex:1}
+.action-row{display:flex;gap:8px;padding-top:4px}
+.btn-sm{padding:7px 14px;border-radius:var(--radius);font-size:13px;cursor:pointer;font-family:var(--font);display:flex;align-items:center;gap:6px;border:none;transition:all .15s}
+.btn-primary-sm{background:var(--navy);color:#fff}
+.btn-primary-sm:hover{background:var(--navy-mid)}
+.btn-sec-sm{background:#fff;color:var(--text-sec);border:0.5px solid var(--border-strong)!important;border-radius:var(--radius)}
+.btn-sec-sm:hover{background:var(--accent-light)}
+.patient-queue{display:flex;flex-direction:column;gap:6px}
+.queue-item{display:flex;align-items:center;gap:10px;padding:10px 12px;border-radius:8px;border:0.5px solid var(--border);cursor:pointer;transition:all .15s}
+.queue-item:hover{border-color:var(--border-strong);background:var(--surface)}
+.queue-item.active-q{border-color:var(--accent);background:var(--accent-light)}
+.q-avatar{width:32px;height:32px;border-radius:8px;background:var(--navy-light);display:flex;align-items:center;justify-content:center;color:#fff;font-size:12px;font-weight:500;flex-shrink:0}
+.q-name{font-size:13px;font-weight:500;color:var(--text)}
+.q-meta{font-size:11px;color:var(--text-muted)}
+.q-risk{margin-left:auto}
+.feedback-row{display:flex;gap:8px;flex-wrap:wrap}
+.fb-btn{padding:6px 12px;border-radius:6px;font-size:12px;cursor:pointer;font-family:var(--font);background:#fff;border:0.5px solid var(--border-strong);color:var(--text-sec);transition:all .15s}
+.fb-btn:hover{background:var(--accent-light);border-color:var(--accent);color:var(--accent)}
+.stat-mini{text-align:center;padding:12px}
+.stat-mini .num{font-size:22px;font-weight:500;color:var(--navy)}
+.stat-mini .lbl{font-size:11px;color:var(--text-muted);margin-top:2px}
+.stats-row{display:grid;grid-template-columns:repeat(3,1fr);gap:0;border:0.5px solid var(--border);border-radius:12px;overflow:hidden;margin-bottom:14px}
+.stats-row .stat-mini:not(:last-child){border-right:0.5px solid var(--border)}
+</style>
+
+<div style="display:flex;min-height:700px">
+<div class="sidebar">
+  <div class="sb-logo">
+    <div class="mark"><i class="ti ti-stethoscope" aria-hidden="true"></i></div>
+    <div><div class="name">MediScreen BD</div><div class="role">Doctor portal</div></div>
+  </div>
+  <div class="sb-section" id="sb-nav">Navigation</div>
+  <div class="sb-item active"><i class="ti ti-layout-dashboard" aria-hidden="true"></i><span id="sb-dash">Dashboard</span></div>
+  <div class="sb-item"><i class="ti ti-users" aria-hidden="true"></i><span id="sb-queue">Patient queue</span><span class="badge">4</span></div>
+  <div class="sb-item"><i class="ti ti-report-medical" aria-hidden="true"></i><span id="sb-reports">Reports</span></div>
+  <div class="sb-item"><i class="ti ti-history" aria-hidden="true"></i><span id="sb-hist">History</span></div>
+  <div class="sb-section" id="sb-tools">Tools</div>
+  <div class="sb-item"><i class="ti ti-chart-bar" aria-hidden="true"></i><span id="sb-analytics">Analytics</span></div>
+  <div class="sb-item"><i class="ti ti-settings" aria-hidden="true"></i><span id="sb-settings">Settings</span></div>
+  <div class="sb-bottom">
+    <div class="lang-toggle" style="margin:0 8px 10px;width:calc(100% - 16px)">
+      <button class="lang-btn active" onclick="setLang('en')" style="flex:1">EN</button>
+      <button class="lang-btn" onclick="setLang('bn')" style="flex:1">বাং</button>
+    </div>
+    <div class="sb-user">
+      <div class="avatar">DR</div>
+      <div class="info"><div class="name">Dr. Rahman</div><div class="spec" id="dr-spec">Internal Medicine</div></div>
+    </div>
+  </div>
+</div>
+
+<div class="main">
+  <div class="topbar">
+    <div class="topbar-title" id="tb-title">Patient pre-screening report</div>
+    <div style="display:flex;align-items:center;gap:10px">
+      <div style="font-size:12px;color:var(--text-sec)"><i class="ti ti-calendar" style="margin-right:4px" aria-hidden="true"></i><span id="tb-date">Today, 26 June 2026</span></div>
+      <button class="btn-sm btn-sec-sm" style="border:0.5px solid var(--border-strong)"><i class="ti ti-printer" aria-hidden="true"></i> <span id="tb-print">Print report</span></button>
+    </div>
+  </div>
+
+  <div class="alert-bar" id="alert-bar">
+    <i class="ti ti-alert-triangle" aria-hidden="true"></i>
+    <strong id="ab-title">Critical alert —</strong>
+    <span id="ab-msg">Patient Fatema Begum (next in queue) has been flagged with high-priority red-flag indicators. Please review immediately.</span>
+    <span style="margin-left:auto;cursor:pointer;font-weight:500;text-decoration:underline" id="ab-view">View patient</span>
+  </div>
+
+  <div class="content">
+    <div class="col-main">
+      <div class="card">
+        <div class="patient-header">
+          <div class="p-avatar">RH</div>
+          <div>
+            <div class="p-name" id="p-name">Rahim Hossain</div>
+            <div class="p-meta" id="p-meta">Male · 52 years · +880 01712 345678 · Session: 10:24 AM</div>
+          </div>
+          <div class="risk-badge">
+            <div class="risk-pill risk-high"><i class="ti ti-alert-circle" aria-hidden="true"></i> <span id="p-risk">High risk</span></div>
+            <div class="risk-label" id="p-risk-lbl">Risk level</div>
+          </div>
+        </div>
+        <div class="info-grid">
+          <div class="info-item"><div class="lbl" id="i-chief-lbl">Chief complaint</div><div class="val" id="i-chief">Fever, dry cough — 3 days</div></div>
+          <div class="info-item"><div class="lbl" id="i-hist-lbl">Known conditions</div><div class="val" id="i-hist">Diabetes (Type 2), Hypertension</div></div>
+          <div class="info-item"><div class="lbl" id="i-med-lbl">Current medications</div><div class="val" id="i-med">Metformin 500mg, Amlodipine 5mg</div></div>
+          <div class="info-item"><div class="lbl" id="i-allergy-lbl">Allergies</div><div class="val" id="i-allergy">Penicillin (reported)</div></div>
+        </div>
+
+        <div class="redflag-box">
+          <i class="ti ti-alert-octagon" aria-hidden="true"></i>
+          <div>
+            <div class="redflag-text" id="rf-title">Red-flag indicators detected</div>
+            <div class="redflag-sub" id="rf-msg">Persistent fever >5 days in a diabetic patient aged 52, with reported difficulty breathing and night sweats. Requires prompt clinical evaluation.</div>
+          </div>
+        </div>
+
+        <div class="section-title"><i class="ti ti-virus" aria-hidden="true"></i> <span id="s-symptoms">Symptom profile</span></div>
+        <div class="symptom-list">
+          <div class="symptom-row">
+            <div class="symptom-dot primary"></div>
+            <div class="symptom-detail">
+              <div style="display:flex;align-items:center;justify-content:space-between">
+                <div class="symptom-name" id="sym-1-name">Fever</div>
+                <span class="symptom-badge" style="background:var(--warn-bg);color:var(--warn);border:0.5px solid var(--warn-border)" id="sym-1-sev">Moderate · 102°F</span>
+              </div>
+              <div class="symptom-meta" id="sym-1-meta">Duration: 3 days · Location: Systemic · Character: Continuous · Worsens: Evening · Improves: With paracetamol</div>
+            </div>
+          </div>
+          <div class="symptom-row">
+            <div class="symptom-dot primary"></div>
+            <div class="symptom-detail">
+              <div style="display:flex;align-items:center;justify-content:space-between">
+                <div class="symptom-name" id="sym-2-name">Dry cough</div>
+                <span class="symptom-badge" style="background:var(--med-bg);color:var(--med);border:0.5px solid var(--med-border)" id="sym-2-sev">Moderate</span>
+              </div>
+              <div class="symptom-meta" id="sym-2-meta">Duration: 3 days · No sputum · No haemoptysis · Worsens: At night</div>
+            </div>
+          </div>
+          <div class="symptom-row">
+            <div class="symptom-dot secondary"></div>
+            <div class="symptom-detail">
+              <div style="display:flex;align-items:center;justify-content:space-between">
+                <div class="symptom-name" id="sym-3-name">Fatigue</div>
+                <span class="symptom-badge" style="background:var(--surface);color:var(--text-sec);border:0.5px solid var(--border)" id="sym-3-sev">Mild</span>
+              </div>
+              <div class="symptom-meta" id="sym-3-meta">Onset: 2 days ago · No loss of consciousness</div>
+            </div>
+          </div>
+          <div class="symptom-row">
+            <div class="symptom-dot secondary"></div>
+            <div class="symptom-detail">
+              <div style="display:flex;align-items:center;justify-content:space-between">
+                <div class="symptom-name" id="sym-4-name">Night sweats</div>
+                <span class="symptom-badge" style="background:var(--warn-bg);color:var(--warn);border:0.5px solid var(--warn-border)" id="sym-4-sev">Notable</span>
+              </div>
+              <div class="symptom-meta" id="sym-4-meta">Reported last 3 nights · Soaking clothing · Flagged for TB/lymphoma rule-out</div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div class="card">
+        <div class="section-title"><i class="ti ti-brain" aria-hidden="true"></i> <span id="s-xai">Reasoning summary</span></div>
+        <div class="xai-box" style="margin-bottom:14px">
+          <div class="xai-title"><i class="ti ti-info-circle" aria-hidden="true"></i> <span id="xai-why">Why this risk level was assigned</span></div>
+          <span id="xai-body">High-risk classification was assigned due to: fever persisting beyond 3 days in a patient with Type 2 Diabetes (significant comorbidity), night sweats reported over 3 consecutive nights, patient age of 52 years with an active comorbidity burden, and dry cough without sputum. These findings together warrant rule-out of pulmonary tuberculosis and possible secondary bacterial infection.</span>
+        </div>
+        <div class="section-title" style="margin-top:4px"><i class="ti ti-stethoscope" aria-hidden="true"></i> <span id="s-consider">Conditions worth considering</span></div>
+        <div style="font-size:12px;color:var(--text-muted);margin-bottom:10px;font-style:italic" id="s-consider-note">Presented for clinical consideration only — not a diagnosis</div>
+        <div style="display:flex;flex-wrap:wrap;gap:8px" id="conditions-wrap">
+          <div style="padding:7px 14px;background:var(--warn-bg);border:0.5px solid var(--warn-border);border-radius:20px;font-size:13px;color:var(--warn)">Pulmonary tuberculosis</div>
+          <div style="padding:7px 14px;background:var(--med-bg);border:0.5px solid var(--med-border);border-radius:20px;font-size:13px;color:var(--med)">Secondary bacterial pneumonia</div>
+          <div style="padding:7px 14px;background:var(--surface);border:0.5px solid var(--border);border-radius:20px;font-size:13px;color:var(--text-sec)">Viral respiratory infection</div>
+        </div>
+        <div style="margin-top:16px;padding-top:16px;border-top:0.5px solid var(--border)">
+          <div class="section-title"><i class="ti ti-list-check" aria-hidden="true"></i> <span id="s-nextsteps">Suggested next steps</span></div>
+          <div style="display:flex;flex-direction:column;gap:6px" id="steps-list-dr">
+            <div style="display:flex;gap:10px;font-size:13px;color:var(--text-sec);align-items:flex-start">
+              <i class="ti ti-chevron-right" style="color:var(--accent);flex-shrink:0;margin-top:1px" aria-hidden="true"></i>Chest X-ray and sputum AFB test to rule out pulmonary tuberculosis
+            </div>
+            <div style="display:flex;gap:10px;font-size:13px;color:var(--text-sec);align-items:flex-start">
+              <i class="ti ti-chevron-right" style="color:var(--accent);flex-shrink:0;margin-top:1px" aria-hidden="true"></i>CBC with differential, CRP, and blood glucose assessment given diabetic status
+            </div>
+            <div style="display:flex;gap:10px;font-size:13px;color:var(--text-sec);align-items:flex-start">
+              <i class="ti ti-chevron-right" style="color:var(--accent);flex-shrink:0;margin-top:1px" aria-hidden="true"></i>Review antibiotic history — note penicillin allergy before prescribing
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div class="card">
+        <div class="section-title"><i class="ti ti-message-dots" aria-hidden="true"></i> <span id="s-feedback">Doctor feedback</span></div>
+        <div style="font-size:13px;color:var(--text-sec);margin-bottom:12px" id="fb-note">Your feedback improves the system's accuracy. Rate this report and correct any errors.</div>
+        <div class="feedback-row" style="margin-bottom:12px">
+          <button class="fb-btn"><i class="ti ti-thumb-up" aria-hidden="true"></i> <span id="fb-accurate">Report accurate</span></button>
+          <button class="fb-btn"><i class="ti ti-edit" aria-hidden="true"></i> <span id="fb-correct">Correct extraction</span></button>
+          <button class="fb-btn"><i class="ti ti-alert-circle" aria-hidden="true"></i> <span id="fb-missed">Symptom missed</span></button>
+          <button class="fb-btn"><i class="ti ti-x" aria-hidden="true"></i> <span id="fb-wrong-risk">Risk level incorrect</span></button>
+        </div>
+        <div class="action-row">
+          <button class="btn-sm btn-primary-sm"><i class="ti ti-circle-check" aria-hidden="true"></i> <span id="btn-accept">Accept report</span></button>
+          <button class="btn-sm btn-sec-sm" style="border:0.5px solid var(--border-strong)"><i class="ti ti-notes" aria-hidden="true"></i> <span id="btn-annotate">Add annotations</span></button>
+          <button class="btn-sm btn-sec-sm" style="border:0.5px solid var(--border-strong)"><i class="ti ti-share" aria-hidden="true"></i> <span id="btn-refer">Refer patient</span></button>
+        </div>
+      </div>
+    </div>
+
+    <div class="col-side">
+      <div class="card-sm">
+        <div class="sec-label" id="s-today-label">Today's overview</div>
+        <div class="stats-row">
+          <div class="stat-mini"><div class="num">7</div><div class="lbl" id="stat-seen">Seen</div></div>
+          <div class="stat-mini"><div class="num">4</div><div class="lbl" id="stat-queue">In queue</div></div>
+          <div class="stat-mini"><div class="num" style="color:var(--danger)">1</div><div class="lbl" id="stat-critical">Critical</div></div>
+        </div>
+        <div class="sec-label" id="s-queue-label">Patient queue</div>
+        <div class="patient-queue">
+          <div class="queue-item active-q">
+            <div class="q-avatar">RH</div>
+            <div><div class="q-name">Rahim Hossain</div><div class="q-meta" id="q1-meta">52M · Now · Pre-screening complete</div></div>
+            <div class="q-risk"><span class="risk-pill risk-high" style="font-size:11px;padding:3px 8px"><span id="q1-risk">High</span></span></div>
+          </div>
+          <div class="queue-item">
+            <div class="q-avatar" style="background:#B91C1C">FB</div>
+            <div><div class="q-name">Fatema Begum</div><div class="q-meta" id="q2-meta">38F · Waiting · Review needed</div></div>
+            <div class="q-risk"><span class="risk-pill risk-critical" style="font-size:11px;padding:3px 8px"><span id="q2-risk">Critical</span></span></div>
+          </div>
+          <div class="queue-item">
+            <div class="q-avatar">KA</div>
+            <div><div class="q-name">Karim Ahmed</div><div class="q-meta" id="q3-meta">34M · In progress</div></div>
+            <div class="q-risk"><span class="risk-pill risk-medium" style="font-size:11px;padding:3px 8px"><span id="q3-risk">Medium</span></span></div>
+          </div>
+          <div class="queue-item">
+            <div class="q-avatar" style="background:var(--success)">NS</div>
+            <div><div class="q-name">Nusrat Sultana</div><div class="q-meta" id="q4-meta">28F · Waiting</div></div>
+            <div class="q-risk"><span class="risk-pill risk-low" style="font-size:11px;padding:3px 8px"><span id="q4-risk">Low</span></span></div>
+          </div>
+        </div>
+      </div>
+
+      <div class="card-sm">
+        <div class="sec-label" id="s-summary-label">Medical problem summary</div>
+        <div style="font-size:11px;color:var(--text-muted);margin-bottom:10px;font-style:italic" id="s-summary-sub">Faculty pre-screening format</div>
+        <div id="summary-list" style="display:flex;flex-direction:column"></div>
+      </div>
+    </div>
+  </div>
+</div>
+</div>
+
+<script>
+var lang='en';
+var summaryData={
+  en:[
+    ['1. Main problem','Fever and dry cough for 3 days in a 52-year-old diabetic male'],
+    ['2. When it started','Started: 3 days ago · Duration: 72 hours'],
+    ['3. Main symptom','Fever 102°F · Severity: Moderate · Systemic · Continuous · Worsens evening · Improves with paracetamol'],
+    ['4. Associated symptoms','Dry cough, fatigue, night sweats (×3 nights)'],
+    ['5. Medical history','Type 2 Diabetes, Hypertension · No recent surgery'],
+    ['6. Medications','Metformin 500mg, Amlodipine 5mg'],
+    ['7. Allergies','Penicillin (reported)'],
+    ['8. Recent changes','No new exposures reported'],
+    ['9. Already done','Paracetamol at home — partial relief'],
+    ['10. Current concern','Rule out TB, assess infection source, check blood glucose'],
+  ],
+  bn:[
+    ['১. প্রধান সমস্যা','৫২ বছর বয়সী ডায়াবেটিক পুরুষের ৩ দিনের জ্বর ও শুকনো কাশি'],
+    ['২. শুরুর সময়','শুরু: ৩ দিন আগে · সময়কাল: ৭২ ঘণ্টা'],
+    ['৩. প্রধান উপসর্গ','জ্বর ১০২°F · তীব্রতা: মাঝারি · সার্বিক · ক্রমাগত · সন্ধ্যায় বাড়ে'],
+    ['৪. সহ-উপসর্গ','শুকনো কাশি, ক্লান্তি, রাতের ঘাম (৩ রাত)'],
+    ['৫. চিকিৎসা ইতিহাস','টাইপ ২ ডায়াবেটিস, উচ্চ রক্তচাপ'],
+    ['৬. ওষুধ','মেটফর্মিন ৫০০মিগ্রা, অ্যামলোডিপিন ৫মিগ্রা'],
+    ['৭. অ্যালার্জি','পেনিসিলিন (জানানো হয়েছে)'],
+    ['৮. সাম্প্রতিক পরিবর্তন','নতুন কোনো সংস্পর্শ নেই'],
+    ['৯. ইতোমধ্যে যা করা হয়েছে','বাড়িতে প্যারাসিটামল — আংশিক উপশম'],
+    ['১০. বর্তমান উদ্বেগ','যক্ষ্মা বাদ দেওয়া, সংক্রমণের উৎস নির্ণয়, রক্তের গ্লুকোজ পরীক্ষা'],
+  ]
+};
+var sidebarTexts={
+  en:{
+    'sb-nav':'Navigation','sb-dash':'Dashboard','sb-queue':'Patient queue','sb-reports':'Reports',
+    'sb-hist':'History','sb-tools':'Tools','sb-analytics':'Analytics','sb-settings':'Settings',
+    'dr-spec':'Internal Medicine','tb-title':'Patient pre-screening report','tb-date':'Today, 26 June 2026',
+    'tb-print':'Print report','ab-title':'Critical alert —','ab-view':'View patient',
+    'ab-msg':'Patient Fatema Begum (next in queue) has been flagged with high-priority red-flag indicators. Please review immediately.',
+    'p-name':'Rahim Hossain','p-meta':'Male · 52 years · +880 01712 345678 · Session: 10:24 AM',
+    'p-risk':'High risk','p-risk-lbl':'Risk level',
+    'i-chief-lbl':'Chief complaint','i-chief':'Fever, dry cough — 3 days',
+    'i-hist-lbl':'Known conditions','i-hist':'Diabetes (Type 2), Hypertension',
+    'i-med-lbl':'Current medications','i-med':'Metformin 500mg, Amlodipine 5mg',
+    'i-allergy-lbl':'Allergies','i-allergy':'Penicillin (reported)',
+    'rf-title':'Red-flag indicators detected',
+    'rf-msg':'Persistent fever >5 days in a diabetic patient aged 52, with reported difficulty breathing and night sweats. Requires prompt clinical evaluation.',
+    's-symptoms':'Symptom profile','sym-1-name':'Fever','sym-1-sev':'Moderate · 102°F',
+    'sym-1-meta':'Duration: 3 days · Location: Systemic · Character: Continuous · Worsens: Evening · Improves: With paracetamol',
+    'sym-2-name':'Dry cough','sym-2-sev':'Moderate',
+    'sym-2-meta':'Duration: 3 days · No sputum · No haemoptysis · Worsens: At night',
+    'sym-3-name':'Fatigue','sym-3-sev':'Mild','sym-3-meta':'Onset: 2 days ago · No loss of consciousness',
+    'sym-4-name':'Night sweats','sym-4-sev':'Notable',
+    'sym-4-meta':'Reported last 3 nights · Soaking clothing · Flagged for TB/lymphoma rule-out',
+    's-xai':'Reasoning summary','xai-why':'Why this risk level was assigned',
+    'xai-body':'High-risk classification was assigned due to: fever persisting beyond 3 days in a patient with Type 2 Diabetes, night sweats reported over 3 consecutive nights, patient age of 52 with active comorbidity burden, and dry cough without sputum. These findings together warrant rule-out of pulmonary tuberculosis and possible secondary bacterial infection.',
+    's-consider':'Conditions worth considering','s-consider-note':'Presented for clinical consideration only — not a diagnosis',
+    's-nextsteps':'Suggested next steps',
+    's-feedback':'Doctor feedback','fb-note':'Your feedback improves the system\'s accuracy. Rate this report and correct any errors.',
+    'fb-accurate':'Report accurate','fb-correct':'Correct extraction','fb-missed':'Symptom missed','fb-wrong-risk':'Risk level incorrect',
+    'btn-accept':'Accept report','btn-annotate':'Add annotations','btn-refer':'Refer patient',
+    's-today-label':'Today\'s overview','stat-seen':'Seen','stat-queue':'In queue','stat-critical':'Critical',
+    's-queue-label':'Patient queue',
+    'q1-meta':'52M · Now · Pre-screening complete','q1-risk':'High',
+    'q2-meta':'38F · Waiting · Review needed','q2-risk':'Critical',
+    'q3-meta':'34M · In progress','q3-risk':'Medium',
+    'q4-meta':'28F · Waiting','q4-risk':'Low',
+    's-summary-label':'Medical problem summary','s-summary-sub':'Faculty pre-screening format',
+  },
+  bn:{
+    'sb-nav':'নেভিগেশন','sb-dash':'ড্যাশবোর্ড','sb-queue':'রোগীর সারি','sb-reports':'রিপোর্ট',
+    'sb-hist':'ইতিহাস','sb-tools':'টুলস','sb-analytics':'বিশ্লেষণ','sb-settings':'সেটিংস',
+    'dr-spec':'অভ্যন্তরীণ চিকিৎসা','tb-title':'রোগীর প্রি-স্ক্রীনিং রিপোর্ট','tb-date':'আজ, ২৬ জুন ২০২৬',
+    'tb-print':'রিপোর্ট প্রিন্ট করুন','ab-title':'জরুরি সতর্কতা —','ab-view':'রোগী দেখুন',
+    'ab-msg':'ফাতেমা বেগম (সারিতে পরবর্তী) উচ্চ-অগ্রাধিকার রেড-ফ্ল্যাগ নির্দেশক দ্বারা চিহ্নিত হয়েছেন। অনুগ্রহ করে এখনই পর্যালোচনা করুন।',
+    'p-name':'রহিম হোসেন','p-meta':'পুরুষ · ৫২ বছর · +880 01712 345678 · সেশন: সকাল ১০:২৪',
+    'p-risk':'উচ্চ ঝুঁকি','p-risk-lbl':'ঝুঁকির মাত্রা',
+    'i-chief-lbl':'প্রধান অভিযোগ','i-chief':'জ্বর, শুকনো কাশি — ৩ দিন',
+    'i-hist-lbl':'পরিচিত রোগ','i-hist':'টাইপ ২ ডায়াবেটিস, উচ্চ রক্তচাপ',
+    'i-med-lbl':'বর্তমান ওষুধ','i-med':'মেটফর্মিন ৫০০মিগ্রা, অ্যামলোডিপিন ৫মিগ্রা',
+    'i-allergy-lbl':'অ্যালার্জি','i-allergy':'পেনিসিলিন (জানানো হয়েছে)',
+    'rf-title':'রেড-ফ্ল্যাগ নির্দেশক শনাক্ত',
+    'rf-msg':'৫২ বছর বয়সী ডায়াবেটিক রোগীর ৫ দিনের বেশি ক্রমাগত জ্বর, শ্বাসকষ্ট এবং রাতের ঘাম। দ্রুত ক্লিনিকাল মূল্যায়ন প্রয়োজন।',
+    's-symptoms':'উপসর্গ প্রোফাইল','sym-1-name':'জ্বর','sym-1-sev':'মাঝারি · ১০২°F',
+    'sym-1-meta':'সময়কাল: ৩ দিন · অবস্থান: সার্বিক · ধরন: ক্রমাগত · খারাপ হয়: সন্ধ্যায়',
+    'sym-2-name':'শুকনো কাশি','sym-2-sev':'মাঝারি',
+    'sym-2-meta':'সময়কাল: ৩ দিন · কফ নেই · রাতে বাড়ে',
+    'sym-3-name':'ক্লান্তি','sym-3-sev':'হালকা','sym-3-meta':'শুরু: ২ দিন আগে',
+    'sym-4-name':'রাতের ঘাম','sym-4-sev':'উল্লেখযোগ্য',
+    'sym-4-meta':'গত ৩ রাত · যক্ষ্মা/লিম্ফোমা বাদ দেওয়ার জন্য চিহ্নিত',
+    's-xai':'যুক্তির সারসংক্ষেপ','xai-why':'এই ঝুঁকির মাত্রা কেন নির্ধারিত হয়েছে',
+    'xai-body':'উচ্চ ঝুঁকির শ্রেণীবিভাগ নির্ধারিত হয়েছে কারণ: টাইপ ২ ডায়াবেটিস রোগীতে ৩ দিনের বেশি জ্বর, ৩ রাতের রাতের ঘাম, ৫২ বছর বয়স এবং সক্রিয় কমোর্বিডিটি, এবং কফহীন শুকনো কাশি। এই ফলাফলগুলি একসাথে পালমোনারি যক্ষ্মা এবং সম্ভাব্য ব্যাকটেরিয়াল সংক্রমণ বাদ দেওয়ার প্রয়োজনীয়তা নির্দেশ করে।',
+    's-consider':'বিবেচনাযোগ্য রোগ','s-consider-note':'শুধুমাত্র ক্লিনিকাল বিবেচনার জন্য — রোগ নির্ণয় নয়',
+    's-nextsteps':'প্রস্তাবিত পরবর্তী পদক্ষেপ',
+    's-feedback':'ডাক্তারের মতামত','fb-note':'আপনার মতামত সিস্টেমের নির্ভুলতা উন্নত করে।',
+    'fb-accurate':'রিপোর্ট সঠিক','fb-correct':'তথ্য সংশোধন','fb-missed':'উপসর্গ বাদ পড়েছে','fb-wrong-risk':'ঝুঁকির মাত্রা ভুল',
+    'btn-accept':'রিপোর্ট গ্রহণ করুন','btn-annotate':'মন্তব্য যোগ করুন','btn-refer':'রোগী রেফার করুন',
+    's-today-label':'আজকের সারসংক্ষেপ','stat-seen':'দেখা হয়েছে','stat-queue':'সারিতে','stat-critical':'জটিল',
+    's-queue-label':'রোগীর সারি',
+    'q1-meta':'৫২পু · এখন · প্রি-স্ক্রীনিং সম্পন্ন','q1-risk':'উচ্চ',
+    'q2-meta':'৩৮মহি · অপেক্ষায় · পর্যালোচনা প্রয়োজন','q2-risk':'জটিল',
+    'q3-meta':'৩৪পু · চলমান','q3-risk':'মাঝারি',
+    'q4-meta':'২৮মহি · অপেক্ষায়','q4-risk':'কম',
+    's-summary-label':'চিকিৎসা সমস্যার সারসংক্ষেপ','s-summary-sub':'ফ্যাকাল্টি প্রি-স্ক্রীনিং ফরম্যাট',
+  }
+};
+
+function setLang(l){
+  lang=l;
+  document.querySelectorAll('.lang-btn').forEach(b=>{b.classList.toggle('active',b.textContent.trim()===(l==='en'?'EN':'বাং'));});
+  var t=sidebarTexts[l];
+  Object.keys(t).forEach(function(k){var el=document.getElementById(k);if(el)el.textContent=t[k];});
+  renderSummary();
+}
+function renderSummary(){
+  var sl=document.getElementById('summary-list');if(!sl)return;
+  sl.innerHTML=summaryData[lang].map(function(row){
+    return '<div class="summary-row"><span class="summary-num" style="font-size:11px;font-weight:600;color:var(--accent);flex-shrink:0;min-width:5px"></span>'
+    +'<span class="summary-label">'+row[0]+'</span><span class="summary-val">'+row[1]+'</span></div>';
+  }).join('');
+}
+renderSummary();
+</script>
