@@ -1,3 +1,4 @@
+<<<<<<< HEAD
 # CSE499: EHR-Based Pre-Consultation Medical Documentation System
 ## (AI Medical Pre-Screening Assistant)
 
@@ -202,3 +203,7 @@ This project is conducted for academic purposes at North South University.
 
 *Last Updated: June 2026*
 *CSE499 Capstone Project - North South University*
+=======
+# TAORM
+### Thermal-Aware AI OS Resource Manager
+>>>>>>> 5211a537698e794d24ebc4c11990aa303e29d05b
