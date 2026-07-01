@@ -204,6 +204,3 @@ This project is conducted for academic purposes at North South University.
 *CSE499 Capstone Project - North South University*
 
 ---
-
-# TAORM
-### Thermal-Aware AI OS Resource Manager
