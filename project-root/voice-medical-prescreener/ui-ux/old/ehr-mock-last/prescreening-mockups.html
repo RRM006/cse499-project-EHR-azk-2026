@@ -1,0 +1,839 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Pre-Screening System — Priority Screen Mockups</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Hind+Siliguri:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+<style>
+  :root{
+    --blue:#0B5CAD; --blue-bright:#2E86DE; --blue-tint:#EAF2FB;
+    --bg:#F6F9FC; --white:#FFFFFF; --ink:#1B2733; --muted:#5A6B7B; --hair:#E1E8EF;
+    --crit:#D32F2F; --crit-bg:#FDECEC; --high:#E8710A; --high-bg:#FDF0E3;
+    --mod:#B07A00; --mod-bg:#FBF4DE; --low:#2E7D52; --low-bg:#E7F4ED;
+    --ai:#6D5BD0; --ai-bg:#EFEBFB;
+    --font-en:'Inter',system-ui,-apple-system,'Segoe UI',Roboto,sans-serif;
+    --font-bn:'Hind Siliguri','Noto Sans Bengali',system-ui,sans-serif;
+    --mono:'IBM Plex Mono',ui-monospace,SFMono-Regular,Menlo,monospace;
+    --shadow:0 1px 2px rgba(16,40,70,.06),0 8px 24px rgba(16,40,70,.06);
+    --shadow-sm:0 1px 2px rgba(16,40,70,.08);
+  }
+  *{box-sizing:border-box}
+  html,body{margin:0;height:100%}
+  body{font-family:var(--font-en);color:var(--ink);background:#eef3f8;font-size:16px;line-height:1.5;-webkit-font-smoothing:antialiased}
+  body.lang-bn{font-family:var(--font-bn)}
+  button{font-family:inherit;cursor:pointer}
+  :focus-visible{outline:3px solid var(--blue-bright);outline-offset:2px;border-radius:6px}
+
+  .shell{display:flex;min-height:100vh}
+  .nav{width:280px;flex:none;background:#0e1b2a;color:#cdd9e6;display:flex;flex-direction:column;position:sticky;top:0;height:100vh;overflow:auto}
+  .nav-brand{padding:22px 22px 8px}
+  .nav-brand .logo{display:flex;align-items:center;gap:10px;font-weight:700;color:#fff;font-size:15px;letter-spacing:.2px}
+  .nav-brand .logo .dot{width:26px;height:26px;border-radius:8px;background:linear-gradient(135deg,#2E86DE,#0B5CAD);display:grid;place-items:center}
+  .nav-brand .sub{font-size:12px;color:#7e93a8;margin-top:8px;line-height:1.5}
+  .nav-lang{margin:10px 22px 8px}
+  .nav-group{padding:2px 12px}
+  .nav-group h4{font-size:11px;text-transform:uppercase;letter-spacing:.12em;color:#6f8499;margin:14px 10px 6px;font-weight:600}
+  .nav-item{display:flex;align-items:center;gap:10px;width:100%;text-align:left;background:none;border:0;color:#bccadb;padding:9px 10px;border-radius:8px;font-size:13.5px}
+  .nav-item:hover{background:#16263a;color:#fff}
+  .nav-item.active{background:var(--blue);color:#fff;font-weight:600}
+  .nav-item .ix{width:18px;height:18px;border-radius:5px;background:#1d3047;display:grid;place-items:center;font-size:10px;color:#8fa6bd;flex:none}
+  .nav-item.active .ix{background:rgba(255,255,255,.22);color:#fff}
+  .nav-foot{margin-top:auto;padding:16px 22px;font-size:11.5px;color:#6f8499;border-top:1px solid #18293c;line-height:1.6}
+
+  .stage{flex:1;min-width:0;display:flex;flex-direction:column}
+  .stage-bar{display:flex;align-items:center;justify-content:space-between;gap:16px;padding:14px 26px;background:#fff;border-bottom:1px solid var(--hair);position:sticky;top:0;z-index:5}
+  .stage-bar .title{font-weight:600;font-size:15px}
+  .stage-bar .title .crumb{color:var(--muted);font-weight:500}
+  .device-pill{font-size:11.5px;color:var(--muted);background:var(--bg);border:1px solid var(--hair);padding:4px 10px;border-radius:999px;font-weight:500}
+  .stage-canvas{padding:30px;overflow:auto}
+  .screen{display:none}
+  .screen.show{display:block;animation:fade .25s ease}
+  @keyframes fade{from{opacity:0;transform:translateY(6px)}to{opacity:1;transform:none}}
+
+  .lang-toggle{display:inline-flex;background:var(--bg);border:1px solid var(--hair);border-radius:999px;padding:3px}
+  .lang-toggle button{border:0;background:none;padding:6px 14px;border-radius:999px;font-size:13px;font-weight:600;color:var(--muted)}
+  .lang-toggle button[data-lang="bn"]{font-family:var(--font-bn)}
+  .lang-toggle button.on{background:var(--blue);color:#fff;box-shadow:var(--shadow-sm)}
+  .nav .lang-toggle{background:#16263a;border:1px solid #243549;display:flex}
+  .nav .lang-toggle button{color:#9fb2c6}
+  .nav .lang-toggle button.on{background:var(--blue);color:#fff}
+
+  .tablet{max-width:520px;margin:0 auto;background:#1f2a36;border-radius:30px;padding:16px;box-shadow:0 30px 60px -20px rgba(16,40,70,.45)}
+  .tablet .glass{background:#fff;border-radius:18px;overflow:hidden;min-height:660px;display:flex;flex-direction:column;position:relative}
+  .desktop{max-width:1180px;margin:0 auto;background:#fff;border-radius:14px;overflow:hidden;box-shadow:var(--shadow);border:1px solid var(--hair)}
+  .browser-bar{display:flex;align-items:center;gap:8px;padding:10px 14px;background:#f1f5f9;border-bottom:1px solid var(--hair)}
+  .browser-bar .dots{display:flex;gap:6px}
+  .browser-bar .dots i{width:11px;height:11px;border-radius:50%;display:block}
+  .browser-bar .url{flex:1;background:#fff;border:1px solid var(--hair);border-radius:7px;padding:5px 12px;font-size:12px;color:var(--muted);font-family:var(--mono)}
+
+  .btn{border:1px solid var(--hair);background:#fff;color:var(--ink);padding:11px 18px;border-radius:10px;font-size:14.5px;font-weight:600}
+  .btn-primary{background:var(--blue);border-color:var(--blue);color:#fff}
+  .btn-primary:hover{background:#0a4f96}
+  .btn-block{display:block;width:100%}
+  .btn-lg{padding:16px 22px;font-size:16px;border-radius:12px}
+  .btn-ghost{background:none;border:0;color:var(--blue);font-weight:600;padding:8px 10px;border-radius:8px}
+  .btn-ghost:hover{background:var(--blue-tint)}
+  .field{width:100%;border:1.5px solid var(--hair);border-radius:11px;padding:13px 14px;font-size:16px;font-family:inherit;color:var(--ink);background:#fff}
+  .field:focus{outline:none;border-color:var(--blue-bright);box-shadow:0 0 0 3px rgba(46,134,222,.18)}
+  .muted{color:var(--muted)} .small{font-size:13px}
+
+  .risk{display:inline-flex;align-items:center;gap:6px;font-weight:700;font-size:12.5px;padding:4px 10px;border-radius:7px;white-space:nowrap}
+  .risk .bead{width:8px;height:8px;border-radius:50%;background:currentColor}
+  .risk.critical{color:var(--crit);background:var(--crit-bg)}
+  .risk.high{color:var(--high);background:var(--high-bg)}
+  .risk.moderate{color:var(--mod);background:var(--mod-bg)}
+  .risk.low{color:var(--low);background:var(--low-bg)}
+
+  .tag{display:inline-flex;align-items:center;gap:5px;font-size:11px;font-weight:600;padding:2px 8px;border-radius:6px;vertical-align:middle}
+  .tag-ai{color:var(--ai);background:var(--ai-bg)}
+  .tag-edited{color:var(--muted);background:#eef2f6}
+  .tag svg{width:11px;height:11px}
+
+  .p-pad{padding:30px 26px;flex:1;display:flex;flex-direction:column}
+  .p-top{display:flex;align-items:center;justify-content:space-between;margin-bottom:8px}
+  .clinic{display:flex;align-items:center;gap:9px;font-weight:700;color:var(--blue)}
+  .clinic .mark{width:30px;height:30px;border-radius:9px;background:linear-gradient(135deg,#2E86DE,#0B5CAD);display:grid;place-items:center}
+  .stepline{font-size:12px;color:var(--muted);font-weight:600;text-transform:uppercase;letter-spacing:.08em}
+  .p-login-wrap{margin:auto 0;display:flex;flex-direction:column;gap:6px}
+  .p-h1{font-size:26px;font-weight:700;margin:18px 0 4px;line-height:1.25}
+  .otp-row{display:flex;gap:10px;margin:22px 0 8px;justify-content:space-between}
+  .otp-box{flex:1;aspect-ratio:1/1.15;border:1.5px solid var(--hair);border-radius:13px;display:grid;place-items:center;font-size:26px;font-weight:700;color:var(--ink);background:#fff}
+  .otp-box.filled{border-color:var(--blue)}
+  .otp-box.active{border-color:var(--blue-bright);box-shadow:0 0 0 3px rgba(46,134,222,.18);color:var(--blue-bright)}
+  .resend{display:flex;align-items:center;justify-content:space-between;margin:6px 2px 22px;font-size:13.5px}
+  .priv{display:flex;gap:9px;align-items:flex-start;font-size:13px;color:var(--muted);background:var(--bg);border-radius:11px;padding:12px 14px;margin-top:auto}
+  .priv svg{flex:none;margin-top:1px}
+
+  .voice{flex:1;display:flex;flex-direction:column;padding:24px 26px}
+  .v-progress{display:flex;align-items:center;gap:12px;margin-bottom:6px}
+  .v-progress .bar{flex:1;height:7px;background:var(--blue-tint);border-radius:999px;overflow:hidden}
+  .v-progress .bar i{display:block;height:100%;width:50%;background:var(--blue);border-radius:999px}
+  .v-progress .lbl{font-size:12.5px;color:var(--muted);font-weight:600;white-space:nowrap}
+  .v-mid{flex:1;display:flex;flex-direction:column;align-items:center;justify-content:center;text-align:center;gap:6px}
+  .v-status{font-size:13px;font-weight:700;color:var(--blue-bright);text-transform:uppercase;letter-spacing:.1em;display:flex;align-items:center;gap:8px}
+  .v-status .live{width:9px;height:9px;border-radius:50%;background:var(--blue-bright);animation:blink 1.4s infinite}
+  @keyframes blink{50%{opacity:.25}}
+  .v-q{font-size:25px;font-weight:700;line-height:1.3;max-width:380px;margin:2px 0 10px}
+  .orb{position:relative;width:132px;height:132px;margin:8px 0 14px;display:grid;place-items:center}
+  .orb .core{width:96px;height:96px;border-radius:50%;background:radial-gradient(circle at 35% 30%,#5aa6ec,#0B5CAD);display:grid;place-items:center;box-shadow:0 10px 30px -6px rgba(11,92,173,.55);z-index:2}
+  .orb .ring{position:absolute;width:96px;height:96px;border-radius:50%;background:rgba(46,134,222,.30)}
+  .orb .ring.r1{animation:pulse 2.4s ease-out infinite}
+  .orb .ring.r2{animation:pulse 2.4s ease-out infinite .8s}
+  .orb .ring.r3{animation:pulse 2.4s ease-out infinite 1.6s}
+  @keyframes pulse{0%{transform:scale(.7);opacity:.55}100%{transform:scale(1.6);opacity:0}}
+  .transcript{background:var(--bg);border:1px solid var(--hair);border-radius:14px;padding:14px 16px;font-size:17px;line-height:1.5;color:var(--ink);max-width:400px}
+  .transcript .cap{display:block;font-size:11px;text-transform:uppercase;letter-spacing:.1em;color:var(--muted);font-weight:700;margin-bottom:5px}
+  .v-foot{display:flex;flex-direction:column;align-items:center;gap:12px;margin-top:14px}
+  .v-hint{font-size:12.5px;color:var(--muted);text-align:center;max-width:360px}
+  .v-trouble{font-size:13.5px;color:var(--blue);font-weight:600;border:0;background:none;text-decoration:underline;text-underline-offset:3px}
+
+  .psum{flex:1;display:flex;flex-direction:column;padding:22px 22px 18px;overflow:auto}
+  .nextstep{display:flex;gap:12px;align-items:flex-start;background:var(--blue-tint);border:1px solid #cfe1f6;border-radius:14px;padding:14px 16px;margin:8px 0 18px}
+  .nextstep .ico{width:34px;height:34px;border-radius:50%;background:var(--blue);display:grid;place-items:center;flex:none}
+  .nextstep b{display:block;font-size:15px;margin-bottom:2px}
+  .nextstep span{font-size:13.5px;color:#33506e}
+  .pcard{border:1px solid var(--hair);border-radius:13px;padding:13px 15px;margin-bottom:10px}
+  .pcard .pl{display:flex;align-items:center;gap:9px;font-size:12.5px;font-weight:700;color:var(--blue);text-transform:uppercase;letter-spacing:.04em;margin-bottom:5px}
+  .pcard .pv{font-size:15.5px;line-height:1.45}
+  .sev{height:10px;border-radius:999px;background:#e7eef5;overflow:hidden;margin-top:8px}
+  .sev i{display:block;height:100%;width:80%;background:linear-gradient(90deg,#2E86DE,#0B5CAD);border-radius:999px}
+  .psum-actions{display:flex;gap:10px;margin-top:8px;padding-top:6px}
+  .psum-actions .btn{flex:1}
+  .bye{position:absolute;inset:0;background:#fff;display:none;flex-direction:column;align-items:center;justify-content:center;text-align:center;padding:34px;gap:6px;z-index:10}
+  .bye.show{display:flex;animation:fade .3s}
+  .bye .check{width:74px;height:74px;border-radius:50%;background:var(--low-bg);display:grid;place-items:center;margin-bottom:6px}
+  .bye h2{font-size:24px;margin:0}
+  .countpill{font-family:var(--mono);font-size:12.5px;color:var(--muted);background:var(--bg);padding:9px 14px;border-radius:12px;margin:12px 0;max-width:320px;line-height:1.5}
+
+  .work{display:flex;min-height:620px}
+  .side{width:212px;flex:none;background:#0e1b2a;color:#bccadb;padding:16px 12px;display:flex;flex-direction:column;gap:3px}
+  .side .ptag{font-size:11px;text-transform:uppercase;letter-spacing:.1em;color:#6f8499;font-weight:700;padding:6px 10px 12px}
+  .side a{display:flex;align-items:center;gap:10px;color:#bccadb;text-decoration:none;padding:10px 12px;border-radius:9px;font-size:13.5px;font-weight:500;cursor:pointer}
+  .side a:hover{background:#16263a;color:#fff}
+  .side a.on{background:var(--blue);color:#fff;font-weight:600}
+  .side a svg{width:16px;height:16px;opacity:.85;flex:none}
+  .side .sp{flex:1}
+  .work-main{flex:1;min-width:0;background:var(--bg);display:flex;flex-direction:column}
+  .topbar{display:flex;align-items:center;gap:14px;padding:12px 20px;background:#fff;border-bottom:1px solid var(--hair)}
+  .lookup{flex:1;max-width:360px;display:flex;align-items:center;gap:9px;background:var(--bg);border:1px solid var(--hair);border-radius:10px;padding:9px 13px}
+  .lookup svg{flex:none;color:var(--muted)}
+  .lookup input{border:0;background:none;outline:none;flex:1;font-size:14px;font-family:inherit;color:var(--ink)}
+  .topbar .who{margin-left:auto;display:flex;align-items:center;gap:10px;font-size:13px}
+  .topbar .who .av{width:32px;height:32px;border-radius:50%;background:var(--blue-tint);color:var(--blue);display:grid;place-items:center;font-weight:700;font-size:13px}
+  .content{padding:18px 20px;overflow:auto}
+
+  .critbar{display:flex;align-items:center;gap:12px;background:var(--crit-bg);border:1px solid #f4c4c4;border-left:4px solid var(--crit);border-radius:11px;padding:12px 15px;margin-bottom:16px}
+  .critbar .ping{width:11px;height:11px;border-radius:50%;background:var(--crit);flex:none;animation:ping 1.6s infinite}
+  @keyframes ping{0%{box-shadow:0 0 0 0 rgba(211,47,47,.5)}70%{box-shadow:0 0 0 9px rgba(211,47,47,0)}100%{box-shadow:0 0 0 0 rgba(211,47,47,0)}}
+  .critbar b{color:var(--crit);font-size:14px}
+  .critbar .btn{margin-left:auto;padding:7px 14px;font-size:13px}
+
+  .sec-h{display:flex;align-items:center;justify-content:space-between;gap:12px;margin:2px 2px 12px;flex-wrap:wrap}
+  .sec-h h2{font-size:16px;margin:0}
+  .sec-h .cnt{font-size:12.5px;color:var(--muted)}
+
+  .queue{background:#fff;border:1px solid var(--hair);border-radius:13px;overflow:hidden}
+  .qhead,.qrow{display:grid;grid-template-columns:118px 1.4fr 2fr 118px 150px;gap:12px;align-items:center;padding:12px 16px}
+  .qhead{background:#f3f7fb;font-size:11.5px;text-transform:uppercase;letter-spacing:.05em;color:var(--muted);font-weight:700;border-bottom:1px solid var(--hair)}
+  .qrow{border-bottom:1px solid #eef3f8;cursor:pointer}
+  .qrow:last-child{border-bottom:0}
+  .qrow:hover{background:#f8fbfe}
+  .qrow.crit{background:#fff7f7}
+  .qrow.crit:hover{background:#fdeeee}
+  .pname{font-weight:600;font-size:14.5px}
+  .pmeta{font-size:12.5px;color:var(--muted)}
+  .qprob{font-size:14px;line-height:1.35}
+  .qtime{font-size:13px;color:var(--muted)}
+
+  .dcards{display:grid;grid-template-columns:repeat(2,1fr);gap:14px}
+  .dcard{background:#fff;border:1px solid var(--hair);border-radius:13px;padding:15px 16px;cursor:pointer;border-left:4px solid var(--hair);transition:box-shadow .15s}
+  .dcard:hover{box-shadow:var(--shadow)}
+  .dcard.critical{border-left-color:var(--crit)}
+  .dcard.high{border-left-color:var(--high)}
+  .dcard.moderate{border-left-color:var(--mod)}
+  .dcard.low{border-left-color:var(--low)}
+  .dcard .dc-top{display:flex;align-items:center;justify-content:space-between;margin-bottom:9px}
+  .dcard h3{font-size:15.5px;margin:0 0 3px}
+  .dcard .dc-prob{font-size:14px;color:var(--ink);margin-bottom:10px;line-height:1.35}
+  .dcard .dc-flag{display:flex;gap:8px;align-items:flex-start;font-size:12.5px;color:var(--crit);background:var(--crit-bg);padding:8px 10px;border-radius:9px;margin-bottom:10px}
+  .dcard .dc-flag svg{flex:none;margin-top:1px}
+  .dcard .dc-foot{display:flex;align-items:center;justify-content:space-between}
+
+  .detail{display:grid;grid-template-columns:1fr 320px;gap:18px;align-items:start}
+  .phead{display:flex;align-items:center;gap:14px;background:#fff;border:1px solid var(--hair);border-radius:13px;padding:14px 16px;margin-bottom:16px;grid-column:1/-1}
+  .phead .pic{width:46px;height:46px;border-radius:12px;background:var(--blue-tint);color:var(--blue);display:grid;place-items:center;font-weight:700;font-size:17px;flex:none}
+  .phead .pn{font-size:17px;font-weight:700}
+  .phead .pd{font-size:13px;color:var(--muted)}
+  .phead .pright{margin-left:auto;text-align:right;font-size:12.5px;color:var(--muted)}
+
+  .acc-item{background:#fff;border:1px solid var(--hair);border-radius:12px;margin-bottom:10px;overflow:hidden}
+  .acc-head{display:flex;align-items:center;gap:12px;width:100%;background:none;border:0;padding:14px 16px;text-align:left}
+  .acc-head:hover{background:#f8fbfe}
+  .acc-head .chev{transition:transform .2s;color:var(--muted);flex:none;display:flex}
+  .acc-item.open .chev{transform:rotate(90deg)}
+  .acc-head .nm{font-weight:600;font-size:14.5px;flex:none}
+  .acc-head .preview{color:var(--muted);font-size:13px;margin-left:auto;text-align:right;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;max-width:48%}
+  .acc-body{display:none;padding:4px 16px 14px;border-top:1px solid #eef3f8}
+  .acc-item.open .acc-body{display:block}
+  .frow{display:flex;align-items:flex-start;gap:10px;padding:9px 0;border-bottom:1px dashed #eef3f8;flex-wrap:wrap}
+  .frow:last-child{border-bottom:0}
+  .frow .fl{width:150px;flex:none;font-size:12.5px;color:var(--muted);font-weight:600;padding-top:3px}
+  .frow .fv{flex:1;min-width:160px;font-size:14.5px;line-height:1.45}
+  .frow .fa{display:flex;align-items:center;gap:6px;flex:none;margin-left:auto;flex-wrap:wrap;justify-content:flex-end}
+  .ic-btn{border:1px solid var(--hair);background:#fff;border-radius:7px;width:28px;height:28px;display:grid;place-items:center;color:var(--muted)}
+  .ic-btn:hover{border-color:var(--blue);color:var(--blue);background:var(--blue-tint)}
+  .doc-actions{display:flex;gap:6px}
+  .mini{font-size:11.5px;font-weight:600;padding:5px 9px;border-radius:7px;border:1px solid var(--hair);background:#fff;color:var(--muted)}
+  .mini:hover{border-color:var(--blue);color:var(--blue);background:var(--blue-tint)}
+  .mini.val:hover{border-color:var(--low);color:var(--low);background:var(--low-bg)}
+
+  .rail .card{background:#fff;border:1px solid var(--hair);border-radius:13px;padding:16px;margin-bottom:14px}
+  .rail h3{font-size:12px;text-transform:uppercase;letter-spacing:.06em;color:var(--muted);margin:0 0 12px;font-weight:700}
+  .assign-sel{width:100%;border:1.5px solid var(--hair);border-radius:10px;padding:11px 12px;font-size:14px;font-family:inherit;background:#fff;margin-bottom:10px;color:var(--ink)}
+  .flag-list{list-style:none;margin:0;padding:0;display:flex;flex-direction:column;gap:9px}
+  .flag-list li{display:flex;gap:9px;align-items:flex-start;font-size:13px;line-height:1.4;color:var(--ink)}
+  .flag-list li svg{flex:none;margin-top:1px;color:var(--crit)}
+
+  .xai{grid-column:1/-1;border-radius:14px;overflow:hidden;border:1px solid #f4c4c4;margin-bottom:18px;box-shadow:var(--shadow)}
+  .xai-top{display:flex;align-items:center;gap:14px;background:var(--crit-bg);padding:14px 18px;border-bottom:1px solid #f4c4c4;flex-wrap:wrap}
+  .xai-top .risk{font-size:14px;padding:6px 13px}
+  .xai-top .lead{font-weight:700;font-size:15px;color:var(--crit)}
+  .xai-grid{display:grid;grid-template-columns:1fr 1.1fr;gap:0;background:#fff}
+  .xai-col{padding:16px 18px}
+  .xai-col+.xai-col{border-left:1px solid var(--hair)}
+  .xai-col h4{font-size:11.5px;text-transform:uppercase;letter-spacing:.07em;color:var(--muted);margin:0 0 11px;font-weight:700}
+  .why{font-size:13.5px;line-height:1.6;color:var(--ink);margin:0}
+
+  .status-pill{display:inline-flex;align-items:center;gap:7px;font-size:13px;font-weight:700;padding:6px 13px;border-radius:999px}
+  .status-pill.ok{color:var(--low);background:var(--low-bg)}
+  .status-pill .bead{width:9px;height:9px;border-radius:50%;background:currentColor}
+  .tiles{display:grid;grid-template-columns:repeat(3,1fr);gap:14px;margin-bottom:18px}
+  .tile{background:#fff;border:1px solid var(--hair);border-radius:13px;padding:16px 18px}
+  .tile .tl{font-size:12.5px;color:var(--muted);font-weight:600;display:flex;align-items:center;gap:8px}
+  .tile .tv{font-family:var(--mono);font-size:30px;font-weight:600;margin-top:8px;line-height:1}
+  .tile .tv small{font-size:14px;color:var(--muted);font-weight:500}
+  .tile.warn .tv{color:var(--high)}
+  .panel{background:#fff;border:1px solid var(--hair);border-radius:13px;padding:16px 18px;margin-bottom:16px}
+  .panel h3{font-size:13.5px;margin:0 0 14px}
+  .flow{display:flex;align-items:stretch;gap:0}
+  .stage-node{flex:1;text-align:center;padding:0 6px}
+  .stage-node .chip{border:1px solid var(--hair);border-radius:11px;padding:12px 8px;background:#fafcfe;height:100%}
+  .stage-node .dotbig{width:12px;height:12px;border-radius:50%;margin:0 auto 9px}
+  .stage-node.ok .dotbig{background:var(--low)} .stage-node.ok .st{color:var(--low)}
+  .stage-node.warn .dotbig{background:var(--high)} .stage-node.warn .st{color:var(--high)}
+  .stage-node.warn .chip{background:var(--high-bg);border-color:#f3d5b3}
+  .stage-node .nm2{font-size:12.5px;font-weight:600;line-height:1.3;min-height:34px;display:flex;align-items:center;justify-content:center}
+  .stage-node .st{font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.05em;margin-top:6px}
+  .stage-node .ct{font-family:var(--mono);font-size:12px;color:var(--muted);margin-top:3px}
+  .stage-arrow{display:flex;align-items:center;color:#c2cfdb;padding:0 2px}
+  .logtbl{width:100%;border-collapse:collapse;font-size:13px}
+  .logtbl th{text-align:left;font-size:11px;text-transform:uppercase;letter-spacing:.05em;color:var(--muted);font-weight:700;padding:8px 10px;border-bottom:1px solid var(--hair)}
+  .logtbl td{padding:10px;border-bottom:1px solid #eef3f8;vertical-align:top}
+  .logtbl td.t,.logtbl td.area{font-family:var(--mono);font-size:12px;color:var(--muted);white-space:nowrap}
+  .lstat{font-size:11px;font-weight:700;padding:3px 8px;border-radius:6px}
+  .lstat.res{color:var(--low);background:var(--low-bg)}
+  .lstat.open{color:var(--high);background:var(--high-bg)}
+  .urow{display:flex;gap:30px;flex-wrap:wrap}
+  .ustat{font-size:13px;color:var(--muted)}
+  .ustat b{font-family:var(--mono);font-size:20px;color:var(--ink);display:block;font-weight:600}
+
+  @media (max-width:880px){
+    .shell{flex-direction:column}
+    .nav{width:100%;height:auto;position:static}
+    .nav-foot{display:none}
+    .detail,.xai-grid,.tiles,.dcards{grid-template-columns:1fr}
+    .xai-col+.xai-col{border-left:0;border-top:1px solid var(--hair)}
+    .qhead{display:none}
+    .qrow{grid-template-columns:1fr 1fr;row-gap:6px}
+    .flow{flex-direction:column;gap:8px}.stage-arrow{justify-content:center;transform:rotate(90deg)}
+  }
+  @media (prefers-reduced-motion:reduce){*{animation:none!important}}
+</style>
+</head>
+<body class="lang-en">
+<div class="shell">
+
+  <aside class="nav">
+    <div class="nav-brand">
+      <div class="logo"><span class="dot"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="2.4" stroke-linecap="round"><path d="M3 12h4l2 5 4-12 2 7h6"/></svg></span> CareVoice</div>
+      <div class="sub" data-en="Voice pre-screening · priority screen mockups" data-bn="ভয়েস প্রি-স্ক্রিনিং · প্রধান স্ক্রিন মকআপ">Voice pre-screening · priority screen mockups</div>
+    </div>
+    <div class="nav-lang">
+      <div class="lang-toggle" role="group" aria-label="Language">
+        <button data-lang="bn" onclick="setLang('bn')">বাংলা</button>
+        <button data-lang="en" class="on" onclick="setLang('en')">English</button>
+      </div>
+    </div>
+
+    <div class="nav-group">
+      <h4 data-en="Patient" data-bn="রোগী">Patient</h4>
+      <button class="nav-item active" onclick="go(this,'patient-login','Patient','Phone &amp; OTP sign-in','Tablet / kiosk')"><span class="ix">1</span><span data-en="Phone &amp; OTP sign-in" data-bn="ফোন ও ওটিপি সাইন-ইন">Phone &amp; OTP sign-in</span></button>
+      <button class="nav-item" onclick="go(this,'patient-voice','Patient','Voice interaction','Tablet / kiosk')"><span class="ix">2</span><span data-en="Voice interaction" data-bn="ভয়েস কথোপকথন">Voice interaction</span></button>
+      <button class="nav-item" onclick="go(this,'patient-summary','Patient','Pre-screening summary','Tablet / kiosk')"><span class="ix">3</span><span data-en="Pre-screening summary" data-bn="প্রি-স্ক্রিনিং সারসংক্ষেপ">Pre-screening summary</span></button>
+    </div>
+    <div class="nav-group">
+      <h4 data-en="Pre-screening desk" data-bn="প্রি-স্ক্রিনিং ডেস্ক">Pre-screening desk</h4>
+      <button class="nav-item" onclick="go(this,'medic-queue','Medic','Queue &amp; patient lookup','Web · desktop')"><span class="ix">4</span><span data-en="Queue &amp; lookup" data-bn="সারি ও খোঁজ">Queue &amp; lookup</span></button>
+      <button class="nav-item" id="nav-medic-detail" onclick="go(this,'medic-detail','Medic','Patient detail &amp; assign','Web · desktop')"><span class="ix">5</span><span data-en="Patient detail" data-bn="রোগীর বিবরণ">Patient detail</span></button>
+    </div>
+    <div class="nav-group">
+      <h4 data-en="Doctor desk" data-bn="ডাক্তার ডেস্ক">Doctor desk</h4>
+      <button class="nav-item" onclick="go(this,'doctor-queue','Doctor','My patients','Web · desktop')"><span class="ix">6</span><span data-en="My patients" data-bn="আমার রোগী">My patients</span></button>
+      <button class="nav-item" id="nav-doctor-detail" onclick="go(this,'doctor-detail','Doctor','Risk, red flags &amp; summary','Web · desktop')"><span class="ix">7</span><span data-en="Patient detail + risk" data-bn="রোগীর বিবরণ + ঝুঁকি">Patient detail + risk</span></button>
+    </div>
+    <div class="nav-group">
+      <h4 data-en="Operations" data-bn="অপারেশনস">Operations</h4>
+      <button class="nav-item" onclick="go(this,'admin','Admin','System monitoring','Web · desktop')"><span class="ix">8</span><span data-en="Monitoring dashboard" data-bn="মনিটরিং ড্যাশবোর্ড">Monitoring dashboard</span></button>
+    </div>
+    <div class="nav-foot" data-en="Static mockups for design review. Tap বাংলা / English at any time — every label re-renders, showing how the layout absorbs Bangla's longer text." data-bn="ডিজাইন পর্যালোচনার জন্য স্ট্যাটিক মকআপ। যেকোনো সময় বাংলা / English চাপুন — প্রতিটি লেবেল পুনরায় রেন্ডার হয়, দেখায় কীভাবে লেআউট বাংলার দীর্ঘ টেক্সট ধারণ করে।">Static mockups for design review. Tap বাংলা / English at any time — every label re-renders, showing how the layout absorbs Bangla's longer text.</div>
+  </aside>
+
+  <main class="stage">
+    <div class="stage-bar">
+      <div class="title"><span id="crumb" class="crumb">Patient</span> &nbsp;/&nbsp; <span id="screenName">Phone &amp; OTP sign-in</span></div>
+      <div style="display:flex;align-items:center;gap:14px">
+        <span class="device-pill" id="devicePill">Tablet / kiosk</span>
+        <div class="lang-toggle" role="group" aria-label="Language">
+          <button data-lang="bn" onclick="setLang('bn')">বাংলা</button>
+          <button data-lang="en" class="on" onclick="setLang('en')">English</button>
+        </div>
+      </div>
+    </div>
+    <div class="stage-canvas">
+
+      <!-- 1. PATIENT — OTP LOGIN -->
+      <section class="screen show" id="patient-login">
+        <div class="tablet"><div class="glass"><div class="p-pad">
+          <div class="p-top">
+            <div class="clinic"><span class="mark"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="2.4" stroke-linecap="round"><path d="M12 5v14M5 12h14"/></svg></span><span data-en="Shasthya Clinic" data-bn="স্বাস্থ্য ক্লিনিক">Shasthya Clinic</span></div>
+            <span class="stepline" data-en="Step 2 of 2" data-bn="ধাপ ২ / ২">Step 2 of 2</span>
+          </div>
+          <div class="p-login-wrap">
+            <h1 class="p-h1" data-en="Enter the 6-digit code" data-bn="৬-সংখ্যার কোডটি লিখুন">Enter the 6-digit code</h1>
+            <p class="muted small" data-en="Sent by SMS to +880 1712-•••678" data-bn="এসএমএসে পাঠানো হয়েছে +880 1712-•••678 নম্বরে">Sent by SMS to +880 1712-•••678</p>
+            <div class="otp-row">
+              <div class="otp-box filled">4</div><div class="otp-box filled">1</div><div class="otp-box filled">9</div>
+              <div class="otp-box active">|</div><div class="otp-box"></div><div class="otp-box"></div>
+            </div>
+            <div class="resend">
+              <button class="btn-ghost" style="padding-left:0" data-en="Change number" data-bn="নম্বর পরিবর্তন করুন">Change number</button>
+              <span class="muted" data-en="Resend code in 0:42" data-bn="কোড আবার পাঠান ০:৪২ পরে">Resend code in 0:42</span>
+            </div>
+            <button class="btn btn-primary btn-block btn-lg" data-en="Verify" data-bn="যাচাই করুন">Verify</button>
+          </div>
+          <div class="priv">
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#5A6B7B" stroke-width="2" stroke-linecap="round"><path d="M12 3l7 3v6c0 4-3 7-7 9-4-2-7-5-7-9V6z"/></svg>
+            <span data-en="Your answers stay private and go only to your care team." data-bn="আপনার উত্তর গোপন থাকবে এবং শুধু আপনার চিকিৎসা দলের কাছে যাবে।">Your answers stay private and go only to your care team.</span>
+          </div>
+        </div></div></div>
+      </section>
+
+      <!-- 2. PATIENT — VOICE -->
+      <section class="screen" id="patient-voice">
+        <div class="tablet"><div class="glass"><div class="voice">
+          <div class="v-progress">
+            <span class="lbl" data-en="Question 3 of about 6" data-bn="প্রশ্ন ৩ / আনুমানিক ৬">Question 3 of about 6</span>
+            <span class="bar"><i></i></span>
+          </div>
+          <div class="v-mid">
+            <div class="v-status"><span class="live"></span><span data-en="Listening" data-bn="শুনছি">Listening</span></div>
+            <h2 class="v-q" data-en="Does the pain spread anywhere else?" data-bn="ব্যথা কি অন্য কোথাও ছড়িয়ে পড়ছে?">Does the pain spread anywhere else?</h2>
+            <div class="orb">
+              <span class="ring r1"></span><span class="ring r2"></span><span class="ring r3"></span>
+              <span class="core"><svg width="34" height="34" viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="2" stroke-linecap="round"><rect x="9" y="3" width="6" height="11" rx="3"/><path d="M5 11a7 7 0 0 0 14 0M12 18v3"/></svg></span>
+            </div>
+            <div class="transcript">
+              <span class="cap" data-en="You said" data-bn="আপনি বললেন">You said</span>
+              <span data-en="It goes down my left arm and up to my jaw…" data-bn="এটা আমার বাঁ হাতে নেমে যায় আর চোয়াল পর্যন্ত ওঠে…">It goes down my left arm and up to my jaw…</span>
+            </div>
+          </div>
+          <div class="v-foot">
+            <p class="v-hint" data-en="Speak normally — Bangla, English, or mixed. No need to press anything; we move on when you finish." data-bn="স্বাভাবিকভাবে বলুন — বাংলা, ইংরেজি বা মিশিয়ে। কিছু চাপতে হবে না; আপনি শেষ করলেই পরের প্রশ্নে যাব।">Speak normally — Bangla, English, or mixed. No need to press anything; we move on when you finish.</p>
+            <button class="v-trouble" data-en="Having trouble? Type instead" data-bn="অসুবিধা হচ্ছে? টাইপ করুন">Having trouble? Type instead</button>
+          </div>
+        </div></div></div>
+      </section>
+
+      <!-- 3. PATIENT — SUMMARY -->
+      <section class="screen" id="patient-summary">
+        <div class="tablet"><div class="glass" style="position:relative">
+          <div class="psum">
+            <div class="p-top" style="margin-bottom:2px">
+              <div class="clinic" style="font-size:15px"><span class="mark" style="width:26px;height:26px"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="2.4" stroke-linecap="round"><path d="M12 5v14M5 12h14"/></svg></span><span data-en="Your summary" data-bn="আপনার সারসংক্ষেপ">Your summary</span></div>
+            </div>
+            <h1 class="p-h1" style="font-size:23px;margin:8px 0 2px" data-en="Your pre-screening summary" data-bn="আপনার প্রি-স্ক্রিনিং সারসংক্ষেপ">Your pre-screening summary</h1>
+            <p class="muted small" data-en="Here's what we'll share with your doctor. Please check it's correct." data-bn="এই তথ্য আমরা আপনার ডাক্তারের সাথে শেয়ার করব। অনুগ্রহ করে দেখে নিন সব ঠিক আছে কিনা।">Here's what we'll share with your doctor. Please check it's correct.</p>
+
+            <div class="nextstep">
+              <span class="ico"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="2.2" stroke-linecap="round"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/></svg></span>
+              <div><b data-en="Please stay nearby" data-bn="অনুগ্রহ করে কাছেই থাকুন">Please stay nearby</b><span data-en="A member of our care team will see you very soon." data-bn="আমাদের চিকিৎসা দলের একজন শীঘ্রই আপনাকে দেখবেন।">A member of our care team will see you very soon.</span></div>
+            </div>
+
+            <div class="pcard"><div class="pl"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#0B5CAD" stroke-width="2.2"><circle cx="12" cy="12" r="9"/></svg><span data-en="Main problem" data-bn="প্রধান সমস্যা">Main problem</span></div><div class="pv" data-en="Chest pain spreading to the left arm, started about 2 hours ago." data-bn="বুকে ব্যথা, যা বাঁ হাতের দিকে ছড়িয়ে পড়ছে — প্রায় ২ ঘণ্টা আগে শুরু হয়েছে।">Chest pain spreading to the left arm, started about 2 hours ago.</div></div>
+            <div class="pcard"><div class="pl"><span data-en="When it started" data-bn="কখন শুরু হয়েছে">When it started</span></div><div class="pv" data-en="Today, around 6:30 AM — about 2 hours ago." data-bn="আজ, আনুমানিক সকাল ৬:৩০টা — প্রায় ২ ঘণ্টা আগে।">Today, around 6:30 AM — about 2 hours ago.</div></div>
+            <div class="pcard"><div class="pl"><span data-en="How strong it feels" data-bn="কতটা তীব্র অনুভব হচ্ছে">How strong it feels</span></div><div class="pv"><span data-en="Pain level: 8 out of 10 — heavy, pressure-like, in the center of the chest." data-bn="ব্যথার মাত্রা: ১০-এ ৮ — ভারী, চাপ-ধরা, বুকের মাঝখানে।">Pain level: 8 out of 10 — heavy, pressure-like, in the center of the chest.</span><div class="sev"><i></i></div></div></div>
+            <div class="pcard"><div class="pl"><span data-en="Other symptoms" data-bn="অন্যান্য উপসর্গ">Other symptoms</span></div><div class="pv" data-en="Sweating, shortness of breath, and feeling sick (nausea)." data-bn="ঘাম হওয়া, শ্বাসকষ্ট এবং বমি বমি ভাব।">Sweating, shortness of breath, and feeling sick (nausea).</div></div>
+            <div class="pcard"><div class="pl"><span data-en="Your health background" data-bn="আপনার স্বাস্থ্য পটভূমি">Your health background</span></div><div class="pv" data-en="High blood pressure (5 years) and diabetes (3 years). A milder chest tightness about a month ago settled on its own." data-bn="উচ্চ রক্তচাপ (৫ বছর) ও ডায়াবেটিস (৩ বছর)। প্রায় এক মাস আগে হালকা বুকে চাপ অনুভব হয়েছিল, নিজে থেকেই সেরে গিয়েছিল।">High blood pressure (5 years) and diabetes (3 years). A milder chest tightness about a month ago settled on its own.</div></div>
+            <div class="pcard"><div class="pl"><span data-en="Medicines you take" data-bn="আপনার ওষুধ">Medicines you take</span></div><div class="pv" data-en="Amlodipine 5 mg once a day; Metformin 500 mg twice a day." data-bn="অ্যামলোডিপিন ৫ মি.গ্রা. দিনে একবার; মেটফরমিন ৫০০ মি.গ্রা. দিনে দুইবার।">Amlodipine 5 mg once a day; Metformin 500 mg twice a day.</div></div>
+            <div class="pcard"><div class="pl"><span data-en="Allergies" data-bn="অ্যালার্জি">Allergies</span></div><div class="pv" data-en="No known allergy." data-bn="জানা কোনো অ্যালার্জি নেই।">No known allergy.</div></div>
+            <div class="pcard"><div class="pl"><span data-en="Recent changes" data-bn="সাম্প্রতিক পরিবর্তন">Recent changes</span></div><div class="pv" data-en="Heavy physical work yesterday (carrying loads). No travel, no new medicine." data-bn="গতকাল ভারী শারীরিক পরিশ্রম (ভার বহন)। কোনো ভ্রমণ নেই, নতুন কোনো ওষুধ নেই।">Heavy physical work yesterday (carrying loads). No travel, no new medicine.</div></div>
+            <div class="pcard"><div class="pl"><span data-en="What you've tried" data-bn="আপনি যা চেষ্টা করেছেন">What you've tried</span></div><div class="pv" data-en="Took an antacid at home — it did not help. Have not seen a doctor yet for this." data-bn="বাড়িতে একটি অ্যান্টাসিড নিয়েছেন — আরাম হয়নি। এ জন্য এখনও কোনো ডাক্তার দেখাননি।">Took an antacid at home — it did not help. Have not seen a doctor yet for this.</div></div>
+            <div class="pcard"><div class="pl"><span data-en="What you'd like the doctor to decide" data-bn="ডাক্তারের কাছে যা জানতে চান">What you'd like the doctor to decide</span></div><div class="pv" data-en="Whether this is a heart problem and whether urgent care is needed." data-bn="এটি হার্টের সমস্যা কিনা এবং জরুরি চিকিৎসা দরকার কিনা।">Whether this is a heart problem and whether urgent care is needed.</div></div>
+
+            <div class="psum-actions">
+              <button class="btn" data-en="Something's wrong" data-bn="কিছু ঠিক নেই">Something's wrong</button>
+              <button class="btn btn-primary" onclick="document.getElementById('bye').classList.add('show')" data-en="This looks correct" data-bn="সব ঠিক আছে">This looks correct</button>
+            </div>
+          </div>
+          <div class="bye" id="bye">
+            <span class="check"><svg width="34" height="34" viewBox="0 0 24 24" fill="none" stroke="#2E7D52" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6L9 17l-5-5"/></svg></span>
+            <h2 data-en="Thank you" data-bn="ধন্যবাদ">Thank you</h2>
+            <p class="muted" style="max-width:300px" data-en="Your information has been sent to the care team." data-bn="আপনার তথ্য চিকিৎসা দলের কাছে পাঠানো হয়েছে।">Your information has been sent to the care team.</p>
+            <span class="countpill" data-en="This session closes in 5 seconds so the next patient can begin." data-bn="পরবর্তী রোগীর জন্য এই সেশন ৫ সেকেন্ডে বন্ধ হবে।">This session closes in 5 seconds so the next patient can begin.</span>
+            <button class="btn btn-primary" onclick="document.getElementById('bye').classList.remove('show')" data-en="Finish now" data-bn="এখনই শেষ করুন">Finish now</button>
+          </div>
+        </div></div>
+      </section>
+
+      <!-- 4. MEDIC — QUEUE -->
+      <section class="screen" id="medic-queue">
+        <div class="desktop">
+          <div class="browser-bar"><div class="dots"><i style="background:#ff5f57"></i><i style="background:#febc2e"></i><i style="background:#28c840"></i></div><div class="url">carevoice.clinic/desk/queue</div></div>
+          <div class="work">
+            <nav class="side">
+              <div class="ptag" data-en="Pre-screening desk" data-bn="প্রি-স্ক্রিনিং ডেস্ক">Pre-screening desk</div>
+              <a class="on"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 6h16M4 12h16M4 18h16"/></svg><span data-en="Queue" data-bn="সারি">Queue</span></a>
+              <a><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="7"/><path d="M21 21l-4-4"/></svg><span data-en="Find patient" data-bn="রোগী খুঁজুন">Find patient</span></a>
+              <a><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M9 11l3 3L22 4"/><path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11"/></svg><span data-en="Assigned" data-bn="বরাদ্দকৃত">Assigned</span></a>
+              <span class="sp"></span>
+              <a><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4M16 17l5-5-5-5M21 12H9"/></svg><span data-en="Sign out" data-bn="সাইন আউট">Sign out</span></a>
+            </nav>
+            <div class="work-main">
+              <div class="topbar">
+                <div class="lookup"><svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="7"/><path d="M21 21l-4-4"/></svg><input placeholder="Find patient by phone" data-ph-en="Find patient by phone" data-ph-bn="ফোন নম্বর দিয়ে রোগী খুঁজুন"></div>
+                <div class="who"><span class="muted" data-en="Nure Alam · Staff" data-bn="নুরে আলম · স্টাফ">Nure Alam · Staff</span><span class="av">NA</span></div>
+              </div>
+              <div class="content">
+                <div class="critbar">
+                  <span class="ping"></span>
+                  <b data-en="1 critical case waiting — review now" data-bn="১টি সংকটাপন্ন কেস অপেক্ষমাণ — এখনই দেখুন">1 critical case waiting — review now</b>
+                  <button class="btn btn-primary" onclick="document.getElementById('nav-medic-detail').click()" data-en="Jump to it" data-bn="দেখতে যান">Jump to it</button>
+                </div>
+                <div class="sec-h"><h2 data-en="Completed pre-screenings" data-bn="সম্পন্ন প্রি-স্ক্রিনিং">Completed pre-screenings</h2><span class="cnt" data-en="Sorted by risk, then wait time" data-bn="ঝুঁকি অনুসারে, তারপর অপেক্ষার সময়">Sorted by risk, then wait time</span></div>
+                <div class="queue">
+                  <div class="qhead">
+                    <span data-en="Risk" data-bn="ঝুঁকি">Risk</span><span data-en="Patient" data-bn="রোগী">Patient</span><span data-en="Main problem" data-bn="প্রধান সমস্যা">Main problem</span><span data-en="Completed" data-bn="সম্পন্ন">Completed</span><span data-en="Action" data-bn="করণীয়">Action</span>
+                  </div>
+                  <div id="medic-rows"></div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <!-- 5. MEDIC — DETAIL -->
+      <section class="screen" id="medic-detail">
+        <div class="desktop">
+          <div class="browser-bar"><div class="dots"><i style="background:#ff5f57"></i><i style="background:#febc2e"></i><i style="background:#28c840"></i></div><div class="url">carevoice.clinic/desk/patient/8821</div></div>
+          <div class="work">
+            <nav class="side">
+              <div class="ptag" data-en="Pre-screening desk" data-bn="প্রি-স্ক্রিনিং ডেস্ক">Pre-screening desk</div>
+              <a onclick="go(document.querySelectorAll('.nav-item')[3],'medic-queue','Medic','Queue &amp; patient lookup','Web · desktop')"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 6h16M4 12h16M4 18h16"/></svg><span data-en="Queue" data-bn="সারি">Queue</span></a>
+              <a class="on"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="8" r="4"/><path d="M4 20a8 8 0 0 1 16 0"/></svg><span data-en="Patient detail" data-bn="রোগীর বিবরণ">Patient detail</span></a>
+              <span class="sp"></span>
+              <a><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4M16 17l5-5-5-5M21 12H9"/></svg><span data-en="Sign out" data-bn="সাইন আউট">Sign out</span></a>
+            </nav>
+            <div class="work-main">
+              <div class="topbar">
+                <div class="lookup"><svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="7"/><path d="M21 21l-4-4"/></svg><input placeholder="Find patient by phone" data-ph-en="Find patient by phone" data-ph-bn="ফোন নম্বর দিয়ে রোগী খুঁজুন"></div>
+                <div class="who"><span class="muted" data-en="Nure Alam · Staff" data-bn="নুরে আলম · স্টাফ">Nure Alam · Staff</span><span class="av">NA</span></div>
+              </div>
+              <div class="content">
+                <div class="detail">
+                  <div class="phead">
+                    <span class="pic">KU</span>
+                    <div><div class="pn" data-en="Md. Karim Uddin" data-bn="মো. করিম উদ্দিন">Md. Karim Uddin</div><div class="pd" data-en="54 years · Male · +880 1712-•••678" data-bn="৫৪ বছর · পুরুষ · +880 1712-•••678">54 years · Male · +880 1712-•••678</div></div>
+                    <div class="pright"><span class="risk critical"><span class="bead"></span><span data-en="Critical" data-bn="সংকটাপন্ন">Critical</span></span><div style="margin-top:6px" data-en="Completed 2 min ago" data-bn="২ মিনিট আগে সম্পন্ন">Completed 2 min ago</div></div>
+                  </div>
+                  <div>
+                    <div class="sec-h"><h2 data-en="Medical problem summary" data-bn="চিকিৎসা সমস্যার সারসংক্ষেপ">Medical problem summary</h2><span class="cnt" data-en="Tap a section to expand · edit any field" data-bn="সেকশনে চাপুন · যেকোনো ফিল্ড সম্পাদনা করুন">Tap a section to expand · edit any field</span></div>
+                    <div id="medic-acc"></div>
+                  </div>
+                  <div class="rail">
+                    <div class="card">
+                      <h3 data-en="Assign to doctor" data-bn="ডাক্তার বরাদ্দ করুন">Assign to doctor</h3>
+                      <select class="assign-sel">
+                        <option data-en="Select doctor…" data-bn="ডাক্তার নির্বাচন করুন…">Select doctor…</option>
+                        <option data-en="Dr. S. Chowdhury · Cardiology" data-bn="ডা. এস. চৌধুরী · কার্ডিওলজি">Dr. S. Chowdhury · Cardiology</option>
+                        <option data-en="Dr. A. Rahman · Medicine" data-bn="ডা. এ. রহমান · মেডিসিন">Dr. A. Rahman · Medicine</option>
+                        <option data-en="Dr. F. Haque · Medicine" data-bn="ডা. এফ. হক · মেডিসিন">Dr. F. Haque · Medicine</option>
+                      </select>
+                      <button class="btn btn-primary btn-block" data-en="Assign case" data-bn="কেস বরাদ্দ করুন">Assign case</button>
+                    </div>
+                    <div class="card">
+                      <h3 data-en="Risk &amp; red flags" data-bn="ঝুঁকি ও সতর্ক-সংকেত">Risk &amp; red flags</h3>
+                      <span class="risk critical"><span class="bead"></span><span data-en="Critical" data-bn="সংকটাপন্ন">Critical</span></span>
+                      <ul class="flag-list" id="medic-flags" style="margin-top:13px"></ul>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <!-- 6. DOCTOR — QUEUE -->
+      <section class="screen" id="doctor-queue">
+        <div class="desktop">
+          <div class="browser-bar"><div class="dots"><i style="background:#ff5f57"></i><i style="background:#febc2e"></i><i style="background:#28c840"></i></div><div class="url">carevoice.clinic/doctor/patients</div></div>
+          <div class="work">
+            <nav class="side">
+              <div class="ptag" data-en="Doctor desk" data-bn="ডাক্তার ডেস্ক">Doctor desk</div>
+              <a class="on"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M9 11l3 3L22 4"/><path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11"/></svg><span data-en="My patients" data-bn="আমার রোগী">My patients</span></a>
+              <a><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="7"/><path d="M21 21l-4-4"/></svg><span data-en="Find patient" data-bn="রোগী খুঁজুন">Find patient</span></a>
+              <span class="sp"></span>
+              <a><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4M16 17l5-5-5-5M21 12H9"/></svg><span data-en="Sign out" data-bn="সাইন আউট">Sign out</span></a>
+            </nav>
+            <div class="work-main">
+              <div class="topbar">
+                <div class="lookup"><svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="7"/><path d="M21 21l-4-4"/></svg><input placeholder="Find patient by phone" data-ph-en="Find patient by phone" data-ph-bn="ফোন নম্বর দিয়ে রোগী খুঁজুন"></div>
+                <div class="who"><span class="muted" data-en="Dr. A. Rahman · Medicine" data-bn="ডা. এ. রহমান · মেডিসিন">Dr. A. Rahman · Medicine</span><span class="av">AR</span></div>
+              </div>
+              <div class="content">
+                <div class="critbar">
+                  <span class="ping"></span>
+                  <b data-en="1 critical case assigned to you — review now" data-bn="আপনাকে ১টি সংকটাপন্ন কেস বরাদ্দ করা হয়েছে — এখনই দেখুন">1 critical case assigned to you — review now</b>
+                  <button class="btn btn-primary" onclick="document.getElementById('nav-doctor-detail').click()" data-en="Open" data-bn="খুলুন">Open</button>
+                </div>
+                <div class="sec-h"><h2 data-en="Assigned to you" data-bn="আপনাকে বরাদ্দকৃত">Assigned to you</h2><span class="cnt" data-en="Sorted by risk, then wait time" data-bn="ঝুঁকি অনুসারে, তারপর অপেক্ষার সময়">Sorted by risk, then wait time</span></div>
+                <div class="dcards" id="doctor-cards"></div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <!-- 7. DOCTOR — DETAIL (XAI) -->
+      <section class="screen" id="doctor-detail">
+        <div class="desktop">
+          <div class="browser-bar"><div class="dots"><i style="background:#ff5f57"></i><i style="background:#febc2e"></i><i style="background:#28c840"></i></div><div class="url">carevoice.clinic/doctor/patient/8821</div></div>
+          <div class="work">
+            <nav class="side">
+              <div class="ptag" data-en="Doctor desk" data-bn="ডাক্তার ডেস্ক">Doctor desk</div>
+              <a onclick="go(document.querySelectorAll('.nav-item')[5],'doctor-queue','Doctor','My patients','Web · desktop')"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M9 11l3 3L22 4"/><path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11"/></svg><span data-en="My patients" data-bn="আমার রোগী">My patients</span></a>
+              <a class="on"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="8" r="4"/><path d="M4 20a8 8 0 0 1 16 0"/></svg><span data-en="Patient detail" data-bn="রোগীর বিবরণ">Patient detail</span></a>
+              <span class="sp"></span>
+              <a><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4M16 17l5-5-5-5M21 12H9"/></svg><span data-en="Sign out" data-bn="সাইন আউট">Sign out</span></a>
+            </nav>
+            <div class="work-main">
+              <div class="topbar">
+                <div class="lookup"><svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="7"/><path d="M21 21l-4-4"/></svg><input placeholder="Find patient by phone" data-ph-en="Find patient by phone" data-ph-bn="ফোন নম্বর দিয়ে রোগী খুঁজুন"></div>
+                <div class="who"><span class="muted" data-en="Dr. A. Rahman · Medicine" data-bn="ডা. এ. রহমান · মেডিসিন">Dr. A. Rahman · Medicine</span><span class="av">AR</span></div>
+              </div>
+              <div class="content">
+                <div class="phead" style="margin-bottom:16px">
+                  <span class="pic">KU</span>
+                  <div><div class="pn" data-en="Md. Karim Uddin" data-bn="মো. করিম উদ্দিন">Md. Karim Uddin</div><div class="pd" data-en="54 years · Male · +880 1712-•••678" data-bn="৫৪ বছর · পুরুষ · +880 1712-•••678">54 years · Male · +880 1712-•••678</div></div>
+                  <div class="pright" data-en="Completed 2 min ago · Assigned to you" data-bn="২ মিনিট আগে সম্পন্ন · আপনাকে বরাদ্দকৃত">Completed 2 min ago · Assigned to you</div>
+                </div>
+                <div class="xai">
+                  <div class="xai-top">
+                    <span class="risk critical"><span class="bead"></span><span data-en="Critical" data-bn="সংকটাপন্ন">Critical</span></span>
+                    <span class="lead" data-en="Possible heart-related cause — needs urgent review" data-bn="সম্ভাব্য হার্ট-সম্পর্কিত কারণ — জরুরি পর্যালোচনা দরকার">Possible heart-related cause — needs urgent review</span>
+                  </div>
+                  <div class="xai-grid">
+                    <div class="xai-col">
+                      <h4 data-en="Red flags" data-bn="সতর্ক-সংকেত">Red flags</h4>
+                      <ul class="flag-list" id="doctor-flags"></ul>
+                    </div>
+                    <div class="xai-col">
+                      <h4 data-en="Why this level" data-bn="কেন এই মাত্রা">Why this level</h4>
+                      <p class="why" data-en="Marked Critical because the described pattern — chest pressure spreading to the left arm with sweating and nausea, brought on by exertion in someone with high blood pressure and diabetes — matches the red-flag checklist for possible heart-related causes. This is a prompt for urgent human review, not a diagnosis." data-bn="সংকটাপন্ন হিসেবে চিহ্নিত, কারণ বর্ণিত ধরন — পরিশ্রমে শুরু হওয়া বুকে চাপ যা বাঁ হাতে ছড়াচ্ছে, সাথে ঘাম ও বমি বমি ভাব, এবং রোগীর উচ্চ রক্তচাপ ও ডায়াবেটিস — সম্ভাব্য হার্ট-সম্পর্কিত কারণের সতর্কতা-তালিকার সাথে মিলে যায়। এটি জরুরি মানবিক পর্যালোচনার ইঙ্গিত, কোনো রোগ নির্ণয় নয়।">Marked Critical because the described pattern — chest pressure spreading to the left arm with sweating and nausea, brought on by exertion in someone with high blood pressure and diabetes — matches the red-flag checklist for possible heart-related causes. This is a prompt for urgent human review, not a diagnosis.</p>
+                    </div>
+                  </div>
+                </div>
+                <div class="sec-h"><h2 data-en="Medical problem summary" data-bn="চিকিৎসা সমস্যার সারসংক্ষেপ">Medical problem summary</h2><span class="cnt" data-en="Validate, override, or annotate any field" data-bn="যেকোনো ফিল্ড নিশ্চিত, সংশোধন বা নোট করুন">Validate, override, or annotate any field</span></div>
+                <div id="doctor-acc"></div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <!-- 8. ADMIN -->
+      <section class="screen" id="admin">
+        <div class="desktop">
+          <div class="browser-bar"><div class="dots"><i style="background:#ff5f57"></i><i style="background:#febc2e"></i><i style="background:#28c840"></i></div><div class="url">carevoice.clinic/ops/overview</div></div>
+          <div class="work">
+            <nav class="side">
+              <div class="ptag" data-en="Operations" data-bn="অপারেশনস">Operations</div>
+              <a class="on"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="7" height="9"/><rect x="14" y="3" width="7" height="5"/><rect x="14" y="12" width="7" height="9"/><rect x="3" y="16" width="7" height="5"/></svg><span data-en="Overview" data-bn="সারসংক্ষেপ">Overview</span></a>
+              <a><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 12h16M14 6l6 6-6 6"/></svg><span data-en="Handoffs" data-bn="হস্তান্তর">Handoffs</span></a>
+              <a><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 9v4M12 17h.01"/><path d="M10.3 3.9 1.8 18a2 2 0 0 0 1.7 3h17a2 2 0 0 0 1.7-3L13.7 3.9a2 2 0 0 0-3.4 0z"/></svg><span data-en="Errors" data-bn="ত্রুটি">Errors</span></a>
+              <a><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="9" cy="8" r="4"/><path d="M2 20a7 7 0 0 1 14 0M17 11l2 2 4-4"/></svg><span data-en="Users" data-bn="ব্যবহারকারী">Users</span></a>
+              <span class="sp"></span>
+              <a><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4M16 17l5-5-5-5M21 12H9"/></svg><span data-en="Sign out" data-bn="সাইন আউট">Sign out</span></a>
+            </nav>
+            <div class="work-main">
+              <div class="topbar">
+                <h2 style="font-size:16px;margin:0" data-en="System monitoring" data-bn="সিস্টেম মনিটরিং">System monitoring</h2>
+                <div class="who"><span class="status-pill ok"><span class="bead"></span><span data-en="All systems operational" data-bn="সব সিস্টেম সচল">All systems operational</span></span><span class="muted" data-en="Ops admin" data-bn="অপস অ্যাডমিন">Ops admin</span><span class="av">OP</span></div>
+              </div>
+              <div class="content">
+                <div class="tiles">
+                  <div class="tile"><div class="tl"><span data-en="Active sessions now" data-bn="এখন সক্রিয় সেশন">Active sessions now</span></div><div class="tv">7</div></div>
+                  <div class="tile"><div class="tl"><span data-en="Average processing time" data-bn="গড় প্রক্রিয়াকরণ সময়">Average processing time</span></div><div class="tv">4.2<small> s</small></div></div>
+                  <div class="tile"><div class="tl"><span data-en="Cases completed today" data-bn="আজ সম্পন্ন কেস">Cases completed today</span></div><div class="tv">128</div></div>
+                  <div class="tile warn"><div class="tl"><span data-en="Failed voice captures today" data-bn="আজ ব্যর্থ ভয়েস ক্যাপচার">Failed voice captures today</span></div><div class="tv">3</div></div>
+                  <div class="tile"><div class="tl"><span data-en="Queue throughput" data-bn="সারির প্রবাহ">Queue throughput</span></div><div class="tv">22<small> /hr</small></div></div>
+                  <div class="tile"><div class="tl"><span data-en="Kiosks online" data-bn="অনলাইন কিয়স্ক">Kiosks online</span></div><div class="tv">8<small> / 9</small></div></div>
+                </div>
+
+                <div class="panel">
+                  <h3 data-en="Handoff health — patient to doctor" data-bn="হস্তান্তরের অবস্থা — রোগী থেকে ডাক্তার">Handoff health — patient to doctor</h3>
+                  <div class="flow">
+                    <div class="stage-node ok"><div class="chip"><div class="dotbig"></div><div class="nm2"><span data-en="Check-in &amp; voice capture" data-bn="চেক-ইন ও ভয়েস ক্যাপচার">Check-in &amp; voice capture</span></div><div class="st" data-en="Healthy" data-bn="সচল">Healthy</div><div class="ct" data-en="7 active" data-bn="৭টি সক্রিয়">7 active</div></div></div>
+                    <div class="stage-arrow"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M5 12h14M13 6l6 6-6 6"/></svg></div>
+                    <div class="stage-node ok"><div class="chip"><div class="dotbig"></div><div class="nm2"><span data-en="Summary preparation" data-bn="সারসংক্ষেপ প্রস্তুতি">Summary preparation</span></div><div class="st" data-en="Healthy" data-bn="সচল">Healthy</div><div class="ct" data-en="2 in progress" data-bn="২টি চলছে">2 in progress</div></div></div>
+                    <div class="stage-arrow"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M5 12h14M13 6l6 6-6 6"/></svg></div>
+                    <div class="stage-node ok"><div class="chip"><div class="dotbig"></div><div class="nm2"><span data-en="Staff review" data-bn="স্টাফ পর্যালোচনা">Staff review</span></div><div class="st" data-en="Healthy" data-bn="সচল">Healthy</div><div class="ct" data-en="5 waiting" data-bn="৫টি অপেক্ষমাণ">5 waiting</div></div></div>
+                    <div class="stage-arrow"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M5 12h14M13 6l6 6-6 6"/></svg></div>
+                    <div class="stage-node warn"><div class="chip"><div class="dotbig"></div><div class="nm2"><span data-en="Doctor handoff" data-bn="ডাক্তারের কাছে হস্তান্তর">Doctor handoff</span></div><div class="st" data-en="Degraded" data-bn="ধীরগতি">Degraded</div><div class="ct" data-en="1 delayed" data-bn="১টি বিলম্বিত">1 delayed</div></div></div>
+                  </div>
+                </div>
+
+                <div class="panel">
+                  <h3 data-en="Recent issues" data-bn="সাম্প্রতিক সমস্যা">Recent issues</h3>
+                  <table class="logtbl">
+                    <thead><tr><th data-en="Time" data-bn="সময়">Time</th><th data-en="Area" data-bn="ক্ষেত্র">Area</th><th data-en="Detail" data-bn="বিবরণ">Detail</th><th data-en="Status" data-bn="অবস্থা">Status</th></tr></thead>
+                    <tbody>
+                      <tr><td class="t">09:14</td><td class="area" data-en="Voice capture" data-bn="ভয়েস ক্যাপচার">Voice capture</td><td data-en="Microphone not detected at Kiosk 3" data-bn="কিয়স্ক ৩-এ মাইক্রোফোন শনাক্ত হয়নি">Microphone not detected at Kiosk 3</td><td><span class="lstat res" data-en="Resolved" data-bn="সমাধান হয়েছে">Resolved</span></td></tr>
+                      <tr><td class="t">10:02</td><td class="area" data-en="Summary preparation" data-bn="সারসংক্ষেপ প্রস্তুতি">Summary preparation</td><td data-en="Recovered after a timeout" data-bn="টাইমআউটের পর পুনরুদ্ধার হয়েছে">Recovered after a timeout</td><td><span class="lstat res" data-en="Resolved" data-bn="সমাধান হয়েছে">Resolved</span></td></tr>
+                      <tr><td class="t">11:47</td><td class="area" data-en="Doctor handoff" data-bn="ডাক্তার হস্তান্তর">Doctor handoff</td><td data-en="Assignment delayed — no doctor free" data-bn="বরাদ্দ বিলম্বিত — কোনো ডাক্তার ফাঁকা নেই">Assignment delayed — no doctor free</td><td><span class="lstat open" data-en="Open" data-bn="অমীমাংসিত">Open</span></td></tr>
+                    </tbody>
+                  </table>
+                </div>
+
+                <div class="panel">
+                  <div class="sec-h" style="margin-bottom:14px"><h3 style="margin:0" data-en="Active accounts" data-bn="সক্রিয় অ্যাকাউন্ট">Active accounts</h3><button class="btn-ghost" data-en="Manage users" data-bn="ব্যবহারকারী পরিচালনা">Manage users</button></div>
+                  <div class="urow">
+                    <div class="ustat"><b>14</b><span data-en="Active staff" data-bn="সক্রিয় স্টাফ">Active staff</span></div>
+                    <div class="ustat"><b>6</b><span data-en="Doctors online" data-bn="অনলাইন ডাক্তার">Doctors online</span></div>
+                    <div class="ustat"><b>8 / 9</b><span data-en="Kiosks online" data-bn="অনলাইন কিয়স্ক">Kiosks online</span></div>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </section>
+
+    </div><!-- /stage-canvas -->
+  </main>
+</div><!-- /shell -->
+
+<script>
+  var lang = 'en';
+
+  var flags = [
+    {en:'Chest pain spreading to the left arm and jaw', bn:'বুকে ব্যথা বাঁ হাত ও চোয়ালে ছড়াচ্ছে'},
+    {en:'Sweating together with nausea', bn:'ঘামের সাথে বমি বমি ভাব'},
+    {en:'Pain brought on by exertion, with high blood pressure and diabetes', bn:'পরিশ্রমে ব্যথা শুরু, সাথে উচ্চ রক্তচাপ ও ডায়াবেটিস'}
+  ];
+
+  var patients = [
+    {nameEn:'Md. Karim Uddin',nameBn:'মো. করিম উদ্দিন',metaEn:'54 · Male',metaBn:'৫৪ · পুরুষ',tier:'critical',tEn:'Critical',tBn:'সংকটাপন্ন',probEn:'Chest pain spreading to the left arm',probBn:'বুকে ব্যথা বাঁ হাতে ছড়াচ্ছে',agoEn:'2 min ago',agoBn:'২ মিনিট আগে',flagEn:'Pain spreading to left arm, with sweating',flagBn:'বাঁ হাতে ছড়ানো ব্যথা, সাথে ঘাম'},
+    {nameEn:'Rina Akter',nameBn:'রিনা আক্তার',metaEn:'31 · Female',metaBn:'৩১ · মহিলা',tier:'high',tEn:'High',tBn:'উচ্চ',probEn:'Severe abdominal pain with vomiting',probBn:'তীব্র পেটে ব্যথা ও বমি',agoEn:'6 min ago',agoBn:'৬ মিনিট আগে',flagEn:'Severe pain with repeated vomiting',flagBn:'বারবার বমিসহ তীব্র ব্যথা'},
+    {nameEn:'Abdul Hannan',nameBn:'আব্দুল হান্নান',metaEn:'45 · Male',metaBn:'৪৫ · পুরুষ',tier:'moderate',tEn:'Moderate',tBn:'মাঝারি',probEn:'Fever and cough for 5 days',probBn:'৫ দিন ধরে জ্বর ও কাশি',agoEn:'9 min ago',agoBn:'৯ মিনিট আগে',flagEn:'',flagBn:''},
+    {nameEn:'Shahana Begum',nameBn:'শাহানা বেগম',metaEn:'28 · Female',metaBn:'২৮ · মহিলা',tier:'low',tEn:'Low',tBn:'নিম্ন',probEn:'Mild headache, wants advice',probBn:'হালকা মাথাব্যথা, পরামর্শ চান',agoEn:'12 min ago',agoBn:'১২ মিনিট আগে',flagEn:'',flagBn:''},
+    {nameEn:'Jahangir Alam',nameBn:'জাহাঙ্গীর আলম',metaEn:'60 · Male',metaBn:'৬০ · পুরুষ',tier:'moderate',tEn:'Moderate',tBn:'মাঝারি',probEn:'Knee pain and swelling',probBn:'হাঁটুতে ব্যথা ও ফোলা',agoEn:'15 min ago',agoBn:'১৫ মিনিট আগে',flagEn:'',flagBn:''}
+  ];
+
+  var summary = [
+    {nameEn:'Main problem',nameBn:'প্রধান সমস্যা',open:true,fields:[
+      {lEn:'Chief complaint',lBn:'প্রধান অভিযোগ',vEn:'Chest pain spreading to the left arm, started about 2 hours ago.',vBn:'বুকে ব্যথা, যা বাঁ হাতের দিকে ছড়িয়ে পড়ছে — প্রায় ২ ঘণ্টা আগে শুরু হয়েছে।',prov:'ai'}
+    ]},
+    {nameEn:'When it started',nameBn:'কখন শুরু হয়েছে',open:false,fields:[
+      {lEn:'Started',lBn:'শুরু',vEn:'Today, around 6:30 AM',vBn:'আজ, আনুমানিক সকাল ৬:৩০টা',prov:'ai'},
+      {lEn:'Duration',lBn:'স্থায়িত্ব',vEn:'About 2 hours',vBn:'প্রায় ২ ঘণ্টা',prov:'edited'}
+    ]},
+    {nameEn:'Symptoms',nameBn:'উপসর্গ',open:true,fields:[
+      {lEn:'Main symptom',lBn:'প্রধান উপসর্গ',vEn:'Chest pain',vBn:'বুকে ব্যথা',prov:'ai'},
+      {lEn:'Severity',lBn:'তীব্রতা',vEn:'8 out of 10',vBn:'১০-এ ৮',prov:'ai'},
+      {lEn:'Location',lBn:'অবস্থান',vEn:'Center of chest, spreading to left arm and jaw',vBn:'বুকের মাঝখানে, বাঁ হাত ও চোয়ালে ছড়িয়ে পড়ছে',prov:'ai'},
+      {lEn:'Character',lBn:'ধরন',vEn:'Heavy, pressure-like',vBn:'ভারী, চাপ-ধরা অনুভূতি',prov:'ai'},
+      {lEn:'Makes it worse',lBn:'যাতে বাড়ে',vEn:'Physical effort, lying down',vBn:'পরিশ্রম করলে, শুয়ে থাকলে',prov:'ai'},
+      {lEn:'Makes it better',lBn:'যাতে কমে',vEn:'Sitting still and resting (partly)',vBn:'স্থির হয়ে বসে বিশ্রাম নিলে (আংশিক)',prov:'ai'}
+    ]},
+    {nameEn:'Associated symptoms',nameBn:'সংশ্লিষ্ট উপসর্গ',open:false,fields:[
+      {lEn:'Reported',lBn:'জানানো হয়েছে',vEn:'Sweating, shortness of breath, nausea',vBn:'ঘাম হওয়া, শ্বাসকষ্ট, বমি বমি ভাব',prov:'ai'}
+    ]},
+    {nameEn:'Relevant medical history',nameBn:'প্রাসঙ্গিক চিকিৎসা ইতিহাস',open:false,fields:[
+      {lEn:'Existing diseases',lBn:'বিদ্যমান রোগ',vEn:'High blood pressure (5 years), Type 2 diabetes (3 years)',vBn:'উচ্চ রক্তচাপ (৫ বছর), টাইপ ২ ডায়াবেটিস (৩ বছর)',prov:'ai'},
+      {lEn:'Recent tests / procedures',lBn:'সাম্প্রতিক পরীক্ষা',vEn:'None recently',vBn:'সম্প্রতি কিছু করা হয়নি',prov:'ai'},
+      {lEn:'Previous similar problem',lBn:'আগে একই সমস্যা',vEn:'Yes — milder chest tightness about a month ago, settled on its own',vBn:'হ্যাঁ — প্রায় এক মাস আগে হালকা বুকে চাপ, নিজে থেকেই সেরে গিয়েছিল',prov:'ai'}
+    ]},
+    {nameEn:'Current medicines',nameBn:'বর্তমান ওষুধ',open:false,fields:[
+      {lEn:'Taking now',lBn:'এখন নিচ্ছেন',vEn:'Amlodipine 5 mg (once daily), Metformin 500 mg (twice daily)',vBn:'অ্যামলোডিপিন ৫ মি.গ্রা. (দিনে একবার), মেটফরমিন ৫০০ মি.গ্রা. (দিনে দুইবার)',prov:'ai'}
+    ]},
+    {nameEn:'Allergies',nameBn:'অ্যালার্জি',open:false,fields:[
+      {lEn:'Known allergies',lBn:'জানা অ্যালার্জি',vEn:'No known allergy',vBn:'জানা কোনো অ্যালার্জি নেই',prov:'edited'}
+    ]},
+    {nameEn:'Recent changes or exposures',nameBn:'সাম্প্রতিক পরিবর্তন বা সংস্পর্শ',open:false,fields:[
+      {lEn:'Noted',lBn:'উল্লেখিত',vEn:'Heavy physical work yesterday (carrying loads). No travel, no new medicine.',vBn:'গতকাল ভারী শারীরিক পরিশ্রম (ভার বহন)। কোনো ভ্রমণ নেই, নতুন কোনো ওষুধ নেই।',prov:'ai'}
+    ]},
+    {nameEn:'What has already been done',nameBn:'ইতিমধ্যে যা করা হয়েছে',open:false,fields:[
+      {lEn:'Tried so far',lBn:'এ পর্যন্ত চেষ্টা',vEn:'Took an antacid at home — no relief. Has not seen a doctor yet for this.',vBn:'বাড়িতে একটি অ্যান্টাসিড নিয়েছেন — আরাম হয়নি। এ জন্য এখনও কোনো ডাক্তার দেখাননি।',prov:'ai'}
+    ]},
+    {nameEn:'Current concern',nameBn:'বর্তমান উদ্বেগ',open:false,fields:[
+      {lEn:'Wants the doctor to decide',lBn:'ডাক্তারের কাছে যা জানতে চান',vEn:'Whether this is a heart problem and whether urgent care is needed.',vBn:'এটি হার্টের সমস্যা কিনা এবং জরুরি চিকিৎসা দরকার কিনা।',prov:'ai'}
+    ]}
+  ];
+
+  function provHTML(prov){
+    if(prov === 'edited'){
+      return '<span class="tag tag-edited"><svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6L9 17l-5-5"/></svg> <span data-en="Edited · Nure Alam" data-bn="সম্পাদিত · নুরে আলম">Edited · Nure Alam</span></span>';
+    }
+    return '<span class="tag tag-ai">AI</span>';
+  }
+  function ctrlHTML(role){
+    if(role === 'doctor'){
+      return '<span class="doc-actions"><button class="mini val" onclick="validateField(this)" data-en="Validate" data-bn="নিশ্চিত করুন">Validate</button><button class="mini" data-en="Override" data-bn="সংশোধন করুন">Override</button><button class="mini" data-en="Annotate" data-bn="নোট দিন">Annotate</button></span>';
+    }
+    return '<button class="ic-btn" title="Edit"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 20h9"/><path d="M16.5 3.5a2.1 2.1 0 0 1 3 3L7 19l-4 1 1-4z"/></svg></button>';
+  }
+  function renderAccordion(id, role){
+    var c = document.getElementById(id);
+    c.innerHTML = summary.map(function(s){
+      var fields = s.fields.map(function(f){
+        return '<div class="frow"><span class="fl" data-en="'+f.lEn+'" data-bn="'+f.lBn+'">'+f.lEn+'</span><span class="fv" data-en="'+f.vEn+'" data-bn="'+f.vBn+'">'+f.vEn+'</span><span class="fa">'+provHTML(f.prov)+ctrlHTML(role)+'</span></div>';
+      }).join('');
+      var pv = s.fields[0];
+      return '<div class="acc-item'+(s.open?' open':'')+'"><button class="acc-head" onclick="this.parentNode.classList.toggle(\'open\')"><span class="chev"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4"><path d="M9 6l6 6-6 6"/></svg></span><span class="nm" data-en="'+s.nameEn+'" data-bn="'+s.nameBn+'">'+s.nameEn+'</span><span class="preview" data-en="'+pv.vEn+'" data-bn="'+pv.vBn+'">'+pv.vEn+'</span></button><div class="acc-body">'+fields+'</div></div>';
+    }).join('');
+  }
+  function renderFlags(id){
+    document.getElementById(id).innerHTML = flags.map(function(f){
+      return '<li><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 9v4M12 17h.01"/><path d="M10.3 3.9 1.8 18a2 2 0 0 0 1.7 3h17a2 2 0 0 0 1.7-3L13.7 3.9a2 2 0 0 0-3.4 0z"/></svg><span data-en="'+f.en+'" data-bn="'+f.bn+'">'+f.en+'</span></li>';
+    }).join('');
+  }
+  function renderMedicRows(){
+    document.getElementById('medic-rows').innerHTML = patients.map(function(p){
+      return '<div class="qrow'+(p.tier==='critical'?' crit':'')+'" onclick="document.getElementById(\'nav-medic-detail\').click()">'+
+        '<span><span class="risk '+p.tier+'"><span class="bead"></span><span data-en="'+p.tEn+'" data-bn="'+p.tBn+'">'+p.tEn+'</span></span></span>'+
+        '<span><div class="pname" data-en="'+p.nameEn+'" data-bn="'+p.nameBn+'">'+p.nameEn+'</div><div class="pmeta" data-en="'+p.metaEn+'" data-bn="'+p.metaBn+'">'+p.metaEn+'</div></span>'+
+        '<span class="qprob" data-en="'+p.probEn+'" data-bn="'+p.probBn+'">'+p.probEn+'</span>'+
+        '<span class="qtime" data-en="'+p.agoEn+'" data-bn="'+p.agoBn+'">'+p.agoEn+'</span>'+
+        '<span><button class="btn btn-primary" style="padding:7px 12px;font-size:13px" onclick="event.stopPropagation();document.getElementById(\'nav-medic-detail\').click()" data-en="Assign doctor" data-bn="ডাক্তার বরাদ্দ করুন">Assign doctor</button></span>'+
+      '</div>';
+    }).join('');
+  }
+  function renderDoctorCards(){
+    document.getElementById('doctor-cards').innerHTML = patients.slice(0,4).map(function(p){
+      var flag = p.flagEn ? '<div class="dc-flag"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 9v4M12 17h.01"/><path d="M10.3 3.9 1.8 18a2 2 0 0 0 1.7 3h17a2 2 0 0 0 1.7-3L13.7 3.9a2 2 0 0 0-3.4 0z"/></svg><span data-en="'+p.flagEn+'" data-bn="'+p.flagBn+'">'+p.flagEn+'</span></div>' : '';
+      return '<div class="dcard '+p.tier+'" onclick="document.getElementById(\'nav-doctor-detail\').click()">'+
+        '<div class="dc-top"><span class="risk '+p.tier+'"><span class="bead"></span><span data-en="'+p.tEn+'" data-bn="'+p.tBn+'">'+p.tEn+'</span></span><span class="qtime" data-en="'+p.agoEn+'" data-bn="'+p.agoBn+'">'+p.agoEn+'</span></div>'+
+        '<h3 data-en="'+p.nameEn+'" data-bn="'+p.nameBn+'">'+p.nameEn+'</h3>'+
+        '<div class="dc-prob" data-en="'+p.probEn+'" data-bn="'+p.probBn+'">'+p.probEn+'</div>'+
+        flag+
+        '<div class="dc-foot"><span class="pmeta" data-en="'+p.metaEn+'" data-bn="'+p.metaBn+'">'+p.metaEn+'</span><button class="btn btn-primary" style="padding:7px 14px;font-size:13px" onclick="event.stopPropagation();document.getElementById(\'nav-doctor-detail\').click()" data-en="Open" data-bn="খুলুন">Open</button></div>'+
+      '</div>';
+    }).join('');
+  }
+  function validateField(btn){
+    var fa = btn.closest('.fa');
+    var tag = fa.querySelector('.tag');
+    tag.className = 'tag tag-edited';
+    tag.innerHTML = '<svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6L9 17l-5-5"/></svg> <span data-en="Confirmed · Dr. Rahman" data-bn="নিশ্চিত · ডা. রহমান">Confirmed · Dr. Rahman</span>';
+    applyLang();
+  }
+
+  function applyLang(){
+    document.body.className = 'lang-' + lang;
+    document.documentElement.lang = lang;
+    var nodes = document.querySelectorAll('[data-en]');
+    for(var i=0;i<nodes.length;i++){
+      var t = nodes[i].getAttribute('data-' + lang);
+      if(t !== null) nodes[i].textContent = t;
+    }
+    var phs = document.querySelectorAll('[data-ph-en]');
+    for(var j=0;j<phs.length;j++){
+      var p = phs[j].getAttribute('data-ph-' + lang);
+      if(p !== null) phs[j].placeholder = p;
+    }
+    var btns = document.querySelectorAll('.lang-toggle button');
+    for(var k=0;k<btns.length;k++){
+      btns[k].classList.toggle('on', btns[k].getAttribute('data-lang') === lang);
+    }
+  }
+  function setLang(l){ lang = l; applyLang(); }
+
+  function go(elm, id, crumb, name, device){
+    var items = document.querySelectorAll('.nav-item');
+    for(var i=0;i<items.length;i++) items[i].classList.remove('active');
+    if(elm && elm.classList && elm.classList.contains('nav-item')) elm.classList.add('active');
+    var screens = document.querySelectorAll('.screen');
+    for(var j=0;j<screens.length;j++) screens[j].classList.remove('show');
+    document.getElementById(id).classList.add('show');
+    document.getElementById('crumb').textContent = crumb;
+    document.getElementById('screenName').textContent = name;
+    document.getElementById('devicePill').textContent = device;
+    var canvas = document.querySelector('.stage-canvas');
+    if(canvas) canvas.scrollTop = 0;
+  }
+
+  renderFlags('medic-flags');
+  renderFlags('doctor-flags');
+  renderAccordion('medic-acc','medic');
+  renderAccordion('doctor-acc','doctor');
+  renderMedicRows();
+  renderDoctorCards();
+  applyLang();
+</script>
+</body>
+</html>
