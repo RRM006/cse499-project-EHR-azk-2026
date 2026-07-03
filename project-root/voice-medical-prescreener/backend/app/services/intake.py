@@ -1,0 +1,132 @@
+"""Intake pipeline (BE-2): M3 extraction -> M4 summary -> M6 gaps over a visit's
+collected utterances, written into the visit's case_profile.
+
+Reads the conversation (corrected text when available, else raw — raw itself is
+never modified, rule #1). Never diagnoses (rule #2): prompts extract and summarize
+only what the patient actually said. M2 correction stays its own endpoint/step.
+"""
+
+from __future__ import annotations
+
+import json
+import logging
+import re
+from datetime import datetime, timezone
+
+from sqlalchemy.orm import Session
+
+from backend.app.db.models import CaseProfile, Visit
+from backend.app.db.repository_visits import list_visit_utterances
+from backend.app.schemas.profile import SUMMARY_FIELD_KEYS, SummaryFields
+from backend.app.services.llm_client import call_module
+
+logger = logging.getLogger(__name__)
+
+_EXTRACT_SYSTEM = (
+    "You extract structured pre-screening data for a doctor in Bangladesh from a "
+    "patient conversation (Bangla / Banglish / English). You NEVER diagnose, NEVER "
+    "invent details, and NEVER translate the patient's meaning into a disease name.\n"
+    "Return ONLY a JSON object (no markdown, no commentary) with EXACTLY these keys:\n"
+    + ", ".join(SUMMARY_FIELD_KEYS)
+    + ", symptom_details_structured.\n"
+    "Each of the 10 named keys maps to a short plain-text string in English "
+    "summarizing what the patient said for that field, or \"\" if not mentioned.\n"
+    "symptom_details_structured is an object {location, character, worse, better, "
+    "pain_severity_0_10} (strings, severity an integer 0-10 or null).\n"
+    "Base every value ONLY on the conversation text."
+)
+
+_SUMMARY_SYSTEM = (
+    "You write a 2-4 sentence chief-complaint summary for a doctor, from a patient "
+    "pre-screening conversation (Bangla / Banglish / English). Plain English. State "
+    "symptoms, onset/duration, and relevant context the patient mentioned. Do NOT "
+    "diagnose, do NOT name diseases, do NOT add reassurance or advice. "
+    "Return ONLY the summary text."
+)
+
+_GAPS_SYSTEM = (
+    "You are a clinical-intake completeness checker. Given a patient pre-screening "
+    "conversation and the extracted fields, list what is present and what is still "
+    "missing for a complete pre-screening picture. Do NOT diagnose.\n"
+    "Return ONLY a JSON object: {\"present\": [..], \"missing\": [..]} where each "
+    "item is a short English phrase naming a data point (e.g. \"fever duration\", "
+    "\"temperature measurement\", \"medication dose\")."
+)
+
+
+def _conversation_text(db: Session, visit: Visit) -> str:
+    """The dialogue as text, newest-last. Corrected text is preferred; raw is the
+    fallback and is only READ here."""
+    lines = []
+    for u in list_visit_utterances(db, visit_id=visit.id):
+        speaker = "ASSISTANT" if u.role == "system" else "PATIENT"
+        lines.append(f"{speaker}: {u.corrected_text or u.raw_text}")
+    return "\n".join(lines)
+
+
+def _parse_json(text: str) -> dict:
+    """Parse a model reply as JSON, tolerating markdown code fences."""
+    cleaned = re.sub(r"^```(?:json)?\s*|\s*```$", "", text.strip(), flags=re.MULTILINE)
+    return json.loads(cleaned)
+
+
+def _to_summary_fields(extracted: dict) -> SummaryFields:
+    """Coerce the model's extraction JSON into the enforced 10-field shape."""
+    payload: dict = {}
+    for key in SUMMARY_FIELD_KEYS:
+        value = extracted.get(key, "")
+        payload[key] = {"value": str(value) if value is not None else "", "source": "ai"}
+    structured = extracted.get("symptom_details_structured") or {}
+    if isinstance(structured, dict):
+        payload["symptom_details_structured"] = {
+            "location": str(structured.get("location") or ""),
+            "character": str(structured.get("character") or ""),
+            "worse": str(structured.get("worse") or ""),
+            "better": str(structured.get("better") or ""),
+            "pain_severity_0_10": structured.get("pain_severity_0_10"),
+        }
+    return SummaryFields.model_validate(payload)
+
+
+def run_intake(db: Session, visit: Visit) -> CaseProfile:
+    """M3 -> M4 -> M6 over the visit's conversation; upserts the case_profile.
+
+    Each module call logs its own module_events row (provider/latency/fallback)
+    via llm_client. Raises LLMCallError/ValueError upward for the route to map.
+    """
+    conversation = _conversation_text(db, visit)
+    if not conversation.strip():
+        raise ValueError("Visit has no utterances yet — nothing to extract.")
+
+    # M3 — structured extraction (Flash-Lite bucket).
+    extracted_raw = call_module(
+        db, visit_id=visit.id, module_code="M3", system=_EXTRACT_SYSTEM, user=conversation
+    )
+    summary_fields = _to_summary_fields(_parse_json(extracted_raw))
+
+    # M4 — chief-complaint summary (Flash bucket).
+    summary = call_module(
+        db, visit_id=visit.id, module_code="M4", system=_SUMMARY_SYSTEM, user=conversation
+    )
+
+    # M6 — present-vs-missing checklist (Groq bucket).
+    gaps_user = f"CONVERSATION:\n{conversation}\n\nEXTRACTED FIELDS:\n{extracted_raw}"
+    try:
+        gaps = _parse_json(
+            call_module(db, visit_id=visit.id, module_code="M6", system=_GAPS_SYSTEM, user=gaps_user)
+        )
+    except json.JSONDecodeError:
+        logger.warning("M6 returned non-JSON for visit %s; storing empty gaps", visit.id)
+        gaps = {"present": [], "missing": []}
+
+    profile = db.query(CaseProfile).filter(CaseProfile.visit_id == visit.id).first()
+    if profile is None:
+        profile = CaseProfile(visit_id=visit.id)
+        db.add(profile)
+    profile.entities = {"summary_fields": summary_fields.model_dump(mode="json")}
+    profile.summary = summary
+    profile.gaps = gaps
+    profile.updated_at = datetime.now(timezone.utc)
+    db.commit()
+    db.refresh(profile)
+    return profile

@@ -1,0 +1,160 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Niramoy — Doctor Portal</title>
+  <link rel="stylesheet" href="/shared/shared.css">
+  <style>
+    .login-wrap { display: flex; flex: 1; align-items: center; justify-content: center; padding: 40px; }
+    #portal-main { display: none; flex: 1; flex-direction: column; min-height: 0; }
+    .top-nav { background: var(--bg-white); border-bottom: 1px solid var(--border-color); padding: 10px 24px; display: flex; justify-content: space-between; align-items: center; gap: 12px; }
+  </style>
+</head>
+<body>
+  <div class="portal-header">
+    <div><span class="portal-title">Niramoy Pre-Screening</span>
+      <span class="portal-subtitle">Doctor Clinical Portal</span></div>
+    <div style="font-size:.8rem; font-weight:600; color:var(--text-muted);" id="user-tag"></div>
+  </div>
+  <div id="error-banner" class="error-banner" style="margin:10px 24px 0;"></div>
+
+  <!-- stub login (auth is stubbed; pick a seeded doctor) -->
+  <div class="login-wrap" id="login-screen">
+    <div class="card" style="max-width:400px; width:100%;">
+      <h2 style="color:var(--primary-color); text-align:center; margin-bottom:6px;">Doctor Clinical Portal</h2>
+      <p style="font-size:.75rem; color:var(--text-muted); text-align:center; margin-bottom:22px;">Registered Physicians Only (demo login)</p>
+      <label style="font-size:.72rem; text-transform:uppercase; color:var(--text-muted);">Doctor</label>
+      <select class="input-field" id="doctor-login-select" style="margin:6px 0 14px;"></select>
+      <label style="font-size:.72rem; text-transform:uppercase; color:var(--text-muted);">Password</label>
+      <input class="input-field" type="password" value="demo-password" style="margin:6px 0 18px;">
+      <button class="btn btn-primary" style="width:100%; padding:12px;" onclick="login()">Authenticate &amp; Enter</button>
+    </div>
+  </div>
+
+  <div id="portal-main">
+    <div class="top-nav">
+      <div style="font-weight:600; font-size:.9rem;">My Assigned Patients</div>
+      <div style="display:flex; gap:8px;">
+        <input class="input-field" id="phone-search" placeholder="Patient Mobile Lookup..." style="width:280px; padding:8px 12px; font-size:.85rem;"
+               onkeydown="if(event.key==='Enter') searchPhone()">
+        <button class="btn btn-secondary" onclick="loadQueue()" style="padding:8px 14px; font-size:.85rem;">↻ Queue</button>
+      </div>
+    </div>
+    <div class="staff-grid">
+      <div class="queue-sidebar">
+        <div class="queue-header">Assigned Queue (<span id="queue-count">0</span>)</div>
+        <div id="queue-list"></div>
+      </div>
+      <div class="detail-workspace">
+        <div id="no-case" style="margin:auto; text-align:center; color:var(--text-muted);">
+          <div style="font-size:3rem;">🧑‍⚕️</div>
+          <h3>Select Patient</h3>
+          <p style="font-size:.85rem;">Click a patient to scan risk alerts and the verified pre-screening summary.</p>
+        </div>
+        <div id="case-detail" style="display:none; flex-direction:column; gap:18px;">
+          <div class="verbatim-panel" id="verbatim-panel">
+            <div class="verbatim-header" onclick="toggleVerbatim()">
+              <span>❝ Patient's Own Words<span class="verbatim-badge">Raw — unedited</span></span><span>▾</span>
+            </div>
+            <div class="verbatim-body" id="verbatim-body"></div>
+          </div>
+
+          <!-- glanceable risk / red flags / XAI -->
+          <div class="safety-panel" id="safety-panel">
+            <div style="text-align:center; min-width:150px; border-right:1px solid #FCA5A5; padding-right:16px;">
+              <div style="font-size:2rem;">⚠️</div>
+              <div style="font-size:.75rem; font-weight:700; text-transform:uppercase; color:var(--danger-color);">Risk Assessment</div>
+              <div class="safety-tier" id="risk-tier">—</div>
+            </div>
+            <div style="flex:1;">
+              <div id="red-flags-list"></div>
+              <div class="xai-box" id="xai-box" style="display:none;"></div>
+            </div>
+          </div>
+
+          <div id="field-cards" style="display:flex; flex-direction:column; gap:12px;"></div>
+
+          <div class="card" style="display:flex; justify-content:flex-end; gap:12px; align-items:center;">
+            <input class="input-field" id="review-notes" placeholder="Notes / annotation (optional)" style="flex:1;">
+            <button class="btn btn-danger-outline" onclick="review('low')">Override to Low-Risk</button>
+            <button class="btn btn-primary" onclick="review(null)">Accept &amp; Write to EHR</button>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <script src="/shared/shared.js"></script>
+  <script src="/shared/staff.js"></script>
+  <script>
+    const PORTAL = { role: 'doctor', userId: null, canEdit: true, onCaseLoaded: loadRisk };
+
+    async function boot() {
+      try {
+        const doctors = await api('GET', '/api/users?role=doctor');
+        document.getElementById('doctor-login-select').innerHTML =
+          doctors.map((d) => `<option value="${d.id}">${d.name}</option>`).join('');
+      } catch (e) { showError(e.message); }
+    }
+    boot();
+
+    function login() {
+      const sel = document.getElementById('doctor-login-select');
+      if (!sel.value) return showError('No doctor accounts found — check the DB seed.');
+      PORTAL.userId = Number(sel.value);
+      document.getElementById('user-tag').textContent = `👤 ${sel.options[sel.selectedIndex].text}`;
+      document.getElementById('login-screen').style.display = 'none';
+      document.getElementById('portal-main').style.display = 'flex';
+      loadQueue();
+      setInterval(loadQueue, 15000);
+    }
+
+    async function loadRisk(c) {
+      const panel = document.getElementById('safety-panel');
+      const flags = document.getElementById('red-flags-list');
+      const xaiBox = document.getElementById('xai-box');
+      flags.innerHTML = '';
+      xaiBox.style.display = 'none';
+      try {
+        const risk = await api('GET', `/api/visits/${c.uuid}/risk`);
+        document.getElementById('risk-tier').innerHTML = tierBadge(risk.tier);
+        panel.className = 'safety-panel tier-' + risk.tier;
+        (risk.red_flags || []).forEach((f) => {
+          const d = document.createElement('div');
+          d.className = 'red-flag-item';
+          d.textContent = `▸ Red Flag: ${f}${risk.rule_overrode ? ' (rule forced Critical)' : ''}`;
+          flags.appendChild(d);
+        });
+        if (!risk.red_flags || !risk.red_flags.length) {
+          flags.innerHTML = '<div style="font-size:.85rem;color:var(--text-muted);">No red flags triggered.</div>';
+        }
+        if (risk.explanation) {
+          xaiBox.style.display = 'block';
+          xaiBox.textContent = `🧠 Explainable-AI Reasoning: ${risk.explanation.reason_text}`;
+        }
+      } catch (_) {
+        document.getElementById('risk-tier').textContent = '—';
+        flags.innerHTML = '<div style="font-size:.85rem;color:var(--text-muted);">Not assessed yet.</div>';
+      }
+    }
+
+    async function review(overrideTier) {
+      if (!currentCase) return showError('Select a case first.');
+      try {
+        await api('POST', `/api/visits/${currentCase.uuid}/review`, {
+          reviewer_id: PORTAL.userId,
+          override_tier: overrideTier,
+          disposition: overrideTier ? 'override' : 'accept',
+          notes: document.getElementById('review-notes').value || null,
+        });
+        currentCase = null;
+        document.getElementById('case-detail').style.display = 'none';
+        document.getElementById('no-case').style.display = 'block';
+        document.getElementById('review-notes').value = '';
+        loadQueue();
+      } catch (e) { showError(e.message); }
+    }
+  </script>
+</body>
+</html>

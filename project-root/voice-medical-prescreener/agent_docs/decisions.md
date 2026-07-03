@@ -374,6 +374,48 @@
   text-only (defeats the voice-first, low-literacy-friendly goal).
 - Status: Accepted
 
+## ADR-0029 — 2026-07-03 — Adopt the mockup's clinical-blue design system for all three portals (supersedes the Mintlify frontend rule)
+- Decision: The visual system of `agent_docs/mockups-redesign.html` (clinical blue
+  `#0F4C81` primary, bright blue `#2A75D3`, green accent `#10B981`, 8px radius, Inter,
+  bilingual EN/BN via `data-en`/`data-bn`) becomes the project design for the Patient
+  kiosk, Medic portal, and Doctor portal. `DESIGN-mintlify.md` and CLAUDE.md's frontend
+  rules are to be updated accordingly. Unchanged regardless of skin: Noto Sans Bengali
+  for Bangla text (never mono), and the transcript-panel behavior (fixed height,
+  scrollable, stick-to-bottom, raw read-only).
+- Why: The mockup is the reviewed, human-approved product direction; keeping two design
+  systems would guarantee drift. This contradicted a locked CLAUDE.md rule, so it was
+  flagged explicitly and decided by the human (2026-07-03), not silently resolved.
+- Rejected: Keeping Mintlify and restyling the mockup layouts (double work, and the human
+  prefers the clinical look); mixing both systems per portal (incoherent product).
+- Status: Accepted (supersedes the DESIGN-mintlify.md visual rule; CLAUDE.md update pending)
+
+## ADR-0030 — 2026-07-03 — Mockup reconciliation: medic role, doctor assignment, awaiting_doctor status, stub OTP, 10-field summary JSON shape
+- Decision: (a) `users.role` CHECK gains **'medic'** (real triage-staff role). (b) New
+  nullable `visits.assigned_doctor_id` FK → `users.id` records the medic→doctor
+  assignment; `doctor_reviews` remains append-only doctor actions only. (c) `visits.status`
+  CHECK gains **'awaiting_doctor'** (patient submit → `awaiting_review` → medic forward →
+  `awaiting_doctor` → doctor accept → `reviewed`); the kiosk auto-logout/reset is purely
+  frontend state. (d) Patient identification = phone number stored normalized in
+  `patients.external_ref` (unique per clinic) + a **stubbed** OTP verify endpoint checking
+  a `DEV_OTP` env value — no SMS gateway, no session table (the kiosk session is
+  `visits.uuid`). (e) The 10-fixed-field summary is a Pydantic-enforced
+  `summary_fields` JSON shape inside `case_profiles.entities` (per-field
+  `{value, source: 'ai'|'human', edited_by?, edited_at?}`), not promoted columns
+  (§6.2 rule); staff field edits are additionally logged append-only in `audit_log`.
+  (f) Risk tier codes stay `low/medium/high/critical`; "Moderate" is a display label in
+  one shared frontend `TIER_LABELS` map. Clarification: ADR-0027's voice-only rule
+  governs *clinical* input; typing a phone number/OTP for identification is allowed.
+  All schema deltas land inside the not-yet-written rev `0003` (ADR-0022 preserved).
+- Why: The mockup introduced workflow (triage + assignment + phone lookup) that the locked
+  schema didn't model; these are the smallest additions that keep every architecture.md §0
+  principle (aggregate root, JSON-for-evolving-data, append-only, module_events) intact.
+  Full analysis: `agent_docs/reconciliation.md`.
+- Rejected: Treating medic as a relabeled 'desk' (human confirmed it is a distinct role);
+  an assignments/auth-session table (overkill for the demo; a column + visit uuid suffice);
+  promoting the 10 fields to real columns (nothing filters/sorts on them in SQL yet);
+  real SMS OTP (cost + dependency, not needed to prove the capstone).
+- Status: Accepted (extends ADR-0024–0028; schema deltas recorded in architecture.md §7)
+
 ## ADR-0008 — 2026-06-18 — Default Whisper model is small/base; upgrade to a Bangla fine-tune later
 - Decision: Start with Whisper `small` (or `base` if we need a snappier live feel)
   for streaming on CPU. Upgrade to a Bangla-fine-tuned model (e.g.

@@ -6,65 +6,75 @@
 
 ---
 
-**Date:** 2026-06-25
-**Phase:** Phase 0 → starting **Phase A** of the locked build plan (Setup & first voice add-on)
-**Module:** Module 1 (Speech-to-Text, working) + **Module 7 groundwork (TTS)**
+**Date:** 2026-07-03
+**Phase:** Full-stack build — **backend + all three portals BUILT**; now verification + polish
+**Module:** M1–M12 backend pipeline done (M13 store = the DB itself); M14 doctor UI done; M15 feedback stored
 
 ## Where we are right now
-The Session 7 architect lock is DONE (planning only — no code was written). The plan is now
-final: the Emergency module is removed from the flow and replaced by a **rule-based red-flag
-check inside Module 10**; the stack is CONFIRMED (plain HTML/JS + FastAPI + SQLite/Alembic +
-python-docx) with **browser TTS added** for M7; each LLM module is assigned a free-tier API
-(Gemini Flash / Gemini Flash-Lite / Groq, OpenRouter `:free` as fallback); the patient
-interaction is **voice-only** and follow-up questions display as **text AND audio at the same
-time**. All tracking docs were rewritten this session (see `changelog.md` Session 7 and
-`decisions.md` ADR-0024…0028).
+Session 8 built the whole reconciled system (see `changelog.md` Session 8 and
+`agent_docs/reconciliation.md`):
+- **DB:** Alembic head = `0009_audit_log`; all 15 tables from architecture.md exist and are
+  applied to the real DB. Seeds: 1 clinic, 1 medic ("Medic Rahman"), 2 doctors, 1 admin.
+- **Backend:** kiosk phone + stub OTP (`DEV_OTP=000000`) → visit; intake (M3/M4/M6, per-module
+  free-API buckets + OpenRouter fallback, everything logged in `module_events`); follow-up loop
+  (M7 Groq / M8 merge / M9 local); **M10 risk with the LOCAL red-flag rule that forces Critical
+  even if every LLM is down**; M11 XAI (with deterministic fallback); M12 local report;
+  submit→auto-assess→medic queue→assign→doctor queue→review('reviewed'); audit_log everywhere.
+- **Frontend:** `/kiosk.html` (patient), `/medic/`, `/doctor/` — clinical-blue design (ADR-0029),
+  bilingual EN/BN, TTS+STT wired. The OLD Module-1 transcript app at `/` is untouched.
+- **Tests: 104 passing** (`pytest backend/tests/`). Red-flag recall is enforced per-phrase.
 
-The actual running code is unchanged from Session 6:
-- Pipeline: **mic → Chrome Web Speech API → RAW (immutable, stored) → raw .docx on Stop →
-  Gemini correct → corrected .docx**, two separate downloadable Word files.
-- DB schema is owned by **Alembic** (auto-migrates at startup; never delete the DB).
-- `pytest backend/tests/` = **19 passing**. Server runs on **port 8001**.
+## Done since the main Session 8 build
+- **ADR-0029 executed in docs:** CLAUDE.md frontend section now points at the clinical-blue
+  system (`frontend_shared/shared.css`); `DESIGN-mintlify.md` marked SUPERSEDED. No longer pending.
+- **First live Gemini call verified** (M2 correction on synthetic Banglish — correction-only,
+  no translation/diagnosis; see test_log.md 2026-07-03 Session 8b).
+- **⚠ Live-run key gap:** only `GEMINI_API_KEY` is set. **`GROQ_API_KEY` + `OPENROUTER_API_KEY`
+  are EMPTY**, so M6 (gaps) and M7 (follow-up) — the Groq bucket — have NO provider and a full
+  live intake/loop will 502 until a key is added. Everything passes offline (LLM faked).
 
 ## The one thing we are doing next
-**Phase A / Step A1 — Add browser Text-to-Speech (TTS) to the existing frontend.**
-This is the smallest first step toward Module 7's "audio + text" requirement and adds no new
-dependency (uses the browser's built-in `window.speechSynthesis`).
+**Get a full live run working, in two independent parts:**
 
-Goal for the step:
-1. Add a tiny TTS helper in `frontend/app.js`: `speak(text)` →
-   `const u = new SpeechSynthesisUtterance(text); u.lang = 'bn-BD';
-   speechSynthesis.speak(u);` (pick an installed Bangla voice from
-   `speechSynthesis.getVoices()` if one exists, else fall back to the default voice).
-2. Add a temporary "🔊 Test speak" button to `frontend/index.html` (Mintlify-styled pill) that
-   speaks a hard-coded Bangla sentence, e.g. `আপনার কতদিন ধরে জ্বর হচ্ছে?`
-3. Confirm the on-screen text of that sentence is shown at the same time (text is the
-   always-present fallback if no Bangla voice is installed / audio is muted).
-4. Verify in Chrome on both machines; note in `test_log.md` whether a Bangla voice was
-   available on each OS (this is the one real risk — see Open Flag 4).
+**Part 1 (either you or Claude, once a key exists):** add a **Groq** or **OpenRouter** key to
+`backend/.env`, restart, then drive the pipeline with SYNTHETIC typed text (no mic needed):
+create a visit → POST a couple of `/utterances` → `/intake` → `/followup/next` + `/answer` →
+`/assess` → `/report`. Confirm real M3/M4/M6/M7/M10/M11 output + `module_events` provider rows.
 
-**Do NOT** wire this to any backend or LLM yet, and do NOT touch the raw/corrected/export code.
-Keep it to the two frontend files. Plan it with the human and get "go" before writing code.
+**Part 2 (human only — needs a real microphone):** the voice kiosk run in Chrome
+(spends a little quota — needs the keys above):
+1. Start the server (port 8001), open `http://localhost:8001/kiosk.html`.
+2. Phone → any BD mobile → OTP `000000` → speak a Bangla complaint → answer the follow-up
+   questions by voice → check the 10-field summary → Confirm & Submit → watch the auto-logout.
+3. Open `/medic/` → login → the case should be in the queue WITH a risk badge → edit a field →
+   Assign Doctor → Submit & Forward.
+4. Open `/doctor/` → login as that doctor → case in queue → check risk/red-flags/XAI panel →
+   Accept & Write to EHR (or Override to Low-Risk).
+5. Record in `test_log.md`: TC-V2 (was a bn-BD TTS voice available per OS?), TC-V3 (voice-only
+   loop), TC-F2 (loop exits, no repeats), TC-R1 (say "বুকে ব্যথা" → tier must be Critical),
+   TC-A1 (pull a key → fallback provider logged in `module_events`).
+
+**After that:** per-visit report `.docx` export (M12 → the existing DocxWriter/documents seam),
+then optional PDF, then Phase-1 faster-whisper. (The ADR-0029 doc rewrite is DONE.)
 
 ## Important environment notes
-- **Server runs on port 8001.** `.claude/launch.json` has TWO configs: Windows
-  (`backend (FastAPI + uvicorn)`, `.venv/Scripts/python.exe`) and Linux
-  (`backend-linux (FastAPI + uvicorn)`, `.venv/bin/python`). Pick the one for your OS.
-  - ⚠ **Preview gotcha (Arch):** the preview panel DEFAULTS to the first (Windows) config and
-    fails with `spawn .venv/Scripts/python.exe ENOENT`. On Linux start the **`backend-linux`**
-    config by name, or run uvicorn directly (Arch command below).
-- `.env` changes need a server RESTART (uvicorn --reload only watches `.py`).
-- Schema changes are applied by Alembic automatically at startup — **never delete the DB.**
-- Synthetic/consented data only — the free APIs may log input (rule #4).
+- Server: port 8001. Windows launch config is `backend (FastAPI + uvicorn)`; Arch is
+  `backend-linux`. `.env` changes need a restart.
+- **DEV_OTP=000000** (stub — no SMS). Patient phone lives in `patients.external_ref`.
+- Alembic migrates at startup; NEVER delete the DB. Pre-migration backups:
+  `backend/prescreener.db.pre-000{3,4,5,6,7}.bak` (gitignored).
+- The Windows venv needed `pip install -r requirements.txt` this session (alembic was missing);
+  if tests fail with ModuleNotFoundError, reinstall requirements.
+- Tier codes on the wire are always low/medium/high/critical; labels (incl. "Moderate", Bangla)
+  live ONLY in `frontend_shared/shared.js` TIER_LABELS.
 
 ## Reminders
-- Raw words are never edited (rule #1). Correction AND both .docx files are derived/separate.
-- The system never diagnoses (rule #2). Rule #3 is now "**surface red flags; never reassure
-  falsely**" — the red-flag check lives in **Module 10**, not a separate Emergency module.
-- Schema = Alembic; do not delete the DB; add new columns via a new migration (ADR-0022).
-- Plan first, one small step at a time. Do not assume. (CLAUDE.md)
-- Frontend follows DESIGN-mintlify.md; the transcript panels share the fixed-height + scroll +
-  stick-to-bottom behavior (see CLAUDE.md).
+- Raw words are never edited (rule #1) — staff edits touch only `summary_fields` (source
+  becomes 'human'; M8 never overwrites human fields). The system never diagnoses (rule #2).
+- Red flags: rule list in `backend/app/services/red_flags.py` — ADD phrases only, each with a
+  matching TC-R1 test case; the rule must always be able to force Critical (rule #3).
+- Never auto-run live LLM calls (quota + rule #4 synthetic-data-only). Tests fake the LLM layer.
+- Plan first, one small step at a time (CLAUDE.md).
 - Run (Windows): `.venv\Scripts\python.exe -m uvicorn backend.app.main:app --reload --port 8001`
 - Run (Arch):    `.venv/bin/python -m uvicorn backend.app.main:app --reload --port 8001`
-- Tests: `pytest backend/tests/`  ·  Python 3.14 needs SQLAlchemy>=2.0.51.
+- Tests: `pytest backend/tests/` (**104 passing**).

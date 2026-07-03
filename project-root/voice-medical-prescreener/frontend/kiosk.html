@@ -1,0 +1,146 @@
+<!DOCTYPE html>
+<html lang="bn">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Niramoy Pre-Screening — Patient Kiosk</title>
+  <link rel="stylesheet" href="/shared/shared.css">
+  <style>
+    .screen { display: none; flex: 1; flex-direction: column; }
+    .screen.active { display: flex; }
+    .center-col { max-width: 460px; margin: auto; text-align: center; padding: 32px; width: 100%; }
+    .welcome-title { font-size: 1.4rem; font-weight: 600; color: var(--primary-color); margin-bottom: 8px; }
+    .welcome-sub { color: var(--text-muted); font-size: .9rem; margin-bottom: 22px; }
+    .otp-row { display: flex; gap: 10px; justify-content: space-between; margin: 14px 0; }
+    .otp-input { width: 48px; height: 48px; text-align: center; font-size: 1.25rem; font-weight: 600; border: 1px solid var(--border-color); border-radius: var(--radius); outline: none; }
+
+    /* conversation */
+    .convo-layout { flex: 1; display: flex; flex-direction: column; padding: 20px 28px; gap: 14px; min-height: 0; max-width: 900px; margin: 0 auto; width: 100%; }
+    .chat-thread { flex: 1; overflow-y: auto; min-height: 0; display: flex; flex-direction: column; gap: 14px; padding: 4px 2px; }
+    .chat-turn { max-width: 84%; border-radius: 14px; padding: 12px 16px; line-height: 1.5; box-shadow: var(--shadow-sm); font-size: 1rem; }
+    .chat-turn.ai { align-self: flex-start; background: var(--bg-white); border: 1px solid var(--border-color); border-top-left-radius: 4px; }
+    .chat-turn.patient { align-self: flex-end; background: var(--primary-color); color: #fff; border-top-right-radius: 4px; }
+    .chat-meta { font-size: .66rem; font-weight: 700; text-transform: uppercase; letter-spacing: .04em; margin-bottom: 5px; }
+    .chat-turn.ai .chat-meta { color: var(--secondary-color); }
+    .chat-turn.patient .chat-meta { color: rgba(255,255,255,.8); }
+    .voice-dock { border-top: 1px solid var(--border-color); padding-top: 14px; display: flex; flex-direction: column; align-items: center; gap: 10px; }
+    .dock-transcript { width: 100%; min-height: 42px; background: #F8FAFC; border: 1px dashed var(--border-color); border-radius: var(--radius); padding: 9px 16px; font-style: italic; color: var(--text-muted); text-align: center; }
+    .dock-row { display: flex; align-items: center; gap: 18px; width: 100%; justify-content: space-between; }
+    .mic-btn { width: 68px; height: 68px; border-radius: 50%; background: var(--secondary-color); border: none; color: #fff; font-size: 1.6rem; cursor: pointer; box-shadow: var(--shadow-md); }
+    .mic-btn.listening { background: var(--danger-color); }
+    .fallback-row { display: none; gap: 10px; width: 100%; max-width: 540px; }
+
+    /* summary */
+    .summary-layout { flex: 1; padding: 24px 28px; display: flex; flex-direction: column; gap: 16px; max-width: 980px; margin: 0 auto; width: 100%; overflow-y: auto; }
+    .summary-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 16px 22px; }
+    .summary-label { font-size: .72rem; text-transform: uppercase; letter-spacing: .05em; color: var(--text-muted); margin-bottom: 4px; }
+    .summary-val { font-size: .95rem; line-height: 1.5; }
+    .summary-actions { display: flex; justify-content: flex-end; gap: 12px; align-items: center; }
+  </style>
+</head>
+<body>
+  <div class="portal-header">
+    <div><span class="portal-title">Niramoy Pre-Screening</span>
+      <span class="portal-subtitle" data-en="Patient Kiosk" data-bn="রোগী কিওস্ক">Patient Kiosk</span></div>
+    <div class="lang-toggle">
+      <button class="lang-btn" data-lang="en" onclick="setLanguage('en')">English</button>
+      <button class="lang-btn" data-lang="bn" onclick="setLanguage('bn')">বাংলা</button>
+    </div>
+  </div>
+
+  <div id="error-banner" class="error-banner" style="margin: 10px 28px 0;"></div>
+
+  <!-- 1: phone -->
+  <div class="screen active" id="screen-phone">
+    <div class="center-col">
+      <div class="welcome-title" data-en="Welcome to Pre-Screening" data-bn="প্রাক-পরীক্ষায় স্বাগতম">Welcome to Pre-Screening</div>
+      <div class="welcome-sub" data-en="Enter your mobile number to begin." data-bn="শুরু করতে আপনার মোবাইল নম্বরটি লিখুন।">Enter your mobile number to begin.</div>
+      <div class="card" style="text-align:left;">
+        <label class="summary-label" data-en="Mobile Number" data-bn="মোবাইল নম্বর">Mobile Number</label>
+        <div style="position:relative; margin-bottom:16px;">
+          <span style="position:absolute; left:14px; top:12px; font-weight:600; color:var(--text-muted);">+880</span>
+          <input type="tel" id="phone-input" class="input-field" placeholder="1712345678" style="padding-left:64px;">
+        </div>
+        <button class="btn btn-primary" style="width:100%; padding:12px;" onclick="sendOtp()"
+                data-en="Send Verification Code" data-bn="যাচাইকরণ কোড পাঠান">Send Verification Code</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- 2: OTP -->
+  <div class="screen" id="screen-otp">
+    <div class="center-col">
+      <div class="welcome-title" data-en="Verify OTP" data-bn="ওটিপি যাচাই করুন">Verify OTP</div>
+      <div class="welcome-sub" id="otp-sub"></div>
+      <div class="card" style="text-align:left;">
+        <label class="summary-label" data-en="Enter 6-Digit OTP" data-bn="৬-সংখ্যার ওটিপি লিখুন">Enter 6-Digit OTP</label>
+        <div class="otp-row" id="otp-row">
+          <input class="otp-input" maxlength="1"><input class="otp-input" maxlength="1"><input class="otp-input" maxlength="1"><input class="otp-input" maxlength="1"><input class="otp-input" maxlength="1"><input class="otp-input" maxlength="1">
+        </div>
+        <button class="btn btn-accent" style="width:100%; padding:12px;" onclick="verifyOtp()"
+                data-en="Confirm & Login" data-bn="নিশ্চিত করুন এবং প্রবেশ করুন">Confirm &amp; Login</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- 3: voice conversation -->
+  <div class="screen" id="screen-voice">
+    <div class="convo-layout">
+      <div class="chat-thread" id="chat-thread"></div>
+      <div class="voice-dock">
+        <div class="dock-transcript" id="dock-transcript"
+             data-en="Your speech will appear here as you talk..." data-bn="আপনি বলার সাথে সাথে এখানে দেখা যাবে...">Your speech will appear here as you talk...</div>
+        <div class="dock-row">
+          <button class="btn btn-secondary" onclick="repeatQuestion()" data-en="🔊 Repeat question" data-bn="🔊 প্রশ্নটি আবার শুনুন">🔊 Repeat question</button>
+          <button class="mic-btn" id="mic-btn" onclick="toggleListening()">🎤</button>
+          <button class="btn btn-accent" onclick="finishConversation()" data-en="Done — see summary" data-bn="সম্পন্ন — সারাংশ দেখুন">Done — see summary</button>
+        </div>
+        <div style="font-size:.82rem; font-weight:600; color:var(--text-muted);" id="listening-hint"
+             data-en="Tap the mic when you are ready to speak" data-bn="বলতে প্রস্তুত হলে মাইকে চাপ দিন">Tap the mic when you are ready to speak</div>
+        <div style="text-align:center;">
+          <button style="background:none;border:none;color:var(--secondary-color);text-decoration:underline;cursor:pointer;font-size:.82rem;"
+                  onclick="document.getElementById('fallback-row').style.display='flex'"
+                  data-en="Microphone issue? Type instead" data-bn="মাইকের সমস্যা? টাইপ করুন">Microphone issue? Type instead</button>
+          <div class="fallback-row" id="fallback-row" style="margin-top:8px;">
+            <input type="text" class="input-field" id="fallback-input" placeholder="Describe in Bangla or English...">
+            <button class="btn btn-primary" onclick="sendTypedFallback()" data-en="Send" data-bn="পাঠান">Send</button>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- 4: summary review -->
+  <div class="screen" id="screen-summary">
+    <div class="summary-layout">
+      <div style="text-align:center;">
+        <div class="welcome-title" data-en="Please Review Your Pre-Screening Summary" data-bn="দয়া করে আপনার প্রাক-পরীক্ষার বিবরণীটি পর্যালোচনা করুন">Please Review Your Pre-Screening Summary</div>
+        <div class="welcome-sub" data-en="Compiled from your voice answers. It will be sent to the doctor." data-bn="আপনার ভয়েস উত্তর থেকে সংকলিত। এটি ডাক্তারের কাছে পাঠানো হবে।">Compiled from your voice answers. It will be sent to the doctor.</div>
+      </div>
+      <div class="card"><div class="summary-grid" id="summary-grid"></div></div>
+      <div class="summary-actions card" style="padding:16px 20px;">
+        <span style="font-size:.85rem; color:var(--text-muted); margin-right:auto;"
+              data-en="If anything is incorrect, tap Speak Again to correct." data-bn="কোনো তথ্য ভুল হলে, আবার বলুন চাপুন।">If anything is incorrect, tap Speak Again to correct.</span>
+        <button class="btn btn-secondary" onclick="showScreen('screen-voice')" data-en="Speak Again" data-bn="আবার বলুন">Speak Again</button>
+        <button class="btn btn-accent" onclick="confirmSubmit()" data-en="Confirm & Submit" data-bn="নিশ্চিত ও জমা দিন">Confirm &amp; Submit</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- auto-logout modal -->
+  <div class="modal-overlay" id="logout-modal">
+    <div class="modal-box">
+      <div style="font-size:2rem; margin-bottom:10px;">✅</div>
+      <div class="welcome-title" data-en="Submitted — Thank You!" data-bn="জমা হয়েছে — ধন্যবাদ!">Submitted — Thank You!</div>
+      <p style="color:var(--text-muted); font-size:.9rem; margin:10px 0;">
+        <span data-en="Next patient kiosk preparation in" data-bn="পরবর্তী রোগীর জন্য কিওস্ক প্রস্তুত হচ্ছে">Next patient kiosk preparation in</span>
+        <strong id="logout-timer" style="color:var(--secondary-color);">5</strong>s...
+      </p>
+    </div>
+  </div>
+
+  <script src="/shared/shared.js"></script>
+  <script src="/shared/tts.js"></script>
+  <script src="/kiosk.js"></script>
+</body>
+</html>

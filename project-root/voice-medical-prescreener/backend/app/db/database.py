@@ -26,6 +26,7 @@ Base = declarative_base()
 _BACKEND_DIR = Path(__file__).resolve().parents[2]
 _ALEMBIC_INI = _BACKEND_DIR / "alembic.ini"
 _BASELINE_REVISION = "0001_baseline"
+_REV_0002 = "0002_add_stt_provider_and_doc_kind"
 
 
 def _alembic_config():
@@ -37,21 +38,48 @@ def _alembic_config():
     return cfg
 
 
+def _legacy_stamp_revision() -> str:
+    """Pick the stamp for a pre-Alembic DB by looking at what columns it actually has.
+
+    Old ``create_all`` DBs come in mixed states, because create_all built whatever the
+    models looked like at the time and never altered existing tables:
+      * neither stt_provider nor kind  -> true 0001 baseline;
+      * both stt_provider and kind     -> already at 0002 level;
+      * stt_provider but NOT kind      -> in-between (Session-3-era models): add the one
+        missing column in place (same DDL as 0002), then treat it as 0002.
+    Stamping 0001 blindly here crashed with ``duplicate column name: stt_provider``.
+    """
+    from sqlalchemy import text
+
+    insp = inspect(engine)
+    utt_cols = {c["name"] for c in insp.get_columns("utterances")}
+    doc_cols = {c["name"] for c in insp.get_columns("documents")} if "documents" in insp.get_table_names() else set()
+
+    if "stt_provider" not in utt_cols:
+        return _BASELINE_REVISION
+    if "kind" not in doc_cols:
+        with engine.begin() as conn:
+            conn.execute(
+                text("ALTER TABLE documents ADD COLUMN kind VARCHAR(16) NOT NULL DEFAULT 'combined'")
+            )
+    return _REV_0002
+
+
 def run_migrations() -> None:
     """Bring the schema to ``head`` in place, preserving existing data.
 
     Handles three states:
-      * fresh DB (no tables)      -> run 0001 (create tables) + 0002 (add columns);
-      * legacy DB (tables exist,  -> stamp the baseline so upgrade does NOT try to
-        but no alembic_version)       re-create them, then apply only 0002;
-      * already-migrated DB       -> upgrade is a no-op.
+      * fresh DB (no tables)      -> run every migration from 0001;
+      * legacy DB (tables exist,  -> stamp the revision matching its ACTUAL columns
+        but no alembic_version)       (see _legacy_stamp_revision), then upgrade;
+      * already-migrated DB       -> upgrade applies only what's pending / no-ops.
     """
     from alembic import command
 
     cfg = _alembic_config()
     tables = set(inspect(engine).get_table_names())
     if "alembic_version" not in tables and "utterances" in tables:
-        command.stamp(cfg, _BASELINE_REVISION)
+        command.stamp(cfg, _legacy_stamp_revision())
     command.upgrade(cfg, "head")
 
 

@@ -16,6 +16,66 @@
 
 ---
 
+## Session 8b — 2026-07-03 — ADR-0029 doc rewrite executed + FIRST live Gemini verification
+- Did: (A) Executed the deferred **ADR-0029 design-system switch in the docs**: CLAUDE.md's
+  frontend section now points at the clinical-blue system (`frontend_shared/shared.css`) as the
+  source of truth (with the TIER_LABELS rule + Noto Sans Bengali + the read-only-raw rule) and its
+  status/stack lines updated; `DESIGN-mintlify.md` got a **SUPERSEDED banner** at the top (ADR-0029)
+  with a compact clinical-blue token summary, keeping the old Mintlify analysis only as historical
+  reference. (B) Ran the **first-ever LIVE LLM call** in the project: one real Gemini correction on
+  synthetic Banglish — see test_log.md.
+- Decided: nothing new (ADR-0029/0030 already stand; this executes them).
+- Broke / problem: **Live-run gap surfaced, not a code bug:** only `GEMINI_API_KEY` is set;
+  `GROQ_API_KEY` and `OPENROUTER_API_KEY` are EMPTY. Since M6 (gaps) + M7 (follow-up) are assigned
+  to the Groq bucket with OpenRouter as the only fallback, a FULL live intake/loop cannot complete
+  until a Groq OR OpenRouter key is added. All of it passes offline (LLM faked) — purely a missing
+  key, not a code issue.
+- Deferred: The full live pipeline (blocked on a Groq/OpenRouter key) and the human mic test
+  (I cannot operate a real microphone — the voice portion is inherently the human's part).
+- Next: Add a Groq (or OpenRouter) key to `backend/.env`, then run a full live pipeline with
+  synthetic typed text; separately, the human does the real-voice kiosk run in Chrome. Record
+  TC-V2/V3/F2/R1/A1. See `current_task.md`.
+
+## Session 8 — 2026-07-03 — Mockup reconciliation + FULL-STACK BUILD: DB 0003–0009, backend M3–M12 pipeline, three portals
+- Did: The biggest build session so far. (A) **Reconciliation:** reconciled `mockups-redesign.html`
+  against architecture.md → new `agent_docs/reconciliation.md` + architecture.md §7. Human decided:
+  'medic' is a real role; OTP is a stub; the mockup's clinical-blue design system replaces Mintlify
+  (ADR-0029). (B) **Database:** Alembic revs **0003–0009 all written AND applied** to the real DB
+  (backup .bak per rev): clinics/users/patients/visits (+'medic' role, 'awaiting_doctor' status,
+  `assigned_doctor_id` — ADR-0030), case_profiles, module_events, followup_questions,
+  risk_assessments, xai_explanations, reports, doctor_reviews, feedback, audit_log. Legacy
+  utterances backfilled onto synthetic closed visits; seeds: 1 clinic, 1 medic, 2 doctors, 1 admin.
+  (C) **Backend:** visits API + phone lookup + stub OTP (`DEV_OTP`); LLM provider registry +
+  fallback + module_events logging (ADR-0026 as data); intake M3→M4→M6 writing the enforced
+  10-field `summary_fields` JSON; follow-up loop M7 (Groq, no repeats, question stored + spoken)
+  → M8 (merge; human edits never overwritten) → M9 (LOCAL completeness, threshold/max-turn exit);
+  **M10 risk with the LOCAL red-flag rule list (5 categories, Bangla/Banglish/English) that forces
+  Critical and survives total LLM outage** + M11 XAI (deterministic fallback reason); local M12
+  report (Red Flags section + no-diagnosis disclaimer); staff endpoints (submit→auto-assess,
+  dashboard queues, field-edit PATCH, assign); doctor review (accept/override→'reviewed') +
+  feedback; audit rows on every state change. (D) **Frontend:** `frontend_shared/` (clinical-blue
+  CSS, TIER_LABELS, EN/BN helper, tts.js `speak()` — Step A1 shipped), patient kiosk at
+  `/kiosk.html` (phone→OTP→voice chat with STT bn-BD + TTS→10-field summary→submit→auto-logout),
+  medic portal `/medic/`, doctor portal `/doctor/`. Old Module-1 app at `/` untouched.
+- Decided: ADR-0029 (mockup clinical-blue design system supersedes Mintlify) and ADR-0030
+  (medic role, `assigned_doctor_id`, 'awaiting_doctor', stub OTP, 10-field JSON shape, tier
+  display labels, OTP-typing clarification) — both written to decisions.md mid-session.
+  Implementation choices: M12 report assembly is LOCAL (no quota); model failure in M10 degrades
+  to 'medium', never 'low' (rule #3); each legacy utterance = its own closed visit.
+- Broke / problem: (1) Found + FIXED a pre-existing crash: this Windows machine's DB was a
+  MIXED-state legacy DB (had `stt_provider`, lacked `documents.kind`) — the old blind
+  stamp-at-0001 died with 'duplicate column'; `database.py` now picks the stamp revision from the
+  ACTUAL columns (regression-tested). (2) alembic wasn't installed in the Windows venv (S6 ran on
+  Arch) — installed from requirements.txt. (3) Batch-mode FKs need explicit names (0003 fixed).
+- Deferred: Real SMS OTP, real auth (still stubbed), PDF export, per-visit report .docx export,
+  Postgres (G7 = config), Phase 1 faster-whisper. CLAUDE.md + DESIGN doc rewrite per ADR-0029
+  (awaiting explicit go). LIVE end-to-end run with real Gemini/Groq calls — the human's manual
+  check (quota). Still from S4–S6: live mic test + ~50 samples + WER/latency.
+- Next: Human live test in Chrome (`/kiosk.html` → speak → follow-ups → submit → `/medic/` →
+  forward → `/doctor/` → review), with real keys in backend/.env; record TC-V2/V3/F2/R1/A1
+  results + Bangla-voice availability per OS in test_log.md. Then the ADR-0029 doc rewrite.
+  See `current_task.md`.
+
 ## Session 7 — 2026-06-25 — Architect planning lock: flowchart + final stack + per-module API strategy + voice model
 - Did: A planning-only session (NO code). Locked the FINAL project plan ahead of vibe-coding.
   (A) **Flowchart:** removed the standalone Emergency module from the Patient Journey diagram —

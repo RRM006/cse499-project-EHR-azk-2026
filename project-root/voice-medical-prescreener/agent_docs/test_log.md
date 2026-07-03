@@ -72,6 +72,61 @@ transcribed by hand (the "ground truth"). Record the model + machine each time.
 
 ## Test entries (newest first)
 
+## 2026-07-03 — Session 8b — FIRST live LLM call (Gemini M2 correction) + ADR-0029 doc rewrite
+- Setup: Python 3.14 on Windows; `.venv`. Real `GEMINI_API_KEY` in `backend/.env` (Groq +
+  OpenRouter keys EMPTY). One live call via
+  `python -m backend.app.services.correction.openai_compatible "<synthetic Banglish>"`
+  (model `gemini-flash-latest`). Synthetic data only (rule #4).
+- Metric(s): does a real Gemini call succeed? does it obey the correction-only prompt (no
+  translation / no diagnosis / same script)?
+- Result: **PASS — the live Gemini path works** (first live verification in 8 sessions).
+  * RAW:       `ami 3 din dhore onek jor ar mathabetha te vugchi, sathe kashi o ache`
+  * CORRECTED: `ami 3 din dhore onek jor ar mathabethate bhugchi, sathe kashi o ache`
+  * Behavior correct: fixed spelling only (`vugchi`→`bhugchi`, `mathabetha te`→`mathabethate`),
+    kept Banglish/Roman script (NO conversion to Bangla), no translation, no diagnosis, no added
+    symptoms (rules #1/#2 upheld). ~1 request spent.
+- Notes: **Full live intake/loop is BLOCKED on keys, not code** — M6/M7 are Groq-bucket and both
+  Groq + OpenRouter are empty, so `provider_chain_for_module` returns [] → LLMCallError for those
+  modules. Add a Groq OR OpenRouter key to run the full pipeline live. The real-voice kiosk run
+  (mic) remains the human's task. TC-V2/V3/F2/R1(live)/A1(live) still pending.
+
+## 2026-07-03 — Session 8 — Full-stack build: DB 0003–0009 + M3–M12 backend + 3 portals
+- Setup: Python 3.14 on **Windows**; `.venv` (had to `pip install -r requirements.txt` — alembic
+  was missing, S6 ran on Arch). Server on port 8001 via the preview tool. Unit/route tests on
+  in-memory SQLite (StaticPool) with the **LLM layer faked** (no network, no quota); migration
+  tests on throwaway SQLite files; real-DB migrations verified on a COPY then applied to the real DB
+  (backups `prescreener.db.pre-000{3,4,5,6,7}.bak`). Browser checks via preview_eval/snapshot.
+- Metric(s): test pass/fail; migration data-preservation; red-flag recall; API status; UI render.
+- Result:
+  * `pytest backend/tests/` → **104 passed** (was 19). New suites: `test_migration_0003` (4:
+    legacy backfill keeps raw byte-identical, fresh schema + seeds, CHECK accepts medic/
+    awaiting_doctor + rejects bogus, mixed-state-legacy regression), `test_routes_visits` (4),
+    `test_intake` (3), `test_followup_loop` (4), `test_risk` (**~70** — every red-flag phrase is a
+    parametrized case), `test_staff_routes` (2), `test_report_review` (2). The 19 baseline never
+    regressed.
+  * **TC-R1 (red-flag recall) — offline PASS with zero misses:** every phrase in
+    `RED_FLAG_RULES` (5 categories, Bangla/Banglish/English) forces tier `critical`; verified it
+    still forces `critical` when BOTH the M10 and M11 LLM calls fail (simulated outage), and when
+    the phrase appears only in RAW (uncorrected) text. Benign text triggers nothing. Model failure
+    WITHOUT a flag degrades to `medium`, never silently `low` (rule #3).
+  * **Migration data preservation:** real Windows DB (mixed-state legacy: had `stt_provider`,
+    lacked `documents.kind`) migrated `→ 0009`; **5 utterances preserved, raw byte-identical, 5
+    synthetic closed visits backfilled, 0 orphans**; re-run is a no-op (idempotent). Also fixed a
+    latent crash: blind stamp-at-0001 died with `duplicate column name: stt_provider`;
+    `_legacy_stamp_revision()` now stamps by actual columns (regression-tested).
+  * **Fallback logging (TC-A1, offline):** forcing the primary provider to fail makes intake fall
+    to OpenRouter and logs `module_events.status='fallback'` with the provider — verified per module.
+  * **Browser smoke (no quota spent):** `/kiosk.html` → phone `1715984632` → OTP `000000` →
+    conversation screen with the Bangla opening question rendered AND queued for TTS; 0 console
+    errors, 0 failed network requests, Bangla renders correctly (Noto Sans Bengali). `/medic/`
+    login → seeded "Medic Rahman", doctors dropdown populated, empty queue (correct — nothing
+    submitted). `/doctor/` login → "Dr. M. Rahman", assigned queue renders.
+- Notes: NOT yet run — the LIVE end-to-end with real Gemini/Groq keys (intake/followup/assess/xai
+  actually calling the models). That's the human's next step (spends quota; rule #4 synthetic data
+  only). Still open: TC-V2 (bn-BD TTS voice availability per OS), TC-V3 (voice-only reply loop),
+  TC-F2 on real speech, real-data accuracy for M3/M10, WER/latency, and the S4–S6 mic test + ~50
+  samples.
+
 ## 2026-06-25 — Session 7 — Architect planning lock (no code run)
 - Setup: Planning/documentation session only. No server started, no `pytest` run, no
   models executed. Working code is unchanged from Session 6 (still 19 tests on disk).

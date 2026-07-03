@@ -17,7 +17,10 @@ regional dialect — *before* they see the doctor. The system:
 
 This is a **15-module** system (Module 5 is retired in the current design — see below).
 We build it one module at a time.
-**Right now we are on Module 1 (live speech-to-text) + the text-correction step.**
+**Status (Session 8, 2026-07-03): the whole reconciled system is BUILT** — DB (Alembic head
+`0009`, all 15 tables), the M1–M12 backend pipeline + M13 store + M14/M15 doctor side, and all
+**three portals** (patient kiosk, medic, doctor). 104 tests pass. What's left is the **human
+live run** (real API keys + a real mic) and polish. See `agent_docs/current_task.md`.
 
 ## NON-NEGOTIABLE RULES (never break these)
 
@@ -63,7 +66,7 @@ We build it one module at a time.
 - TTS for M7 audio: **browser Web Speech API** (`SpeechSynthesis`) — no server, no key
 - Text correction / LLM tasks: **swappable OpenAI-compatible client** (one `Corrector`/provider class; `base_url`+model+key from `.env`)
 - Document export: **python-docx** (DOCX now; PDF later behind the format seam)
-- Frontend: plain **HTML/JS** (Mintlify design system); React only "later", not now
+- Frontend: plain **HTML/JS** (clinical-blue design system — ADR-0029, see below); React only "later", not now
 - Deployment: local = one `uvicorn` command; optional remote = single Docker container / free PaaS
 
 ## AI API STRATEGY (free-tier longevity — details in decisions.md ADR-0026)
@@ -96,16 +99,22 @@ Spread load across **three independent daily buckets** so no single quota is the
 - Open:          http://localhost:8001 (Chrome)
 - Run tests:     `pytest backend/tests/`
 
-## FRONTEND / TRANSCRIPT UI (follow this)
+## FRONTEND (follow this)
 
-- Overall visual design follows **`DESIGN-mintlify.md`** (Inter + Geist Mono,
-  black pill buttons, mint-green accent reserved for CTA/active states, 12px cards,
-  hairline borders). Transcript text uses Inter + **Noto Sans Bengali** (NOT mono — mono breaks Bangla).
-- The transcript panels — **Raw**, **Corrected**, **Manual fallback** — share ONE
-  behavior: fixed-height, vertically scrollable; auto-scroll to the newest line, but
-  if the user scrolls up, pause auto-scroll and resume only at the bottom.
-- Raw + Corrected are read-only (raw is never modified — rule #1); Manual is editable.
-- Must stay responsive for very long transcripts (1000s of words).
+- **Design system = the clinical-blue system in `frontend_shared/shared.css` (ADR-0029).**
+  It SUPERSEDES the old Mintlify rule: clinical blue `#0F4C81` primary, bright blue `#2A75D3`,
+  green accent `#10B981`, 8px radius, Inter for UI. `DESIGN-mintlify.md` is kept only as
+  historical reference (marked superseded at its top). The three portals share
+  `frontend_shared/` (shared.css, shared.js with the ONE `TIER_LABELS` map, staff.js, tts.js).
+- **Bangla text always uses Noto Sans Bengali (NOT mono — mono breaks Bangla shaping).**
+- **Bilingual EN/BN** via `data-en` / `data-bn` attributes + the `setLanguage()` helper.
+- **Raw is never shown as editable and never modified (rule #1).** The medic/doctor 10-field
+  cards edit only the DERIVED `summary_fields` (source becomes `human`); the verbatim panel is
+  read-only. Risk tier codes on the wire are always `low|medium|high|critical`; display labels
+  (incl. "Moderate", Bangla) live ONLY in `TIER_LABELS`.
+- The legacy Module-1 transcript app (`frontend/index.html` + `app.js`) is unchanged and still
+  served at `/`; its Raw/Corrected/Manual panels keep the fixed-height + stick-to-bottom scroll
+  behavior. Kiosk = `/kiosk.html`; medic = `/medic/`; doctor = `/doctor/`.
 
 ## PROJECT MEMORY FILES — our shared brain (in `agent_docs/`)
 

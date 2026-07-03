@@ -1,0 +1,115 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Niramoy — Medic Portal</title>
+  <link rel="stylesheet" href="/shared/shared.css">
+  <style>
+    .login-wrap { display: flex; flex: 1; align-items: center; justify-content: center; padding: 40px; }
+    #portal-main { display: none; flex: 1; flex-direction: column; min-height: 0; }
+    .top-nav { background: var(--bg-white); border-bottom: 1px solid var(--border-color); padding: 10px 24px; display: flex; justify-content: space-between; align-items: center; gap: 12px; }
+  </style>
+</head>
+<body>
+  <div class="portal-header">
+    <div><span class="portal-title">Niramoy Pre-Screening</span>
+      <span class="portal-subtitle">Medic / Pre-Screening Portal</span></div>
+    <div style="font-size:.8rem; font-weight:600; color:var(--text-muted);" id="user-tag"></div>
+  </div>
+  <div id="error-banner" class="error-banner" style="margin:10px 24px 0;"></div>
+
+  <!-- stub login (auth is stubbed per architecture.md; picks the seeded medic) -->
+  <div class="login-wrap" id="login-screen">
+    <div class="card" style="max-width:400px; width:100%;">
+      <h2 style="color:var(--primary-color); text-align:center; margin-bottom:6px;">Clinic Medic Portal</h2>
+      <p style="font-size:.75rem; color:var(--text-muted); text-align:center; margin-bottom:22px;">Registered Staff Access (demo login)</p>
+      <label class="summary-label" style="font-size:.72rem; text-transform:uppercase; color:var(--text-muted);">Medic Staff ID</label>
+      <input class="input-field" id="login-id" value="medic_rahman_02" style="margin:6px 0 14px;">
+      <label style="font-size:.72rem; text-transform:uppercase; color:var(--text-muted);">Password</label>
+      <input class="input-field" type="password" value="demo-password" style="margin:6px 0 18px;">
+      <button class="btn btn-primary" style="width:100%; padding:12px;" onclick="login()">Login to Dashboard</button>
+    </div>
+  </div>
+
+  <div id="portal-main">
+    <div class="top-nav">
+      <div style="font-weight:600; font-size:.9rem;">Incoming Pre-Screened Cases</div>
+      <div style="display:flex; gap:8px;">
+        <input class="input-field" id="phone-search" placeholder="Patient Mobile Lookup (+880...)" style="width:280px; padding:8px 12px; font-size:.85rem;"
+               onkeydown="if(event.key==='Enter') searchPhone()">
+        <button class="btn btn-secondary" onclick="loadQueue()" style="padding:8px 14px; font-size:.85rem;">↻ Queue</button>
+      </div>
+    </div>
+    <div class="staff-grid">
+      <div class="queue-sidebar">
+        <div class="queue-header">Queue (<span id="queue-count">0</span> active)</div>
+        <div id="queue-list"></div>
+      </div>
+      <div class="detail-workspace">
+        <div id="no-case" style="margin:auto; text-align:center; color:var(--text-muted);">
+          <div style="font-size:3rem;">🩺</div>
+          <h3>No Case Selected</h3>
+          <p style="font-size:.85rem;">Select a patient from the queue or search by phone.</p>
+        </div>
+        <div id="case-detail" style="display:none; flex-direction:column; gap:18px;">
+          <div class="verbatim-panel" id="verbatim-panel">
+            <div class="verbatim-header" onclick="toggleVerbatim()">
+              <span>❝ Patient's Own Words<span class="verbatim-badge">Raw — unedited</span></span><span>▾</span>
+            </div>
+            <div class="verbatim-body" id="verbatim-body"></div>
+          </div>
+          <div class="card" style="display:flex; justify-content:space-between; align-items:center; gap:14px; flex-wrap:wrap;">
+            <div>
+              <h3 style="font-size:1.05rem; color:var(--primary-color);">Patient Summary Case Verification</h3>
+              <p style="font-size:.8rem; color:var(--text-muted);">Review the AI-extracted fields below. Edit any field that requires correction.</p>
+            </div>
+            <div style="display:flex; align-items:center; gap:10px;">
+              <label style="font-weight:600; font-size:.9rem; color:var(--primary-color);">Assign Doctor:</label>
+              <select class="input-field" id="doctor-select" style="width:auto; min-width:220px; padding:8px 12px;"></select>
+              <button class="btn btn-primary" onclick="submitForward()">Submit &amp; Forward</button>
+            </div>
+          </div>
+          <div id="field-cards" style="display:flex; flex-direction:column; gap:12px;"></div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <script src="/shared/shared.js"></script>
+  <script src="/shared/staff.js"></script>
+  <script>
+    const PORTAL = { role: 'medic', userId: null, canEdit: true, onCaseLoaded: null };
+
+    async function login() {
+      try {
+        const medics = await api('GET', '/api/users?role=medic');
+        if (!medics.length) return showError('No medic account exists — check the DB seed.');
+        PORTAL.userId = medics[0].id;
+        document.getElementById('user-tag').textContent = `👤 Staff: ${medics[0].name}`;
+        document.getElementById('login-screen').style.display = 'none';
+        document.getElementById('portal-main').style.display = 'flex';
+        const doctors = await api('GET', '/api/users?role=doctor');
+        const sel = document.getElementById('doctor-select');
+        sel.innerHTML = '<option value="">-- Choose Doctor --</option>' +
+          doctors.map((d) => `<option value="${d.id}">${d.name}</option>`).join('');
+        loadQueue();
+        setInterval(loadQueue, 15000); // keep the queue fresh
+      } catch (e) { showError(e.message); }
+    }
+
+    async function submitForward() {
+      if (!currentCase) return showError('Select a case first.');
+      const doctorId = document.getElementById('doctor-select').value;
+      if (!doctorId) return showError('Choose a doctor to assign.');
+      try {
+        await api('POST', `/api/visits/${currentCase.uuid}/assign`, { doctor_id: Number(doctorId) });
+        currentCase = null;
+        document.getElementById('case-detail').style.display = 'none';
+        document.getElementById('no-case').style.display = 'block';
+        loadQueue();
+      } catch (e) { showError(e.message); }
+    }
+  </script>
+</body>
+</html>

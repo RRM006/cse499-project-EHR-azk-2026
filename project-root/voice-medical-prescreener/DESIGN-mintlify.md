@@ -1,3 +1,23 @@
+<!--
+════════════════════════════════════════════════════════════════════════════
+⚠ SUPERSEDED (2026-07-03, ADR-0029). This Mintlify analysis is NO LONGER the
+project design system. The three portals (patient kiosk, medic, doctor) now use
+the CLINICAL-BLUE system, whose source of truth is `frontend_shared/shared.css`.
+This file is kept only as historical reference for the old Module-1 transcript app.
+
+Clinical-blue token summary (authoritative values live in frontend_shared/shared.css):
+  --primary-color   #0F4C81   (clinical blue — primary buttons, headings)
+  --secondary-color #2A75D3   (bright blue — mic, active queue item, links)
+  --accent-color    #10B981   (green — confirm / accept CTAs)
+  --danger-color    #EF4444   (red — Critical risk, red flags)
+  --warning-color   #F59E0B   (amber — Moderate/High)
+  radius 8px (--radius); cards 12px; hairline borders #E2E8F0
+  Fonts: Inter (UI) + Noto Sans Bengali (Bangla — never mono)
+  Risk badge classes: .risk-{low|medium|high|critical}; labels via TIER_LABELS (shared.js)
+Do NOT restyle the portals from the Mintlify tokens below — use shared.css.
+════════════════════════════════════════════════════════════════════════════
+-->
+
 ---
 version: alpha
 name: Mintlify-design-analysis

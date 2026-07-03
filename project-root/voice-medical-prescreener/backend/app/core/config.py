@@ -41,6 +41,23 @@ class Settings(BaseSettings):
     groq_api_key: str = ""
     openrouter_api_key: str = ""
 
+    # --- per-bucket model names (ADR-0026: three independent free quota buckets) ---
+    gemini_flash_model: str = "gemini-flash-latest"
+    gemini_flash_lite_model: str = "gemini-flash-lite-latest"
+    groq_model: str = "llama-3.3-70b-versatile"
+    openrouter_model: str = "meta-llama/llama-3.3-70b-instruct:free"
+
+    # --- follow-up loop (M7–M9) ---
+    # Loop guardrails from the capstone brief: stop on completeness OR max turns
+    # (avoids patient fatigue). Both tunable without code changes.
+    followup_max_questions: int = 5
+    completeness_threshold: float = 0.7
+
+    # --- patient identification (kiosk phone + OTP; ADR-0030) ---
+    # The OTP flow is a STUB for the capstone demo: no SMS is sent; the kiosk accepts
+    # exactly this code. Swap in a real gateway later behind the same verify endpoint.
+    dev_otp: str = "000000"
+
     # --- persistence ---
     # Leave empty to use the default local SQLite file. Set a full SQLAlchemy URL
     # (e.g. postgresql+psycopg://...) later to move to Postgres without code changes.

@@ -6,18 +6,23 @@
 
 **Status keys:** ⬜ Not started · 🟨 In progress · 🟦 Blocked · ✅ Done · ⛔ Retired
 
-**Last updated:** 2026-06-25 (Session 7 — architect planning lock)
-**Current phase:** Phase 0 (quick demo) — browser-only STT; about to start **Phase A** (add TTS).
-**Module in focus:** Module 1 (Speech-to-Text, working) + Module 7 groundwork (browser TTS).
-**Progress:** Session 7 was planning-only (no code). The plan is now LOCKED: the standalone
-**Emergency module (old M5) is RETIRED** and its safety job moves into **Module 10 as a
-rule-based red-flag check** (Critical-tier escalation + a Red Flags section in the M12 report);
-constitution rule #3 was revised to "surface red flags; never reassure falsely". The stack is
-CONFIRMED with **browser TTS added** for M7; each LLM module now has a free-tier API + fallback
-(ADR-0026); patient interaction is **voice-only** and follow-ups display **text + audio together**
-(ADR-0027/0028). The running code is unchanged from Session 6: single STT path (browser Web
-Speech API), Mintlify UI, two separate raw/corrected `.docx`, Alembic-managed schema, **19 tests
-pass**. Module 1 stays 🟨 until the human live mic test + ~50 samples + latency/WER are recorded.
+**Last updated:** 2026-07-03 (Session 8 — full-stack build: DB 0003–0009, backend M3–M12, three portals)
+**Current phase:** Full-stack build — **entire pipeline + all three portals BUILT**; now live-test + polish.
+**Module in focus:** end-to-end system; next is the human live run + ADR-0029 doc rewrite.
+**Progress:** Session 8 built the reconciled system end to end (see `changelog.md` S8 +
+`reconciliation.md`). **DB:** all 15 architecture.md tables applied (Alembic head `0009_audit_log`).
+**Backend:** kiosk phone + stub OTP → visit; intake (M3/M4/M6); follow-up loop (M7/M8/M9);
+**M10 risk with a LOCAL red-flag rule that forces Critical even if every LLM is down** + M11 XAI;
+M12 local report (Red Flags + no-diagnosis disclaimer); staff submit→auto-assess→queue→assign→
+review→feedback; audit_log on every state change. **Frontend:** patient kiosk (`/kiosk.html`),
+medic (`/medic/`), doctor (`/doctor/`) — clinical-blue design (ADR-0029), bilingual, TTS+STT.
+**104 tests pass.** Everything below moves off ⬜; most modules are ✅-on-happy-path but stay
+🟨 until the human live run records real numbers (TC-V2/V3/F2/R1/A1) with real API keys. Module 1
+also still awaits the live mic test + ~50 samples + WER/latency.
+**Session 8b:** the ADR-0029 design-system switch is now reflected in the docs (CLAUDE.md +
+DESIGN-mintlify SUPERSEDED). **First live Gemini call verified** (M2 correction, correction-only).
+**Live-run key gap:** only Gemini is keyed — Groq + OpenRouter empty, so M6/M7 can't run live until
+a key is added (all still pass offline). No module status changed from Session 8.
 
 ---
 
@@ -26,20 +31,20 @@ pass**. Module 1 stays 🟨 until the human live mic test + ~50 samples + latenc
 | # | Module | Status | "Done" means (testable) |
 |---|--------|:------:|--------------------------|
 | 1 | Speech-to-Text | 🟨 | Live mic audio is transcribed and the **raw** Bangla/Banglish text appears on screen within ~3s; raw text is stored unchanged; works on both Windows and Linux; manual text-input fallback exists. |
-| 2 | Text Processing & Normalization | ⬜ | Given raw text, a separate cleaned/normalized field is produced (spelling, fillers removed, sentence boundaries); raw is never modified; measured on a small test set. |
-| 3 | Information Extraction | ⬜ | From normalized text, symptoms / body part / duration / severity / meds / history are extracted as structured fields; precision & recall recorded in test_log. |
-| 4 | Initial Clinical Summary | ⬜ | A 2–4 sentence chief-complaint summary is generated from extracted fields and shown to the doctor. |
+| 2 | Text Processing & Normalization | 🟨 | Given raw text, a separate cleaned/normalized field is produced (spelling, fillers removed, sentence boundaries); raw is never modified; measured on a small test set. **Built** (existing `/api/correct` corrector, reused as M2); live accuracy on a test set still pending. |
+| 3 | Information Extraction | 🟨 | From normalized text, symptoms / body part / duration / severity / meds / history are extracted as structured fields; precision & recall recorded in test_log. **Built** (`services/intake.py`, M3 → 10-field `summary_fields` JSON); precision/recall on real data pending. |
+| 4 | Initial Clinical Summary | 🟨 | A 2–4 sentence chief-complaint summary is generated from extracted fields and shown to the doctor. **Built** (`services/intake.py`, M4). |
 | 5 | ~~Emergency Detection~~ | ⛔ | **RETIRED (Session 7, ADR-0024).** The standalone module + its flowchart diamond/alert are removed. Its job is now a **rule-based red-flag check inside Module 10** (see M10). Number 5 is left as a permanent gap so M6–M15 keep their IDs. |
-| 6 | Missing Information Analysis | ⬜ | System outputs a checklist of present vs. missing data points for the case. Now fed **directly by M4** (M4→M6, no emergency branch). |
-| 7 | Follow-up Question Generation | ⬜ | System generates prioritized follow-up questions (Bangla/English) for the gaps, no repeats of answered items; each question is **shown as text AND spoken via TTS**, and the patient replies **by voice only** (ADR-0027/0028). |
-| 8 | Response Processing & Profile Update | ⬜ | Patient answers are re-processed and merged into the profile with conflict handling. |
-| 9 | Case Completion Check | ⬜ | A completeness score is computed; loops back to Module 7 until threshold or max turns reached. |
-| 10 | Risk Assessment Engine | ⬜ | Each case is classified Low/Medium/High/Critical from rules + model; **a rule-based red-flag check forces Critical for clearly life-threatening symptoms (chest pain, stroke signs, severe breathing difficulty, loss of consciousness) and surfaces them prominently**; accuracy + red-flag recall recorded on a labeled test set. |
-| 11 | Explainable AI (XAI) | ⬜ | Every risk output has a plain-language reason listing the contributing factors. |
-| 12 | Structured Clinical Report | ⬜ | A full report (all sections) is generated and exportable as PDF + dashboard view; contains **no diagnosis**; includes a **Red Flags** section sourced from M10. |
-| 13 | EHR Database | ⬜ | Transcripts, profiles, reports, and audit logs are stored and retrievable by patient ID/date; data encrypted. |
-| 14 | Doctor Dashboard | ⬜ | Web UI shows report, risk, flags, XAI; doctor can override/annotate; high/critical cases alerted. |
-| 15 | Feedback & Continuous Learning | ⬜ | Doctor feedback is collected and usable to retrain/fine-tune; regression check before deploying updates. |
+| 6 | Missing Information Analysis | 🟨 | System outputs a checklist of present vs. missing data points for the case. Now fed **directly by M4** (M4→M6, no emergency branch). **Built** (`services/intake.py`, M6 → `case_profiles.gaps`). |
+| 7 | Follow-up Question Generation | 🟨 | System generates prioritized follow-up questions (Bangla/English) for the gaps, no repeats of answered items; each question is **shown as text AND spoken via TTS**, and the patient replies **by voice only** (ADR-0027/0028). **Built** (`services/followup.py` + kiosk STT/TTS); live voice loop pending (TC-V3/F2). |
+| 8 | Response Processing & Profile Update | 🟨 | Patient answers are re-processed and merged into the profile with conflict handling. **Built** (`services/profile_update.py`, M8; human-edited fields are never overwritten). |
+| 9 | Case Completion Check | 🟨 | A completeness score is computed; loops back to Module 7 until threshold or max turns reached. **Built** (`services/completion.py`, LOCAL; threshold + max-turn exit, both env-tunable). |
+| 10 | Risk Assessment Engine | 🟨 | Each case is classified Low/Medium/High/Critical from rules + model; **a rule-based red-flag check forces Critical for clearly life-threatening symptoms (chest pain, stroke signs, severe breathing difficulty, loss of consciousness) and surfaces them prominently**; accuracy + red-flag recall recorded on a labeled test set. **Built** (`services/risk.py` + `red_flags.py`; rule survives total LLM outage; red-flag recall enforced per-phrase in tests). Accuracy on labeled real data pending. |
+| 11 | Explainable AI (XAI) | 🟨 | Every risk output has a plain-language reason listing the contributing factors. **Built** (`services/risk.py`, M11; deterministic fallback so no risk row is ever reason-less). |
+| 12 | Structured Clinical Report | 🟨 | A full report (all sections) is generated and exportable as PDF + dashboard view; contains **no diagnosis**; includes a **Red Flags** section sourced from M10. **Built** (`services/report.py`, LOCAL assembly + disclaimer; shown in doctor portal). PDF/`.docx` per-visit export still pending. |
+| 13 | EHR Database | 🟨 | Transcripts, profiles, reports, and audit logs are stored and retrievable by patient ID/date; data encrypted. **Built** (all 15 tables, Alembic head `0009`; retrieval by phone + status; `audit_log` on every state change). Encryption-at-rest still pending. |
+| 14 | Doctor Dashboard | 🟨 | Web UI shows report, risk, flags, XAI; doctor can override/annotate; high/critical cases alerted. **Built** (`frontend_doctor/`: queue, risk/red-flags/XAI panel, field edit, Override/Accept). |
+| 15 | Feedback & Continuous Learning | 🟨 | Doctor feedback is collected and usable to retrain/fine-tune; regression check before deploying updates. **Built** (feedback stored via `POST /api/visits/{uuid}/feedback`); retrain/regression pipeline still future. |
 
 ---
 
