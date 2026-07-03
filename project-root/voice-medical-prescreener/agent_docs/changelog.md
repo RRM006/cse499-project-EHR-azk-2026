@@ -16,6 +16,28 @@
 
 ---
 
+## Session 8c — 2026-07-03 — Live-run Part 1 PASSED: full pipeline live with real keys, all three buckets verified
+- Did: (A) Added the human-provided **GROQ_API_KEY + OPENROUTER_API_KEY** to `backend/.env`
+  (Gemini untouched) — the Session-8b key gap is CLOSED. (B) Ran **live-run Part 1** end-to-end
+  with SYNTHETIC typed Banglish (no mic): phone lookup → stub OTP → visit → 2 utterances →
+  `/intake` → follow-up loop (2 real Bangla questions from Groq, loop exited at completeness
+  0.7) → `/assess` (tier=medium, no red flags — correct for headache+mild fever) → `/report`.
+  (C) Verified `module_events`: **13 rows, all status=ok, ZERO fallbacks** — M3/M8=
+  gemini_flash_lite, M4/M10/M11=gemini_flash, M6/M7=groq, M12=local — exactly the ADR-0026
+  bucket map, live. Latencies 484–8577 ms. (D) `pytest backend/tests/` still **104 passing**.
+  Numbers in test_log.md.
+- Decided: nothing new (this executes the existing plan; no ADR).
+- Broke / problem: Only a cosmetic Windows console issue: printing Bangla from a driver script
+  needs `PYTHONIOENCODING=utf-8` (cp1252 UnicodeEncodeError) — not a code bug, backend unaffected.
+  Note: the keys were pasted in chat; `.env` is gitignored so the repo is safe, but rotate the
+  keys before any public demo.
+- Deferred: **Part 2 — the human real-mic kiosk run** (TC-V1/V2/V3/F2/R1 + a live TC-A1
+  pull-a-key test) — inherently the human's job. Then `.docx` per-visit report export, optional
+  PDF, Phase-1 faster-whisper. Still: ~50 samples + WER, real SMS OTP/auth, encryption at rest.
+- Next: Human does Part 2 in Chrome (`/kiosk.html` → speak → follow-ups → submit → `/medic/` →
+  forward → `/doctor/` → review) and records TC-V2/V3/F2/R1/A1 in test_log.md. See
+  `current_task.md`.
+
 ## Session 8b — 2026-07-03 — ADR-0029 doc rewrite executed + FIRST live Gemini verification
 - Did: (A) Executed the deferred **ADR-0029 design-system switch in the docs**: CLAUDE.md's
   frontend section now points at the clinical-blue system (`frontend_shared/shared.css`) as the

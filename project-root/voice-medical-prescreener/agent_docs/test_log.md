@@ -72,6 +72,29 @@ transcribed by hand (the "ground truth"). Record the model + machine each time.
 
 ## Test entries (newest first)
 
+## 2026-07-03 — Session 8c — Live-run Part 1: FULL pipeline live (M3→M12), all three API buckets
+- Setup: Python 3.14 on Windows; server via uvicorn port 8001. **All three keys real** in
+  `backend/.env` (Gemini + Groq + OpenRouter — Groq/OpenRouter added this session). Driven by a
+  scratch script over the REST API with SYNTHETIC typed Banglish (no mic; rule #4):
+  lookup(01712345678) → OTP 000000 → visit → 2 utterances ("amar 3 din dhore matha betha ar
+  halka jor ache", "raate ghum hocche na, matha ta dan dike beshi betha kore") → /intake →
+  followup next/answer ×2 → /assess → /report.
+- Metric(s): end-to-end success; per-module provider + latency + fallback from `module_events`;
+  loop exit; risk tier sanity; test-suite regression.
+- Result: **PASS end to end.** `module_events` = 13 rows, **13/13 status=ok, 0 fallbacks**:
+  M3=gemini_flash_lite (1658/1899 ms), M4=gemini_flash (8577/3714 ms), M6=groq (859/850 ms),
+  M7=groq (671/484 ms), M8=gemini_flash_lite (1426/2516 ms), M10=gemini_flash (4093 ms),
+  M11=gemini_flash (3437 ms), M12=local. Providers match the ADR-0026 bucket map exactly.
+  Follow-up loop: 2 real Bangla questions ("আপনার জ্বর কত দিন ধরে আছে?", "আপনার শরীরের তাপমাত্রা
+  কত ছিল?"), no repeats, exited complete=True at completeness 0.7. Risk: tier=**medium**,
+  red_flags=[] (correct: 3-day headache + mild fever is not a red-flag case), M11 gave a
+  plain-language reason. Report generated. `pytest backend/tests/`: **104 passed** (3.88 s).
+- Notes: This effectively covers TC-F1 (M4→M6 direct, live) and the no-repeat/exit half of
+  TC-F2 in a typed run; TC-V2/V3 (voice), TC-R1 (red-flag → Critical, live) and TC-A1
+  (forced-fallback) still need the human Part-2 run. Windows console needs
+  `PYTHONIOENCODING=utf-8` to print Bangla from scripts (cp1252 crash — cosmetic only).
+  Keys were pasted in chat → rotate before any public demo.
+
 ## 2026-07-03 — Session 8b — FIRST live LLM call (Gemini M2 correction) + ADR-0029 doc rewrite
 - Setup: Python 3.14 on Windows; `.venv`. Real `GEMINI_API_KEY` in `backend/.env` (Groq +
   OpenRouter keys EMPTY). One live call via

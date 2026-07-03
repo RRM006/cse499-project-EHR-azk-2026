@@ -6,9 +6,9 @@
 
 **Status keys:** ⬜ Not started · 🟨 In progress · 🟦 Blocked · ✅ Done · ⛔ Retired
 
-**Last updated:** 2026-07-03 (Session 8 — full-stack build: DB 0003–0009, backend M3–M12, three portals)
-**Current phase:** Full-stack build — **entire pipeline + all three portals BUILT**; now live-test + polish.
-**Module in focus:** end-to-end system; next is the human live run + ADR-0029 doc rewrite.
+**Last updated:** 2026-07-03 (Session 8c — live-run Part 1 PASSED with real keys)
+**Current phase:** Full-stack build — pipeline BUILT **and verified LIVE (synthetic text)**; next gate = the human real-mic run (Part 2).
+**Module in focus:** end-to-end system; next is the human voice run (TC-V2/V3/F2/R1/A1).
 **Progress:** Session 8 built the reconciled system end to end (see `changelog.md` S8 +
 `reconciliation.md`). **DB:** all 15 architecture.md tables applied (Alembic head `0009_audit_log`).
 **Backend:** kiosk phone + stub OTP → visit; intake (M3/M4/M6); follow-up loop (M7/M8/M9);
@@ -23,6 +23,12 @@ also still awaits the live mic test + ~50 samples + WER/latency.
 DESIGN-mintlify SUPERSEDED). **First live Gemini call verified** (M2 correction, correction-only).
 **Live-run key gap:** only Gemini is keyed — Groq + OpenRouter empty, so M6/M7 can't run live until
 a key is added (all still pass offline). No module status changed from Session 8.
+**Session 8c:** key gap CLOSED (all three keys in `backend/.env`). **Live-run Part 1 PASSED** —
+the full M3→M12 pipeline ran live with synthetic typed text; `module_events` shows every module
+on its ADR-0026 bucket (M3/M8 flash-lite, M4/M10/M11 flash, M6/M7 groq, M12 local), 13/13 ok,
+zero fallbacks, latencies 0.5–8.6 s. 104 tests still pass. Modules stay 🟨 (not ✅) because the
+statuses gate on the HUMAN real-voice run (TC-V2/V3/F2/R1/A1) — that is now the only thing
+between most modules and ✅-on-live-path. M1 also still awaits the mic test + ~50 samples + WER.
 
 ---
 
