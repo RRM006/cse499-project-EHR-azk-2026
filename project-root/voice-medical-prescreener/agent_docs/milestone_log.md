@@ -6,13 +6,14 @@
 
 **Status keys:** ⬜ Not started · 🟨 In progress · 🟦 Blocked · ✅ Done · ⛔ Retired
 
-**Last updated:** 2026-07-05 (Session 9 — Part-2 human test done → fix/feature build started)
+**Last updated:** 2026-07-06 (Session 10 — fix/feature build, steps 6–7 done)
 **Current phase:** Fix/feature build from the human's Part-2 live test — 20-step approved plan
-(spec: `context_fixed_problem.md`), one step per "go". Steps 1–5 DONE (legacy isolation
-ADR-0031; Alembic 0010 applied ADR-0032; visit-grain docx seam — transcript + summary_report
-export routes live; shared.js `fieldValue()` + C2 `TIER_BANDS`; M3/M8 bilingual values
-ADR-0033 — `value_en`+`value_bn` in one extraction call, full back-compat). **121 tests pass.**
-**Module in focus:** cross-cutting (portals + kiosk); next = step 6 (kiosk OTP auto-advance).
+(spec: `context_fixed_problem.md`), one step per "go". Steps 1–7 DONE (legacy isolation
+ADR-0031; Alembic 0010 applied ADR-0032; visit-grain docx seam; shared.js `fieldValue()` +
+C2 `TIER_BANDS`; M3/M8 bilingual values ADR-0033; kiosk OTP auto-advance KIOSK-1;
+per-message 🔊 + no-Bangla-voice hint KIOSK-2/3 — Repeat-button root cause CONFIRMED:
+no bn TTS voice on the Windows box, TC-V2 in test_log). **121 tests pass.**
+**Module in focus:** kiosk (M7 voice UX); next = step 8 (KIOSK-4 raw transcript download).
 **Progress:** Session 8 built the reconciled system end to end (see `changelog.md` S8 +
 `reconciliation.md`). **DB:** all 15 architecture.md tables applied (Alembic head `0009_audit_log`).
 **Backend:** kiosk phone + stub OTP → visit; intake (M3/M4/M6); follow-up loop (M7/M8/M9);
@@ -56,7 +57,7 @@ steps land.
 | 4 | Initial Clinical Summary | 🟨 | A 2–4 sentence chief-complaint summary is generated from extracted fields and shown to the doctor. **Built** (`services/intake.py`, M4). |
 | 5 | ~~Emergency Detection~~ | ⛔ | **RETIRED (Session 7, ADR-0024).** The standalone module + its flowchart diamond/alert are removed. Its job is now a **rule-based red-flag check inside Module 10** (see M10). Number 5 is left as a permanent gap so M6–M15 keep their IDs. |
 | 6 | Missing Information Analysis | 🟨 | System outputs a checklist of present vs. missing data points for the case. Now fed **directly by M4** (M4→M6, no emergency branch). **Built** (`services/intake.py`, M6 → `case_profiles.gaps`). |
-| 7 | Follow-up Question Generation | 🟨 | System generates prioritized follow-up questions (Bangla/English) for the gaps, no repeats of answered items; each question is **shown as text AND spoken via TTS**, and the patient replies **by voice only** (ADR-0027/0028). **Built** (`services/followup.py` + kiosk STT/TTS); live voice loop pending (TC-V3/F2). |
+| 7 | Follow-up Question Generation | 🟨 | System generates prioritized follow-up questions (Bangla/English) for the gaps, no repeats of answered items; each question is **shown as text AND spoken via TTS**, and the patient replies **by voice only** (ADR-0027/0028). **Built** (`services/followup.py` + kiosk STT/TTS; S10: per-message 🔊 + no-voice hint). TC-V2 partial: Windows dev box has NO bn TTS voice (text fallback + hint verified; audio needs a voice installed). Live voice loop pending (TC-V3/F2). |
 | 8 | Response Processing & Profile Update | 🟨 | Patient answers are re-processed and merged into the profile with conflict handling. **Built** (`services/profile_update.py`, M8; human-edited fields are never overwritten). |
 | 9 | Case Completion Check | 🟨 | A completeness score is computed; loops back to Module 7 until threshold or max turns reached. **Built** (`services/completion.py`, LOCAL; threshold + max-turn exit, both env-tunable). |
 | 10 | Risk Assessment Engine | 🟨 | Each case is classified Low/Medium/High/Critical from rules + model; **a rule-based red-flag check forces Critical for clearly life-threatening symptoms (chest pain, stroke signs, severe breathing difficulty, loss of consciousness) and surfaces them prominently**; accuracy + red-flag recall recorded on a labeled test set. **Built** (`services/risk.py` + `red_flags.py`; rule survives total LLM outage; red-flag recall enforced per-phrase in tests). Accuracy on labeled real data pending. |

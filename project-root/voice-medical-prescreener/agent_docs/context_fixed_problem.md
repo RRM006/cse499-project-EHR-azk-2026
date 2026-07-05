@@ -49,27 +49,29 @@ understand and **cannot affect the new full-stack version**.
 
 ## 1. Patient Kiosk — `http://localhost:8001/kiosk.html`
 
-### KIOSK-1 · OTP verification · ⬜
-When the patient enters a phone number and the OTP page opens, typing a digit does **not**
-auto-move the cursor to the next input box. Users must switch boxes manually, which makes codes
-like **000000** hard to enter.
-- **Expected:** typing a digit auto-advances focus to the next box; Backspace moves back a box;
-  pasting a full 6-digit code fills all boxes. (DEV_OTP stays `000000`.)
+### KIOSK-1 · OTP verification · ✅ (Session 10, step 6)
+Typing a digit auto-advances focus (repeated digits like **000000** flow smoothly);
+non-digits are stripped; Backspace on an empty box clears + focuses the previous box;
+pasting fills all boxes from box 1 (junk stripped, short pastes focus the next empty box).
+`initOtpInputs()` in `kiosk.js`; boxes carry `inputmode="numeric"` +
+`autocomplete="one-time-code"`. Browser-verified (scripted events + screenshot).
+DEV_OTP stays `000000`.
 
 ### Voice Consultation Screen
 
-### KIOSK-2 · "Repeat Question" button not working · ⬜
-The **🔊 প্রশ্নটি আবার শুনুন / 🔊 Repeat Question** button does nothing.
-- **Expected:** tapping it replays the assistant's current question via TTS. Example —
-  **সহকারী:** `"আপনার সমস্যাটি নিজের ভাষায় খুলে বলুন তো।"`
+### KIOSK-2 · "Repeat Question" button not working · ✅ (Session 10, step 7)
+ROOT CAUSE confirmed: the button always fired — **the Windows dev box has no Bangla TTS
+voice**, so speech was silently absent (TC-V2, test_log 2026-07-06). Fix: a bilingual
+`#voice-hint` banner now shows on the voice screen whenever `banglaVoiceAvailable()` is
+false; on-screen text stays the fallback (ADR-0028). Button kept and verified (speaks the
+last question). ⚠ HUMAN: install a Bengali voice (Windows Settings → Speech → Add voices)
+for actual audio; re-check TC-V2 then.
 
-### KIOSK-3 · Speaker icon on every message · ⬜
-Instead of a single "Repeat Question" button, add a **🔊 speaker icon** beside every chat message.
-- **Expected:**
-  - Tapping the icon on an **assistant** message plays the TTS for that question.
-  - Tapping the icon on a **patient** message reads back **exactly** what the patient said
-    (raw words, unchanged — rule #1).
-  - Gives a consistent, intuitive chat experience.
+### KIOSK-3 · Speaker icon on every message · ✅ (Session 10, step 7)
+Every chat bubble now carries a **🔊 icon** (in `addBubble()`): assistant icon replays that
+question via TTS; patient icon reads back EXACTLY the words captured at bubble creation
+(raw, unchanged — rule #1). The Repeat-Question button was kept alongside (separate spec
+item + big accessible target). Browser-verified via a `speak()` spy.
 
 ### KIOSK-4 · Download raw transcript (`.docx`) · ⬜
 Add a **Download (.docx)** option so the patient can download the raw voice transcript exactly as

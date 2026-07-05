@@ -17,12 +17,18 @@
     /* conversation */
     .convo-layout { flex: 1; display: flex; flex-direction: column; padding: 20px 28px; gap: 14px; min-height: 0; max-width: 900px; margin: 0 auto; width: 100%; }
     .chat-thread { flex: 1; overflow-y: auto; min-height: 0; display: flex; flex-direction: column; gap: 14px; padding: 4px 2px; }
-    .chat-turn { max-width: 84%; border-radius: 14px; padding: 12px 16px; line-height: 1.5; box-shadow: var(--shadow-sm); font-size: 1rem; }
+    .chat-turn { max-width: 84%; border-radius: 14px; padding: 12px 16px; line-height: 1.5; box-shadow: var(--shadow-sm); font-size: 1rem; position: relative; }
     .chat-turn.ai { align-self: flex-start; background: var(--bg-white); border: 1px solid var(--border-color); border-top-left-radius: 4px; }
     .chat-turn.patient { align-self: flex-end; background: var(--primary-color); color: #fff; border-top-right-radius: 4px; }
-    .chat-meta { font-size: .66rem; font-weight: 700; text-transform: uppercase; letter-spacing: .04em; margin-bottom: 5px; }
+    .chat-meta { font-size: .66rem; font-weight: 700; text-transform: uppercase; letter-spacing: .04em; margin-bottom: 5px; display: flex; align-items: center; justify-content: space-between; gap: 10px; }
     .chat-turn.ai .chat-meta { color: var(--secondary-color); }
     .chat-turn.patient .chat-meta { color: rgba(255,255,255,.8); }
+    /* KIOSK-3: per-message speaker icon */
+    .bubble-speak { border: none; background: none; cursor: pointer; font-size: 1rem; line-height: 1; padding: 2px 4px; border-radius: 6px; }
+    .bubble-speak:hover { background: rgba(0,0,0,.08); }
+    .chat-turn.patient .bubble-speak:hover { background: rgba(255,255,255,.2); }
+    /* KIOSK-2: visible hint when no Bangla TTS voice is installed */
+    .voice-hint { display: none; font-size: .8rem; color: #92400E; background: #FEF3C7; border: 1px solid #FDE68A; border-radius: var(--radius); padding: 6px 12px; }
     .voice-dock { border-top: 1px solid var(--border-color); padding-top: 14px; display: flex; flex-direction: column; align-items: center; gap: 10px; }
     .dock-transcript { width: 100%; min-height: 42px; background: #F8FAFC; border: 1px dashed var(--border-color); border-radius: var(--radius); padding: 9px 16px; font-style: italic; color: var(--text-muted); text-align: center; }
     .dock-row { display: flex; align-items: center; gap: 18px; width: 100%; justify-content: space-between; }
@@ -75,7 +81,7 @@
       <div class="card" style="text-align:left;">
         <label class="summary-label" data-en="Enter 6-Digit OTP" data-bn="৬-সংখ্যার ওটিপি লিখুন">Enter 6-Digit OTP</label>
         <div class="otp-row" id="otp-row">
-          <input class="otp-input" maxlength="1"><input class="otp-input" maxlength="1"><input class="otp-input" maxlength="1"><input class="otp-input" maxlength="1"><input class="otp-input" maxlength="1"><input class="otp-input" maxlength="1">
+          <input class="otp-input" maxlength="1" inputmode="numeric" autocomplete="one-time-code"><input class="otp-input" maxlength="1" inputmode="numeric"><input class="otp-input" maxlength="1" inputmode="numeric"><input class="otp-input" maxlength="1" inputmode="numeric"><input class="otp-input" maxlength="1" inputmode="numeric"><input class="otp-input" maxlength="1" inputmode="numeric">
         </div>
         <button class="btn btn-accent" style="width:100%; padding:12px;" onclick="verifyOtp()"
                 data-en="Confirm & Login" data-bn="নিশ্চিত করুন এবং প্রবেশ করুন">Confirm &amp; Login</button>
@@ -88,6 +94,9 @@
     <div class="convo-layout">
       <div class="chat-thread" id="chat-thread"></div>
       <div class="voice-dock">
+        <div class="voice-hint" id="voice-hint"
+             data-en="⚠ No Bangla voice is installed on this device — questions will not play as audio, but they always appear as text on screen."
+             data-bn="⚠ এই যন্ত্রে কোনো বাংলা ভয়েস ইনস্টল করা নেই — প্রশ্ন শোনা যাবে না, তবে সবসময় পর্দায় লেখা থাকবে।">⚠ No Bangla voice is installed on this device — questions will not play as audio, but they always appear as text on screen.</div>
         <div class="dock-transcript" id="dock-transcript"
              data-en="Your speech will appear here as you talk..." data-bn="আপনি বলার সাথে সাথে এখানে দেখা যাবে...">Your speech will appear here as you talk...</div>
         <div class="dock-row">

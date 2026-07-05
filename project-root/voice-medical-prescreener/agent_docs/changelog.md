@@ -16,6 +16,36 @@
 
 ---
 
+## Session 10 — 2026-07-06 — Fix/feature build continues: steps 6–7 (KIOSK-1 OTP + KIOSK-2/3 TTS UX)
+- Did: **Step 6 DONE (KIOSK-1):** `frontend/kiosk.js` gains `initOtpInputs()` — typing a
+  digit auto-focuses the next `.otp-input` (repeated digits like 000000 flow smoothly),
+  non-digits are stripped, Backspace on an empty box clears + focuses the previous one,
+  and pasting fills the boxes from box 1 (junk stripped, e.g. "code: 04-73-92" → 047392;
+  short pastes focus the next empty box). `kiosk.html` boxes gain `inputmode="numeric"`
+  + `autocomplete="one-time-code"`. All 5 behaviors asserted live in Chrome + screenshot.
+  **Step 7 DONE (KIOSK-2/3):** (a) ROOT CAUSE of "Repeat Question does nothing" found and
+  CONFIRMED live: the button always fired — **this Windows machine has NO Bangla TTS voice**
+  (`banglaVoiceAvailable() === false`), so speech was silently absent (TC-V2, recorded in
+  test_log.md). Fix = make the state visible: a bilingual `#voice-hint` banner shows on the
+  voice screen whenever no bn voice exists (chained onto tts.js's `onvoiceschanged`, not
+  replacing it); on-screen text stays the fallback (ADR-0028). (b) `addBubble()` now puts a
+  🔊 icon on EVERY chat bubble — assistant icon replays that question; patient icon reads
+  back EXACTLY the words captured at bubble creation (rule #1, never re-fetched/rewritten).
+  The Repeat-Question button is KEPT alongside the icons (KIOSK-2 and KIOSK-3 are separate
+  spec items; the button is also the accessibility-friendly big target). Browser-verified
+  via a `speak()` spy: both icons + the repeat button speak the exact right text; hint
+  toggles correctly both ways. **121 tests pass** (frontend-only; no backend change).
+- Decided: nothing new (no ADR — bug fix + spec'd UI; the keep-the-repeat-button call is
+  recorded here).
+- Broke / problem: Browser CACHE bit twice — a stale kiosk.js made the first verification
+  round of step 6 report false failures. Rule for preview checks: `fetch(url,
+  {cache:'reload'})` + reload BEFORE asserting. The human should Ctrl+F5 the kiosk once.
+- Deferred: Steps 8–20 (one per "go"). Installing a Bangla TTS voice on the Windows box
+  (Settings → Time & Language → Speech → Add voices → Bengali) so TC-V2 can PASS with
+  audio — human action, worth doing before the re-run.
+- Next: Step 8 — kiosk "Download Raw Transcript (.docx)" button wired to the step-3
+  endpoint `POST /api/visits/{uuid}/documents/transcript` (KIOSK-4). See `current_task.md`.
+
 ## Session 9 — 2026-07-05 — Fix/feature build from the human's Part-2 test: steps 1–5 of 20
 - Did: The human's real-mic Part-2 run surfaced bugs + feature gaps, written up as
   `agent_docs/context_fixed_problem.md` (stable IDs: STRUCT/KIOSK/MEDIC/DOCTOR). A 20-step

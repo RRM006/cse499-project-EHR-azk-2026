@@ -83,7 +83,9 @@ voice-medical-prescreener/
 │                                  #   test_bilingual_fields (value_en/value_bn + legacy back-compat)  (121 total)
 ├── frontend/                     # patient side (served at /)
 │   ├── index.html                # NEW (S9): landing page linking the 4 entry points (ADR-0031)
-│   ├── kiosk.html · kiosk.js     # patient kiosk (at /kiosk.html): phone→OTP→voice chat→10-field summary→submit→auto-logout
+│   ├── kiosk.html · kiosk.js     # patient kiosk (at /kiosk.html): phone→OTP (auto-advance/Backspace/paste, S10
+│   │                              #   KIOSK-1)→voice chat (per-bubble 🔊 icons + no-bn-voice hint banner, S10
+│   │                              #   KIOSK-2/3)→10-field summary→submit→auto-logout
 ├── frontend_legacy/              # OLD Module-1 transcript app, isolated (served at /legacy/ — ADR-0031)
 │   ├── index.html · app.js · styles.css   # unchanged behavior; asset refs made relative
 ├── frontend_shared/              # NEW: shared portal assets (mounted at /shared)

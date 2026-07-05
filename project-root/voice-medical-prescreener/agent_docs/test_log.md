@@ -72,6 +72,29 @@ transcribed by hand (the "ground truth"). Record the model + machine each time.
 
 ## Test entries (newest first)
 
+## 2026-07-06 — Session 10 — Steps 6–7: kiosk OTP + TTS UX; TC-V2 PARTIAL result (Windows: no bn voice)
+- Setup: Windows dev box; live Chrome preview against the real server (port 8001); scripted
+  DOM events via preview_eval (no DB writes — screens driven directly); `speak()` spy for
+  TTS wiring so no audio was needed. `pytest backend/tests/` after each step (both frontend-
+  only). ⚠ Verification gotcha: a CACHED kiosk.js produced false failures — always
+  `fetch(url, {cache:'reload'})` + reload before asserting.
+- Metric(s): behavior pass/fail per scripted assertion; TC-V2 voice availability per OS.
+- Result: **121/121 tests still passing** (no backend change). Step 6 (KIOSK-1 OTP): 5/5
+  scripted checks PASS — typing 000000 fills all six with focus advancing each keystroke;
+  non-digit rejected; Backspace on empty box clears+focuses previous; paste "code: 04-73-92"
+  → 047392 focus last; paste "123" → fills 3, focus box 4. Step 7 (KIOSK-2/3): 6/6 PASS —
+  🔊 icon on every bubble (2/2 rendered); assistant icon spoke the exact question; patient
+  icon spoke the EXACT captured raw words (rule #1); Repeat button spoke the last question;
+  hint banner shows when `banglaVoiceAvailable()` is false and hides when true.
+- **TC-V2 (partial, Windows):** `banglaVoiceAvailable()` = **false** on this machine — NO
+  bn/bn-BD voice in `speechSynthesis.getVoices()`. This is the CONFIRMED root cause of the
+  human-reported "Repeat Question does nothing": the code always fired; the OS had no voice
+  to speak with. Per Open Flag 4 / ADR-0028 the on-screen text fallback + the new visible
+  hint banner = graceful degradation (verified). TC-V2 with real AUDIO still needs: install
+  a Bengali voice (Settings → Time & Language → Speech → Add voices), then re-check that
+  the banner disappears and audio plays. Arch laptop still unmeasured.
+- Notes: TC-V3/F2/R1/A1 (real-mic run) remain pending — re-run after steps 8–11 land.
+
 ## 2026-07-05 — Session 9 — Fix/feature build steps 1–5: suite 104 → 121, all offline (no live LLM)
 - Setup: Python 3.14 on Windows (`.venv`); `pytest backend/tests/` after every step; all new
   tests offline per rule #4 (LLM boundary faked; temp-dir document storage; throwaway SQLite

@@ -52,7 +52,21 @@ function addBubble(role, text, label) {
   div.className = `chat-turn ${role}`;
   const meta = document.createElement('div');
   meta.className = 'chat-meta';
-  meta.textContent = label;
+  const labelSpan = document.createElement('span');
+  labelSpan.textContent = label;
+  // KIOSK-3: every message gets a speaker icon. Assistant = replay the question;
+  // patient = read back EXACTLY the captured words (rule #1 — the text captured at
+  // bubble creation, never re-fetched or rewritten).
+  const speakBtn = document.createElement('button');
+  speakBtn.className = 'bubble-speak';
+  speakBtn.type = 'button';
+  speakBtn.textContent = '🔊';
+  speakBtn.title = role === 'patient'
+    ? t('Hear your own words again', 'আপনার নিজের কথা আবার শুনুন')
+    : t('Hear this question again', 'এই প্রশ্নটি আবার শুনুন');
+  speakBtn.onclick = () => speak(text);
+  meta.appendChild(labelSpan);
+  meta.appendChild(speakBtn);
   const body = document.createElement('span');
   body.textContent = text; // verbatim — never rewritten
   div.appendChild(meta);
@@ -60,6 +74,25 @@ function addBubble(role, text, label) {
   thread.appendChild(div);
   thread.scrollTop = thread.scrollHeight;
 }
+
+/* KIOSK-2: the Repeat button was "doing nothing" when the OS has no Bangla TTS voice
+   (speech is silently skipped/degraded). Make that state VISIBLE: show the hint banner
+   whenever no bn voice is available — the on-screen text stays the fallback (ADR-0028). */
+function updateVoiceHint() {
+  const hint = document.getElementById('voice-hint');
+  if (!hint) return;
+  const noVoice = !window.speechSynthesis || !banglaVoiceAvailable();
+  hint.style.display = noVoice ? 'block' : 'none';
+}
+if (window.speechSynthesis) {
+  // Chrome loads voices asynchronously; tts.js already listens — chain, don't replace.
+  const prevHandler = window.speechSynthesis.onvoiceschanged;
+  window.speechSynthesis.onvoiceschanged = () => {
+    if (prevHandler) prevHandler();
+    updateVoiceHint();
+  };
+}
+updateVoiceHint();
 
 /* Show AND speak an assistant turn (ADR-0028), and record it server-side. */
 async function assistantSays(text, { record = true } = {}) {
@@ -77,6 +110,35 @@ async function assistantSays(text, { record = true } = {}) {
 function repeatQuestion() { speak(state.lastQuestionText); }
 
 /* --- screens 1-2: identification --- */
+
+/* KIOSK-1: OTP boxes auto-advance on digit entry, Backspace walks back, and pasting
+   a full 6-digit code fills every box. Wired once at load. */
+function initOtpInputs() {
+  const boxes = Array.from(document.querySelectorAll('#otp-row .otp-input'));
+  boxes.forEach((box, i) => {
+    box.addEventListener('input', () => {
+      const digits = box.value.replace(/\D/g, '');
+      box.value = digits.slice(-1); // keep only the last typed digit
+      if (box.value && i < boxes.length - 1) boxes[i + 1].focus();
+    });
+    box.addEventListener('keydown', (e) => {
+      if (e.key === 'Backspace' && !box.value && i > 0) {
+        e.preventDefault();
+        boxes[i - 1].value = '';
+        boxes[i - 1].focus();
+      }
+    });
+    box.addEventListener('paste', (e) => {
+      e.preventDefault();
+      const digits = (e.clipboardData || window.clipboardData)
+        .getData('text').replace(/\D/g, '').slice(0, boxes.length);
+      if (!digits) return;
+      boxes.forEach((b, j) => { b.value = digits[j] || ''; });
+      boxes[Math.min(digits.length, boxes.length - 1)].focus();
+    });
+  });
+}
+initOtpInputs();
 
 async function sendOtp() {
   const phone = document.getElementById('phone-input').value.trim();
