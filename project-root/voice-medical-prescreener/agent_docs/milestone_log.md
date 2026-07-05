@@ -6,9 +6,13 @@
 
 **Status keys:** ⬜ Not started · 🟨 In progress · 🟦 Blocked · ✅ Done · ⛔ Retired
 
-**Last updated:** 2026-07-03 (Session 8c — live-run Part 1 PASSED with real keys)
-**Current phase:** Full-stack build — pipeline BUILT **and verified LIVE (synthetic text)**; next gate = the human real-mic run (Part 2).
-**Module in focus:** end-to-end system; next is the human voice run (TC-V2/V3/F2/R1/A1).
+**Last updated:** 2026-07-05 (Session 9 — Part-2 human test done → fix/feature build started)
+**Current phase:** Fix/feature build from the human's Part-2 live test — 20-step approved plan
+(spec: `context_fixed_problem.md`), one step per "go". Steps 1–5 DONE (legacy isolation
+ADR-0031; Alembic 0010 applied ADR-0032; visit-grain docx seam — transcript + summary_report
+export routes live; shared.js `fieldValue()` + C2 `TIER_BANDS`; M3/M8 bilingual values
+ADR-0033 — `value_en`+`value_bn` in one extraction call, full back-compat). **121 tests pass.**
+**Module in focus:** cross-cutting (portals + kiosk); next = step 6 (kiosk OTP auto-advance).
 **Progress:** Session 8 built the reconciled system end to end (see `changelog.md` S8 +
 `reconciliation.md`). **DB:** all 15 architecture.md tables applied (Alembic head `0009_audit_log`).
 **Backend:** kiosk phone + stub OTP → visit; intake (M3/M4/M6); follow-up loop (M7/M8/M9);
@@ -29,6 +33,16 @@ on its ADR-0026 bucket (M3/M8 flash-lite, M4/M10/M11 flash, M6/M7 groq, M12 loca
 zero fallbacks, latencies 0.5–8.6 s. 104 tests still pass. Modules stay 🟨 (not ✅) because the
 statuses gate on the HUMAN real-voice run (TC-V2/V3/F2/R1/A1) — that is now the only thing
 between most modules and ✅-on-live-path. M1 also still awaits the mic test + ~50 samples + WER.
+**Session 9:** the human RAN the Part-2 real-mic test; findings became the work spec
+`context_fixed_problem.md` (STRUCT/KIOSK-1..7/MEDIC-1..7/DOCTOR-1..7) and a 20-step plan was
+approved (decisions locked in `current_task.md`: C1 suggestion-not-diagnosis, C2 display-only
+risk bands, DB-backed prescriptions/reports via Alembic 0010, stored bilingual values, DB
+letterhead, KIOSK-7 resume loop). Step 1 DONE: legacy demo isolated at `/legacy/`, landing page
+at `/`, startup entry-point log (ADR-0031). Step 2 DONE: Alembic **0010** applied (nullable
+`documents.utterance_id` for visit-grain exports, patient vitals, letterhead columns,
+`prescriptions` table — ADR-0032, architecture.md §8). **113 tests pass.** Module statuses
+unchanged — the affected areas (M7 loop UX, M12 exports, M14 dashboards) move when their
+steps land.
 
 ---
 
@@ -47,7 +61,7 @@ between most modules and ✅-on-live-path. M1 also still awaits the mic test + ~
 | 9 | Case Completion Check | 🟨 | A completeness score is computed; loops back to Module 7 until threshold or max turns reached. **Built** (`services/completion.py`, LOCAL; threshold + max-turn exit, both env-tunable). |
 | 10 | Risk Assessment Engine | 🟨 | Each case is classified Low/Medium/High/Critical from rules + model; **a rule-based red-flag check forces Critical for clearly life-threatening symptoms (chest pain, stroke signs, severe breathing difficulty, loss of consciousness) and surfaces them prominently**; accuracy + red-flag recall recorded on a labeled test set. **Built** (`services/risk.py` + `red_flags.py`; rule survives total LLM outage; red-flag recall enforced per-phrase in tests). Accuracy on labeled real data pending. |
 | 11 | Explainable AI (XAI) | 🟨 | Every risk output has a plain-language reason listing the contributing factors. **Built** (`services/risk.py`, M11; deterministic fallback so no risk row is ever reason-less). |
-| 12 | Structured Clinical Report | 🟨 | A full report (all sections) is generated and exportable as PDF + dashboard view; contains **no diagnosis**; includes a **Red Flags** section sourced from M10. **Built** (`services/report.py`, LOCAL assembly + disclaimer; shown in doctor portal). PDF/`.docx` per-visit export still pending. |
+| 12 | Structured Clinical Report | 🟨 | A full report (all sections) is generated and exportable as PDF + dashboard view; contains **no diagnosis**; includes a **Red Flags** section sourced from M10. **Built** (`services/report.py`, LOCAL assembly + disclaimer; shown in doctor portal). Per-visit `.docx` export of the summary report + raw transcript SHIPPED (S9 step 3, `visit_docx.py`); PDF still pending. |
 | 13 | EHR Database | 🟨 | Transcripts, profiles, reports, and audit logs are stored and retrievable by patient ID/date; data encrypted. **Built** (all 15 tables, Alembic head `0009`; retrieval by phone + status; `audit_log` on every state change). Encryption-at-rest still pending. |
 | 14 | Doctor Dashboard | 🟨 | Web UI shows report, risk, flags, XAI; doctor can override/annotate; high/critical cases alerted. **Built** (`frontend_doctor/`: queue, risk/red-flags/XAI panel, field edit, Override/Accept). |
 | 15 | Feedback & Continuous Learning | 🟨 | Doctor feedback is collected and usable to retrain/fine-tune; regression check before deploying updates. **Built** (feedback stored via `POST /api/visits/{uuid}/feedback`); retrain/regression pipeline still future. |

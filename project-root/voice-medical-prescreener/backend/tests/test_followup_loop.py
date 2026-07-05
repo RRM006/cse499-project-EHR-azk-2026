@@ -25,7 +25,11 @@ _QUESTION = {"target_gap": "fever duration", "priority": 1,
 
 
 def _extraction(filled: int) -> str:
-    data = {k: (f"<{k}>" if i < filled else "") for i, k in enumerate(SUMMARY_FIELD_KEYS)}
+    # Bilingual reply shape (S9): {"en", "bn"} per key; empty when not yet mentioned.
+    data = {
+        k: ({"en": f"<{k}>", "bn": f"<bn:{k}>"} if i < filled else {"en": "", "bn": ""})
+        for i, k in enumerate(SUMMARY_FIELD_KEYS)
+    }
     data["symptom_details_structured"] = {}
     return json.dumps(data)
 

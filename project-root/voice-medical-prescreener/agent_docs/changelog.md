@@ -16,6 +16,61 @@
 
 ---
 
+## Session 9 — 2026-07-05 — Fix/feature build from the human's Part-2 test: steps 1–5 of 20
+- Did: The human's real-mic Part-2 run surfaced bugs + feature gaps, written up as
+  `agent_docs/context_fixed_problem.md` (stable IDs: STRUCT/KIOSK/MEDIC/DOCTOR). A 20-step
+  sequenced plan was approved with all open decisions resolved: C1 = "Possible Condition
+  (AI Suggestion – Not a Diagnosis)" allowed with disclaimer + editable, doctor's Diagnosis
+  never AI-filled; C2 = display-only tier→band mapping, NO stored numeric risk scores;
+  legacy → `/legacy/` + `/` landing page; prescriptions/reports DB-backed (documents.visit_id
+  + kinds + prescriptions table, Alembic 0010); bilingual summary values generated once and
+  stored (`value_bn`/`value_en`, back-compat with `{value}`); clinic/doctor letterhead in DB;
+  KIOSK-7 = resume loop asking only missing fields, cap respected, "নেই/জানি না" accepted.
+  **Step 1 DONE (STRUCT-1/2, ADR-0031):** legacy demo `git mv`-ed to `frontend_legacy/`
+  (asset refs made relative), mounted at `/legacy/`; new clinical-blue landing page at `/`
+  linking all four entry points; `ENTRY_POINTS` list logged at startup; new
+  `test_routes_static.py` (5 tests). **Step 2 DONE (ADR-0032):** Alembic rev
+  `0010_prescriptions_letterhead` written AND applied to the real DB (backup
+  `prescreener.db.pre-0010.bak`): `documents.utterance_id` now nullable (visit-grain
+  exports), `patients.weight_kg`+`bp`, users/clinics letterhead columns, new
+  `prescriptions` table (payload JSON, document_id link). Discovery that shrank the step:
+  `documents.visit_id` already existed since 0003 and `patients` already had
+  `birth_year`/`sex` — no duplicates added. Models updated (+`Prescription`); new
+  `test_migration_0010.py` (4 tests incl. rule-#1 raw-preservation across the rebuild).
+  architecture.md gained §8 (rev-0010 deltas). **Step 3 DONE:** visit-grain docx seam —
+  new `services/documents/visit_docx.py` (full-visit RAW transcript writer, verbatim
+  role-labeled turns; staff summary-report writer rendering the stored M12 sections with
+  bilingual field labels + red flags + disclaimer), `generate_visit_document()` orchestrator
+  (documents row: `visit_id` set, `utterance_id` NULL), `create_document` repo + DocumentOut
+  schema extended (both grains), new route `POST /api/visits/{uuid}/documents/{kind}`
+  (`routes_visit_documents.py`; download reuses `/api/documents/{id}/download`). New
+  `test_visit_documents.py` (3 tests: byte-exact raw turns, field labels/values/disclaimer,
+  route guards). **Step 4 DONE:** `shared.js` gains `fieldValue(field)` (bilingual summary
+  values: picks `value_bn`/`value_en` by the active language, falls back cross-language,
+  then to the legacy `{value}` shape, then ''; display-only, never writes back) and the C2
+  `TIER_BANDS` map + `tierBand(tier)` (fixed display-only percentage band per tier — no
+  numeric score generated/stored/wired). Verified live in the browser preview (all shapes +
+  fallbacks + bands correct, zero console errors). **Step 5 DONE (ADR-0033):** M3/M8 now
+  emit BOTH `value_en` + `value_bn` per field in ONE extraction call ({"en","bn"} reply
+  shape; plain-string replies salvaged as English); stored shape `{value, value_en,
+  value_bn, source, ...}` with `value` mirroring `value_en` so every legacy consumer/row
+  works; M9 `field_has_text()` counts any slot; staff PATCH edits write the typed text to
+  ALL slots untranslated (authoritative, no quota); `visit_docx._field_value()` falls back
+  across slots. Test fakes updated + new `test_bilingual_fields.py` (5 back-compat tests)
+  + a staff-PATCH slot assertion. **121 tests pass** (104 + 5 + 4 + 3 + 5).
+- Decided: ADR-0031 (legacy isolation + landing page + startup URL log); ADR-0032 (rev 0010:
+  one documents table with two grains, DB letterhead, prescriptions payload as JSON,
+  human-only Diagnosis per C1, no stored risk scores per C2); ADR-0033 (bilingual values:
+  one extraction call fills en+bn, `value` mirrors value_en, staff edits fill all slots
+  untranslated).
+- Broke / problem: Nothing. Note: legacy `index.html` used absolute `/styles.css`+`/app.js` —
+  would have 404'd under `/legacy/`; caught before shipping, made relative.
+- Deferred: Steps 6–20 (kiosk fixes KIOSK-1..7, medic MEDIC-1..7, doctor DOCTOR-1..7,
+  final doc sweep) — one approved step at a time. Note: values stored by OLD intake runs
+  stay English-only until re-extracted; new runs are bilingual.
+- Next: Step 6 — kiosk OTP auto-advance + Backspace + paste (KIOSK-1). See
+  `current_task.md`.
+
 ## Session 8c — 2026-07-03 — Live-run Part 1 PASSED: full pipeline live with real keys, all three buckets verified
 - Did: (A) Added the human-provided **GROQ_API_KEY + OPENROUTER_API_KEY** to `backend/.env`
   (Gemini untouched) — the Session-8b key gap is CLOSED. (B) Ran **live-run Part 1** end-to-end

@@ -1,102 +1,69 @@
 <!DOCTYPE html>
 <html lang="bn">
 <head>
-  <meta charset="utf-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <title>Voice Medical Pre-Screener — Phase 0</title>
-  <link rel="preconnect" href="https://fonts.googleapis.com" />
-  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
-  <link
-    href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&family=Noto+Sans+Bengali:wght@400;500;600&display=swap"
-    rel="stylesheet" />
-  <link rel="stylesheet" href="/styles.css" />
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Niramoy Pre-Screening — Portals</title>
+  <link rel="stylesheet" href="/shared/shared.css">
+  <style>
+    .landing-wrap { flex: 1; display: flex; align-items: center; justify-content: center; padding: 32px; }
+    .landing-col { max-width: 720px; width: 100%; }
+    .landing-title { font-size: 1.5rem; font-weight: 600; color: var(--primary-color); margin-bottom: 6px; text-align: center; }
+    .landing-sub { color: var(--text-muted); font-size: .9rem; margin-bottom: 26px; text-align: center; }
+    .portal-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
+    .portal-card { display: block; text-decoration: none; color: inherit; background: var(--bg-white); border: 1px solid var(--border-color); border-radius: var(--radius); padding: 20px 22px; box-shadow: var(--shadow-sm); transition: box-shadow .15s, border-color .15s; }
+    .portal-card:hover { box-shadow: var(--shadow-md); border-color: var(--secondary-color); }
+    .portal-card .icon { font-size: 1.7rem; margin-bottom: 8px; }
+    .portal-card .name { font-weight: 600; color: var(--primary-color); margin-bottom: 4px; }
+    .portal-card .desc { font-size: .82rem; color: var(--text-muted); line-height: 1.45; }
+    .portal-card.legacy { grid-column: span 2; border-style: dashed; }
+    @media (max-width: 640px) { .portal-grid { grid-template-columns: 1fr; } .portal-card.legacy { grid-column: span 1; } }
+  </style>
 </head>
 <body>
-  <header>
-    <h1>Voice Medical Pre-Screener <small>— Phase 0 demo</small></h1>
-    <p class="note">
-      Speak naturally in Bangla, Banglish, or Roman Bangla (Chrome/Edge). The
-      <strong>RAW</strong> transcript appears live and is kept exactly as recognized
-      — never changed. Correction (Gemini) is shown separately.
-    </p>
-    <p id="browserWarn" class="error-banner" hidden>
-      ⚠ This browser has no Web Speech API. Use <strong>Chrome</strong> or
-      <strong>Edge</strong>, or type into the manual box below.
-    </p>
-  </header>
+  <div class="portal-header">
+    <div><span class="portal-title">Niramoy Pre-Screening</span>
+      <span class="portal-subtitle" data-en="Portal Directory" data-bn="পোর্টাল তালিকা">Portal Directory</span></div>
+    <div class="lang-toggle">
+      <button class="lang-btn" data-lang="en" onclick="setLanguage('en')">English</button>
+      <button class="lang-btn" data-lang="bn" onclick="setLanguage('bn')">বাংলা</button>
+    </div>
+  </div>
 
-  <main>
-    <!-- Recording controls -->
-    <section class="panel full">
-      <div class="row controls">
-        <button id="startBtn" class="accent">● Start Recording</button>
-        <button id="stopBtn" disabled>■ Stop</button>
-        <span id="recStatus" class="status-pill idle">Idle</span>
-        <span id="timer" class="timer">00:00</span>
-        <span class="note">auto-stops after ~10s of silence</span>
+  <div class="landing-wrap">
+    <div class="landing-col">
+      <div class="landing-title" data-en="Choose a Portal" data-bn="একটি পোর্টাল বেছে নিন">Choose a Portal</div>
+      <div class="landing-sub" data-en="All app entry points served by this backend."
+           data-bn="এই ব্যাকএন্ড থেকে পরিবেশিত সব অ্যাপ প্রবেশপথ।">All app entry points served by this backend.</div>
+      <div class="portal-grid">
+        <a class="portal-card" href="/kiosk.html">
+          <div class="icon">🎤</div>
+          <div class="name" data-en="Patient Kiosk" data-bn="রোগী কিওস্ক">Patient Kiosk</div>
+          <div class="desc" data-en="Voice pre-screening: phone → OTP → speak → summary → submit."
+               data-bn="ভয়েস প্রাক-পরীক্ষা: ফোন → ওটিপি → কথা বলুন → সারাংশ → জমা দিন।">Voice pre-screening: phone → OTP → speak → summary → submit.</div>
+        </a>
+        <a class="portal-card" href="/medic/">
+          <div class="icon">🩺</div>
+          <div class="name" data-en="Medic Portal" data-bn="মেডিক পোর্টাল">Medic Portal</div>
+          <div class="desc" data-en="Verify extracted fields, review risk, assign a doctor."
+               data-bn="নিষ্কাশিত তথ্য যাচাই, ঝুঁকি পর্যালোচনা, ডাক্তার নিযুক্ত করুন।">Verify extracted fields, review risk, assign a doctor.</div>
+        </a>
+        <a class="portal-card" href="/doctor/">
+          <div class="icon">🧑‍⚕️</div>
+          <div class="name" data-en="Doctor Portal" data-bn="ডাক্তার পোর্টাল">Doctor Portal</div>
+          <div class="desc" data-en="Risk, red flags, XAI reasoning, review and write to EHR."
+               data-bn="ঝুঁকি, রেড ফ্ল্যাগ, XAI ব্যাখ্যা, পর্যালোচনা ও EHR-এ লিখুন।">Risk, red flags, XAI reasoning, review and write to EHR.</div>
+        </a>
+        <a class="portal-card legacy" href="/legacy/">
+          <div class="icon">🗂️</div>
+          <div class="name" data-en="Legacy Phase-0 Demo" data-bn="পুরনো ফেজ-০ ডেমো">Legacy Phase-0 Demo</div>
+          <div class="desc" data-en="The original transcript demo: raw + corrected text and .docx export. Kept for reference — separate from the portals above."
+               data-bn="মূল ট্রান্সক্রিপ্ট ডেমো: র এবং সংশোধিত লেখা ও .docx এক্সপোর্ট। রেফারেন্সের জন্য রাখা — উপরের পোর্টাল থেকে আলাদা।">The original transcript demo: raw + corrected text and .docx export. Kept for reference — separate from the portals above.</div>
+        </a>
       </div>
-      <p id="errorBanner" class="error-banner" hidden></p>
-    </section>
+    </div>
+  </div>
 
-    <!-- Raw + Corrected -->
-    <section class="panel">
-      <div class="panel-head">
-        <h2>RAW transcript</h2>
-        <div class="controls">
-          <button id="copyRaw">Copy</button>
-          <button id="clearRaw">Clear</button>
-          <a id="downloadRaw" class="download-btn raw is-disabled" download>⬇ Raw .docx</a>
-        </div>
-      </div>
-      <h3>exactly as recognized — read-only, never modified · saved + exported when you Stop</h3>
-      <div id="rawBox" class="box raw" aria-readonly="true">
-        <span id="rawText"></span><span id="interim" class="interim"></span>
-      </div>
-    </section>
-
-    <section class="panel">
-      <div class="panel-head">
-        <h2>Corrected transcript</h2>
-        <div class="controls">
-          <button id="correctBtn" class="primary">Correct with Gemini</button>
-          <button id="copyCorrected">Copy</button>
-          <button id="clearCorrected">Clear</button>
-          <a id="downloadCorrected" class="download-btn corrected is-disabled" download>⬇ Corrected .docx</a>
-        </div>
-      </div>
-      <h3>produced by Gemini — stored + exported separately from RAW</h3>
-      <div id="correctedBox" class="box corrected"><em>No correction yet.</em></div>
-      <p id="correctMeta" class="note"></p>
-    </section>
-
-    <!-- Manual fallback -->
-    <section class="panel full">
-      <div class="panel-head"><h2>Manual text fallback</h2></div>
-      <p class="note">Use this if the mic fails or speech quality is poor.</p>
-      <textarea id="manualText" rows="3" placeholder="Type a Bangla / Banglish / Roman-Bangla utterance…"></textarea>
-      <button id="manualBtn" class="primary">Use this text as RAW</button>
-    </section>
-
-    <!-- Recent -->
-    <section class="panel full">
-      <div class="panel-head">
-        <h2>Recently saved (raw → corrected)</h2>
-        <button id="refreshRecent">Refresh</button>
-      </div>
-      <ul id="recentList" class="recent"></ul>
-    </section>
-
-    <!-- Saved documents -->
-    <section class="panel full">
-      <div class="panel-head">
-        <h2>Saved documents (.docx)</h2>
-        <button id="refreshDocs">Refresh</button>
-      </div>
-      <h3>raw .docx on Stop, corrected .docx on Correct — download to open in Word / LibreOffice</h3>
-      <ul id="docsList" class="recent docs"></ul>
-    </section>
-  </main>
-
-  <script src="/app.js"></script>
+  <script src="/shared/shared.js"></script>
 </body>
 </html>

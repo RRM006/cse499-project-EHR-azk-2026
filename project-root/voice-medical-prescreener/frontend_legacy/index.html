@@ -1,0 +1,102 @@
+<!DOCTYPE html>
+<html lang="bn">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Voice Medical Pre-Screener — Phase 0</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link
+    href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&family=Noto+Sans+Bengali:wght@400;500;600&display=swap"
+    rel="stylesheet" />
+  <link rel="stylesheet" href="styles.css" />
+</head>
+<body>
+  <header>
+    <h1>Voice Medical Pre-Screener <small>— Phase 0 demo</small></h1>
+    <p class="note">
+      Speak naturally in Bangla, Banglish, or Roman Bangla (Chrome/Edge). The
+      <strong>RAW</strong> transcript appears live and is kept exactly as recognized
+      — never changed. Correction (Gemini) is shown separately.
+    </p>
+    <p id="browserWarn" class="error-banner" hidden>
+      ⚠ This browser has no Web Speech API. Use <strong>Chrome</strong> or
+      <strong>Edge</strong>, or type into the manual box below.
+    </p>
+  </header>
+
+  <main>
+    <!-- Recording controls -->
+    <section class="panel full">
+      <div class="row controls">
+        <button id="startBtn" class="accent">● Start Recording</button>
+        <button id="stopBtn" disabled>■ Stop</button>
+        <span id="recStatus" class="status-pill idle">Idle</span>
+        <span id="timer" class="timer">00:00</span>
+        <span class="note">auto-stops after ~10s of silence</span>
+      </div>
+      <p id="errorBanner" class="error-banner" hidden></p>
+    </section>
+
+    <!-- Raw + Corrected -->
+    <section class="panel">
+      <div class="panel-head">
+        <h2>RAW transcript</h2>
+        <div class="controls">
+          <button id="copyRaw">Copy</button>
+          <button id="clearRaw">Clear</button>
+          <a id="downloadRaw" class="download-btn raw is-disabled" download>⬇ Raw .docx</a>
+        </div>
+      </div>
+      <h3>exactly as recognized — read-only, never modified · saved + exported when you Stop</h3>
+      <div id="rawBox" class="box raw" aria-readonly="true">
+        <span id="rawText"></span><span id="interim" class="interim"></span>
+      </div>
+    </section>
+
+    <section class="panel">
+      <div class="panel-head">
+        <h2>Corrected transcript</h2>
+        <div class="controls">
+          <button id="correctBtn" class="primary">Correct with Gemini</button>
+          <button id="copyCorrected">Copy</button>
+          <button id="clearCorrected">Clear</button>
+          <a id="downloadCorrected" class="download-btn corrected is-disabled" download>⬇ Corrected .docx</a>
+        </div>
+      </div>
+      <h3>produced by Gemini — stored + exported separately from RAW</h3>
+      <div id="correctedBox" class="box corrected"><em>No correction yet.</em></div>
+      <p id="correctMeta" class="note"></p>
+    </section>
+
+    <!-- Manual fallback -->
+    <section class="panel full">
+      <div class="panel-head"><h2>Manual text fallback</h2></div>
+      <p class="note">Use this if the mic fails or speech quality is poor.</p>
+      <textarea id="manualText" rows="3" placeholder="Type a Bangla / Banglish / Roman-Bangla utterance…"></textarea>
+      <button id="manualBtn" class="primary">Use this text as RAW</button>
+    </section>
+
+    <!-- Recent -->
+    <section class="panel full">
+      <div class="panel-head">
+        <h2>Recently saved (raw → corrected)</h2>
+        <button id="refreshRecent">Refresh</button>
+      </div>
+      <ul id="recentList" class="recent"></ul>
+    </section>
+
+    <!-- Saved documents -->
+    <section class="panel full">
+      <div class="panel-head">
+        <h2>Saved documents (.docx)</h2>
+        <button id="refreshDocs">Refresh</button>
+      </div>
+      <h3>raw .docx on Stop, corrected .docx on Correct — download to open in Word / LibreOffice</h3>
+      <ul id="docsList" class="recent docs"></ul>
+    </section>
+  </main>
+
+  <script src="app.js"></script>
+</body>
+</html>

@@ -72,6 +72,32 @@ transcribed by hand (the "ground truth"). Record the model + machine each time.
 
 ## Test entries (newest first)
 
+## 2026-07-05 — Session 9 — Fix/feature build steps 1–5: suite 104 → 121, all offline (no live LLM)
+- Setup: Python 3.14 on Windows (`.venv`); `pytest backend/tests/` after every step; all new
+  tests offline per rule #4 (LLM boundary faked; temp-dir document storage; throwaway SQLite
+  files for migration gates). Browser checks via the preview panel on the real server (port 8001).
+- Metric(s): test count / pass rate per step; migration data-preservation; docx content checks.
+- Result: **121/121 passing** (was 104). Step-by-step: +5 `test_routes_static` (all 5 entry
+  points 200; legacy isolated at /legacy/; landing links all four; kiosk untouched) → 109.
+  +4 `test_migration_0010` (legacy-DB upgrade keeps raw text byte-identical + document link;
+  fresh DB has prescriptions table + all new columns; visit-grain document inserts with
+  utterance_id NULL; prescription JSON payload round-trips) → 113. +3 `test_visit_documents`
+  (transcript .docx contains all 4 Bangla raw turns BYTE-EXACT in order; summary report has
+  10 bilingual labels + stored values + vitals + no-diagnosis disclaimer; route guards
+  400/404) → 116. +5 `test_bilingual_fields` (en+bn fill, plain-string salvage→English,
+  legacy `{value}` rows validate + score 0.6, any-slot counting, bn-only counts) → 121.
+  Rev 0010 applied to the REAL dev DB: upgrade 0009→0010 clean, head confirmed, backup
+  `prescreener.db.pre-0010.bak` taken first.
+- Browser verification (step 4, real Chrome preview, zero console errors): `fieldValue()`
+  legacy `{value}` ✓ · en pick "Headache" ✓ · bn pick "মাথা ব্যথা" ✓ · cross-language
+  fallback ✓ · whitespace/null → '' ✓ · `tierBand()` low '0–25%', critical '76–100%',
+  unknown '—' ✓.
+- Notes: two would-be bugs caught before shipping: legacy index.html's absolute
+  `/styles.css`/`/app.js` refs (would 404 under /legacy/) and `documents.utterance_id`
+  NOT NULL (would block every visit-grain export). Existing English-only stored rows stay
+  as-is until re-extracted — readers fall back across slots (ADR-0033). TC-V2/V3/F2/R1/A1
+  (human real-mic run) remain pending — re-run AFTER the kiosk fixes land (steps 6–11).
+
 ## 2026-07-03 — Session 8c — Live-run Part 1: FULL pipeline live (M3→M12), all three API buckets
 - Setup: Python 3.14 on Windows; server via uvicorn port 8001. **All three keys real** in
   `backend/.env` (Gemini + Groq + OpenRouter — Groq/OpenRouter added this session). Driven by a

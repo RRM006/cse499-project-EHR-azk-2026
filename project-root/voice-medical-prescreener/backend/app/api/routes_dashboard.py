@@ -168,8 +168,13 @@ def edit_profile_field(
         raise HTTPException(status_code=400, detail="No profile yet — run intake first.")
 
     fields = dict((profile.entities or {}).get("summary_fields") or {})
+    # A staff edit is authoritative for BOTH display languages: the typed text goes
+    # into every slot untranslated (Session 9 decision — staff text is never machine-
+    # translated, and no quota is spent on edits). M8 never overwrites 'human' fields.
     fields[field_key] = {
         "value": payload.value,
+        "value_en": payload.value,
+        "value_bn": payload.value,
         "source": "human",
         "edited_by": editor.id,
         "edited_at": datetime.now(timezone.utc).isoformat(),

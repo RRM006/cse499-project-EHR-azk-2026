@@ -18,7 +18,10 @@ from backend.app.db.models import ModuleEvent
 from backend.app.main import app
 from backend.app.schemas.profile import SUMMARY_FIELD_KEYS
 
-_FAKE_EXTRACTION = {key: f"<{key}>" for key in SUMMARY_FIELD_KEYS}
+# The bilingual reply shape the Session-9 prompt asks for: {"en", "bn"} per key.
+_FAKE_EXTRACTION = {
+    key: {"en": f"<{key}>", "bn": f"<bn:{key}>"} for key in SUMMARY_FIELD_KEYS
+}
 _FAKE_EXTRACTION["symptom_details_structured"] = {
     "location": "retrosternal", "character": "burning",
     "worse": "lying down", "better": "sitting", "pain_severity_0_10": 7,
@@ -86,10 +89,12 @@ def test_intake_builds_profile_and_logs_module_events(client_and_session):
     assert r.status_code == 200
     profile = r.json()
 
-    # 10-field shape enforced, AI provenance set, structured sub-shape carried.
+    # 10-field shape enforced (bilingual since S9; `value` mirrors value_en for
+    # back-compat), AI provenance set, structured sub-shape carried.
     fields = profile["entities"]["summary_fields"]
     for key in SUMMARY_FIELD_KEYS:
-        assert fields[key] == {"value": f"<{key}>", "source": "ai",
+        assert fields[key] == {"value": f"<{key}>", "value_en": f"<{key}>",
+                               "value_bn": f"<bn:{key}>", "source": "ai",
                                "edited_by": None, "edited_at": None}
     assert fields["symptom_details_structured"]["pain_severity_0_10"] == 7
     assert "burning chest pain" in profile["summary"]

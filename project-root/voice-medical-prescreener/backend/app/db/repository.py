@@ -72,21 +72,24 @@ def get_recent(db: Session, *, limit: int = 50) -> list[Utterance]:
 def create_document(
     db: Session,
     *,
-    utterance_id: int,
+    utterance_id: int | None,
     filename: str,
     rel_path: str,
     kind: str,
     doc_format: str = "docx",
     doc_id: str | None = None,
+    visit_id: int | None = None,
 ) -> Document:
-    """Record a generated export file for a session. The file itself is written by
-    the documents service; this only persists the metadata row.
+    """Record a generated export file. The file itself is written by the documents
+    service; this only persists the metadata row.
 
-    ``kind`` is "raw" or "corrected" — the two are tracked as separate rows so they
-    can be regenerated and downloaded independently.
+    Two grains (rev 0010): utterance-grain rows ("raw" | "corrected") set
+    ``utterance_id``; visit-grain rows ("transcript" | "summary_report" |
+    "prescription") set ``visit_id`` and pass ``utterance_id=None``.
     """
     document = Document(
         utterance_id=utterance_id,
+        visit_id=visit_id,
         filename=filename,
         rel_path=rel_path,
         format=doc_format,

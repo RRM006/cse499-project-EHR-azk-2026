@@ -416,6 +416,69 @@
   real SMS OTP (cost + dependency, not needed to prove the capstone).
 - Status: Accepted (extends ADR-0024–0028; schema deltas recorded in architecture.md §7)
 
+## ADR-0031 — 2026-07-05 — Legacy Phase-0 demo isolated at /legacy/; root becomes a portal landing page
+- Decision: (a) The Phase-0 transcript demo (`index.html` + `app.js` + `styles.css`) moves
+  from `frontend/` into its own `frontend_legacy/` folder, mounted at **`/legacy/`**
+  (`git mv`, history preserved); its asset refs become relative (`/styles.css` → `styles.css`)
+  so it is self-contained under the new mount. Its `/api/*` routes are untouched — the demo
+  stays fully working. (b) `/` becomes a small clinical-blue **landing page**
+  (`frontend/index.html`) linking the four app entry points: kiosk, medic, doctor, legacy.
+  (c) `main.py` keeps an `ENTRY_POINTS` list and logs it at startup (STRUCT-2) — "4 links"
+  was confirmed by the human to mean the four app entry points, not the four legacy artifacts.
+- Why: The legacy demo owning `/` made the new full-stack app look secondary and mixed two
+  generations of frontend in one folder (`context_fixed_problem.md` §0.1). A separate folder +
+  clearly-named route makes the demo obviously distinct and unable to interfere with the
+  portals, without deleting anything.
+- Rejected: Deleting the demo (still useful reference + its tests guard the M2 seam);
+  `/demo/` as the route (human chose `/legacy/`); redirecting `/` to the kiosk (a directory
+  page serves all roles, and kiosks can be bookmarked to `/kiosk.html` directly).
+- Status: Accepted
+
+## ADR-0032 — 2026-07-05 — Rev 0010: visit-grain documents, DB letterhead, vitals, prescriptions table
+- Decision: One new Alembic revision `0010_prescriptions_letterhead` (applied; backup
+  `prescreener.db.pre-0010.bak`): (a) `documents.utterance_id` becomes NULLABLE so
+  visit-grain exports (full-visit transcript / summary report / prescription) can exist —
+  they set the already-present `visit_id` and new data-level `kind` values
+  ('transcript'|'summary_report'|'prescription'); (b) `patients` gains `weight_kg` + `bp`
+  (age/gender already existed as `birth_year`/`sex`); (c) prescription letterhead lives in
+  DB columns — `users.qualification/registration_no/specialization/signature_path`,
+  `clinics.address/logo_path`; (d) new `prescriptions` table (`visit_id`, `doctor_id`,
+  `payload` JSON, `document_id` FK → documents) — the form shape is JSON (principle 3), the
+  `Diagnosis` field inside `payload` is human-doctor-authored ONLY (rule #2, decision C1),
+  and `document_id` makes the exported `.docx` retrievable by doctor and patient.
+- Why: The Session-9 spec (DOCTOR-3/4/5/6, MEDIC-6/7, KIOSK-4) needs visit-level exports,
+  patient vitals, and a professional prescription with a reusable letterhead; the human
+  chose DB-backed storage over file-only and per-entry manual letterhead input.
+- Rejected: A separate `visit_documents` table (the existing `documents` table already had
+  `visit_id` since 0003 — one table, two grains, no duplication); a CHECK constraint on
+  `documents.kind` (kept constraint-free since 0002, new kinds stay additive); storing the
+  prescription as promoted columns (medicines are a variable-length list — JSON fits §6.2);
+  numeric AI risk-score columns (decision C2: display-only tier→band mapping, nothing stored).
+- Status: Accepted
+
+## ADR-0033 — 2026-07-05 — Bilingual summary values: one extraction call fills value_en + value_bn; `value` mirrors value_en
+- Decision: (a) The M3/M8 extraction prompt returns each of the 10 fields as
+  {"en", "bn"} — the SAME content written once in English and once in Bangla script —
+  so bilingual display costs ZERO extra LLM calls (one extraction, not extraction +
+  translation). (b) Stored shape: `{value, value_en, value_bn, source, ...}` where
+  `value` MIRRORS `value_en` — every pre-Session-9 consumer (queue main_problem, staff.js,
+  docx writers) and every stored legacy row keeps working unchanged; readers fall back
+  across the three slots (`shared.js fieldValue()`, `completion.field_has_text()`,
+  `visit_docx._field_value()`). (c) A plain-string model reply is salvaged as English.
+  (d) M9 counts a field filled if ANY slot has text (a Bangla-only value is not "missing").
+  (e) A staff PATCH edit writes the typed text into ALL slots untranslated — staff text is
+  authoritative and is never machine-translated (no quota on edits; M8 still never
+  overwrites 'human' fields).
+- Why: KIOSK-6/DOCTOR-2/MEDIC-1 need the VALUES (not just labels) to follow the language
+  toggle; the human chose generate-once-and-store over on-the-fly client translation
+  (which would burn quota on every toggle). JSON shape evolution needs no migration
+  (principle 3).
+- Rejected: A separate translation call per language (double quota); storing only
+  value_en/value_bn and dropping `value` (breaks every existing consumer and stored row);
+  machine-translating staff edits (staff words are authoritative; silent translation could
+  distort clinical meaning).
+- Status: Accepted
+
 ## ADR-0008 — 2026-06-18 — Default Whisper model is small/base; upgrade to a Bangla fine-tune later
 - Decision: Start with Whisper `small` (or `base` if we need a snappier live feel)
   for streaming on CPU. Upgrade to a Bangla-fine-tuned model (e.g.

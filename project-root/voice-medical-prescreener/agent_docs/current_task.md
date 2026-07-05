@@ -6,57 +6,68 @@
 
 ---
 
-**Date:** 2026-07-03 (Session 8c)
-**Phase:** Full-stack build — backend + all three portals BUILT; **live pipeline VERIFIED (Part 1)**
-**Module:** whole M1–M15 system; next gate = the human real-mic run (Part 2)
+**Date:** 2026-07-05 (Session 9)
+**Phase:** Fix/feature build from the human's Part-2 live test — spec = `agent_docs/context_fixed_problem.md`
+**Module:** whole system; working through a 20-step approved plan, ONE step per "go"
 
 ## Where we are right now
-- The whole reconciled system is built (Session 8) and **the full pipeline now runs LIVE with
-  real API keys (Session 8c)**. All three keys are in `backend/.env`: Gemini + **Groq +
-  OpenRouter** (key gap closed).
-- **Live-run Part 1 PASSED** with synthetic typed Banglish: lookup → OTP `000000` → visit →
-  utterances → intake → follow-up loop (real Bangla Groq questions, exit at 0.7) → assess
-  (medium, no red flags) → report. `module_events`: 13 rows, all ok, zero fallbacks, providers
-  exactly per ADR-0026 (M3/M8 flash-lite, M4/M10/M11 flash, M6/M7 groq, M12 local).
-  Details + numbers: test_log.md 2026-07-03 Session 8c.
-- **Tests: 104 passing** (`pytest backend/tests/`).
+- The human ran the Part-2 real-mic test and wrote up the bugs/features as
+  `context_fixed_problem.md` (IDs: STRUCT-1/2, KIOSK-1..7, DOCTOR-1..7, MEDIC-1..7).
+- A 20-step sequenced plan was approved. **Steps 1–5 are DONE:** legacy demo isolated at
+  `/legacy/` + landing page at `/` (ADR-0031); Alembic rev **0010** applied (ADR-0032:
+  nullable `documents.utterance_id`, vitals, letterhead, `prescriptions` table);
+  visit-grain docx seam (`visit_docx.py`, `POST /api/visits/{uuid}/documents/{kind}`);
+  `shared.js` `fieldValue()` + C2 `TIER_BANDS` (browser-verified); M3/M8 bilingual
+  values (ADR-0033: one call fills `value_en`+`value_bn`, `value` mirrors value_en,
+  staff edits fill all slots untranslated, M9 counts any slot). **121 tests pass.**
+- ⚠ Rows extracted BEFORE step 5 stay English-only until re-extracted (fine — readers
+  fall back across slots).
+
+## Locked decisions for this build (human-approved, do NOT re-open)
+- **C1:** "Possible Condition (AI Suggestion – Not a Diagnosis)" IS allowed — clearly
+  labeled, disclaimer, editable by medic/doctor; the doctor's prescription Diagnosis field
+  is NEVER AI-filled (rule #2 boundary; needs its ADR when implemented).
+- **C2:** Risk "score" = display-only tier→band mapping in `shared.js` (e.g. low = 0–25%).
+  NO numeric score generated or stored.
+- **Storage:** prescriptions/reports are DB-backed: `documents.visit_id` (nullable FK),
+  new `documents.kind` values (`transcript`, `summary_report`, `prescription`), plus a
+  `prescriptions` table (visit_id, doctor_id, payload JSON, document_id) — Alembic **0010**.
+- **Bilingual values:** M3/M8 generate BOTH `value_bn` and `value_en` once, stored in the
+  `summary_fields` JSON; must stay back-compatible with existing `{value}` rows.
+- **Letterhead:** clinic (name/address/logo) + doctor (qualification/registration/
+  specialization/signature) live in DB columns (0010), reusable and editable.
+- **KIOSK-7:** resume loop on the summary screen asks ONLY still-missing fields, one at a
+  time, respects `followup_max_questions`; "নেই" / "No" / "জানি না" count as answered.
 
 ## The one thing we are doing next
-**Part 2 — the HUMAN real-microphone kiosk run in Chrome** (I cannot do this; it needs a voice):
-1. Start the server (port 8001), open `http://localhost:8001/kiosk.html`.
-2. Phone → any BD mobile → OTP `000000` → speak a Bangla complaint → answer the follow-up
-   questions by voice → check the 10-field summary → Confirm & Submit → watch the auto-logout.
-3. Open `/medic/` → login → case in queue WITH risk badge → edit a field → Assign Doctor →
-   Submit & Forward.
-4. Open `/doctor/` → login as that doctor → check risk/red-flags/XAI panel → Accept & Write to
-   EHR (or Override to Low-Risk).
-5. Record in `test_log.md`: TC-V2 (bn-BD TTS voice available per OS?), TC-V3 (voice-only loop),
-   TC-F2 (loop exits, no repeats), TC-R1 (say "বুকে ব্যথা" → tier must be Critical),
-   TC-A1 (pull a key → fallback provider logged in `module_events`).
+**Step 6 — kiosk OTP auto-advance (KIOSK-1)**, frontend-only:
+1. `frontend/kiosk.js` + `kiosk.html`: typing a digit auto-focuses the next `.otp-input`;
+   Backspace on an empty box moves to the previous one; pasting a full 6-digit code
+   fills all boxes; repeated digits like `000000` enter smoothly. DEV_OTP stays 000000.
+2. Verify in the browser preview (focus flow + paste), no backend change.
 
-**After that:** per-visit report `.docx` export (M12 → the existing DocxWriter/documents seam),
-then optional PDF, then Phase-1 faster-whisper.
+**Remaining steps (7–20, one per "go"):** repeat-btn diagnosis + per-message 🔊 (7) ·
+raw transcript download button → step-3 endpoint (8) · summary card redesign (9) ·
+toggle renders value_bn/value_en (10) · resume loop (11) · medic: toggle+polish+
+Queue-btn (12) · risk override endpoint (13) · suggested condition C1 (14) ·
+post-referral summary + docx download (15) · doctor: toggle+polish (16) · patient-details
+card (17) · prescription form (18) · prescription docx + save (19) · final test sweep +
+doc sweep + context_fixed_problem statuses (20).
 
 ## Important environment notes
-- **All three API keys are now set** in `backend/.env` (Gemini, Groq, OpenRouter). ⚠ The keys
-  were pasted in chat this session — rotate them before any public demo. `.env` is gitignored.
-- Free tiers: Gemini ~1,500/day, Groq ~1,000/day, OpenRouter `:free` ~50/day (a $10 top-up
-  raises it to 1,000/day). Never auto-run live LLM calls (quota + rule #4 synthetic-only).
-- Server: port 8001. Windows launch config `backend (FastAPI + uvicorn)`; Arch `backend-linux`.
-  `.env` changes need a restart.
-- Windows console gotcha: printing Bangla from a script needs `PYTHONIOENCODING=utf-8`.
-- **DEV_OTP=000000** (stub — no SMS). Patient phone lives in `patients.external_ref`.
-- Alembic migrates at startup (head `0009`); NEVER delete the DB. Pre-migration backups:
-  `backend/prescreener.db.pre-000{3,4,5,6,7}.bak` (gitignored).
-- Tier codes on the wire are always low/medium/high/critical; labels (incl. "Moderate", Bangla)
-  live ONLY in `frontend_shared/shared.js` TIER_LABELS.
+- All three API keys in `backend/.env` (Gemini/Groq/OpenRouter) — rotate before public demo.
+  Never auto-run live LLM calls (quota + rule #4 synthetic-only).
+- Server: port 8001. Entry points: `/` (landing) · `/kiosk.html` · `/medic/` · `/doctor/` ·
+  `/legacy/` (old Phase-0 demo — ADR-0031). `.env` changes need a restart.
+- **DEV_OTP=000000**. Alembic head `0010` (applied; backup `.pre-0010.bak`); NEVER delete the DB.
+- Windows console gotcha: Bangla prints need `PYTHONIOENCODING=utf-8`.
 
 ## Reminders
-- Raw words are never edited (rule #1) — staff edits touch only `summary_fields` (source
-  becomes 'human'; M8 never overwrites human fields). The system never diagnoses (rule #2).
-- Red flags: rule list in `backend/app/services/red_flags.py` — ADD phrases only, each with a
-  matching TC-R1 test case; the rule must always be able to force Critical (rule #3).
-- Plan first, one small step at a time (CLAUDE.md).
+- Raw words are never edited (rule #1); the system never diagnoses (rule #2) — C1 wording
+  is a *suggestion with disclaimer*, never a diagnosis. Red-flag phrases: ADD only, each
+  with a TC-R1 test (rule #3).
+- Tier codes on the wire stay `low|medium|high|critical`; labels ONLY in `TIER_LABELS`.
+- One small step per "go": diff → `pytest backend/tests/` → doc updates → wait.
 - Run (Windows): `.venv\Scripts\python.exe -m uvicorn backend.app.main:app --reload --port 8001`
 - Run (Arch):    `.venv/bin/python -m uvicorn backend.app.main:app --reload --port 8001`
-- Tests: `pytest backend/tests/` (**104 passing**).
+- Tests: `pytest backend/tests/` (**121 passing**).

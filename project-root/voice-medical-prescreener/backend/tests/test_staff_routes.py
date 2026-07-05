@@ -110,6 +110,10 @@ def test_full_staff_workflow(env):
     assert r.status_code == 200
     field = r.json()["entities"]["summary_fields"]["main_problem"]
     assert field["source"] == "human" and field["edited_by"] == ids["medic"]
+    # S9: the staff edit is authoritative for BOTH languages — typed text lands in
+    # every slot, untranslated (no quota spent on edits).
+    assert (field["value"] == field["value_en"] == field["value_bn"]
+            == "Fever with chills, 3 days")
 
     # medic forwards to the doctor -> awaiting_doctor + assignment recorded
     r = client.post(f"/api/visits/{uuid}/assign", json={"doctor_id": ids["doctor"]})

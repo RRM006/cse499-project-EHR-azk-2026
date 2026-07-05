@@ -6,6 +6,7 @@ Run from the project root:
 Serves the JSON API under /api and (once it exists) the static frontend at /.
 """
 
+import logging
 from contextlib import asynccontextmanager
 from pathlib import Path
 
@@ -19,20 +20,36 @@ from backend.app.api.routes_followup import router as followup_router
 from backend.app.api.routes_report import router as report_router
 from backend.app.api.routes_risk import router as risk_router
 from backend.app.api.routes_transcripts import router as transcripts_router
+from backend.app.api.routes_visit_documents import router as visit_documents_router
 from backend.app.api.routes_visits import router as visits_router
 from backend.app.db.database import init_db
 
 # backend/app/main.py -> parents[2] == project root, then the static portal dirs
 _PROJECT_ROOT = Path(__file__).resolve().parents[2]
-FRONTEND_DIR = _PROJECT_ROOT / "frontend"            # patient kiosk (+ legacy transcript app)
+FRONTEND_DIR = _PROJECT_ROOT / "frontend"            # landing page + patient kiosk
 FRONTEND_SHARED_DIR = _PROJECT_ROOT / "frontend_shared"
 FRONTEND_MEDIC_DIR = _PROJECT_ROOT / "frontend_medic"
 FRONTEND_DOCTOR_DIR = _PROJECT_ROOT / "frontend_doctor"
+FRONTEND_LEGACY_DIR = _PROJECT_ROOT / "frontend_legacy"  # Phase-0 transcript demo, isolated
+
+logger = logging.getLogger("uvicorn.error")
+
+# The app entry points this backend serves (STRUCT-2: surfaced at startup).
+ENTRY_POINTS = [
+    ("Landing page", "/"),
+    ("Patient kiosk", "/kiosk.html"),
+    ("Medic portal", "/medic/"),
+    ("Doctor portal", "/doctor/"),
+    ("Legacy Phase-0 demo", "/legacy/"),
+]
 
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     init_db()  # create SQLite tables if missing
+    logger.info("App entry points (relative to the server root, e.g. http://localhost:8001):")
+    for name, path in ENTRY_POINTS:
+        logger.info("  %-22s %s", name, path)
     yield
 
 
@@ -42,6 +59,7 @@ app = FastAPI(title="Voice Medical Pre-Screener", version="0.0.1", lifespan=life
 app.include_router(transcripts_router)
 app.include_router(documents_router)
 app.include_router(visits_router)
+app.include_router(visit_documents_router)
 app.include_router(followup_router)
 app.include_router(risk_router)
 app.include_router(dashboard_router)
@@ -60,6 +78,11 @@ if FRONTEND_MEDIC_DIR.is_dir():
     app.mount("/medic", StaticFiles(directory=FRONTEND_MEDIC_DIR, html=True), name="medic")
 if FRONTEND_DOCTOR_DIR.is_dir():
     app.mount("/doctor", StaticFiles(directory=FRONTEND_DOCTOR_DIR, html=True), name="doctor")
+
+# Legacy Phase-0 transcript demo — isolated at /legacy/ (STRUCT-1). Kept fully
+# working (its /api routes are unchanged); only its home moved off the root.
+if FRONTEND_LEGACY_DIR.is_dir():
+    app.mount("/legacy", StaticFiles(directory=FRONTEND_LEGACY_DIR, html=True), name="legacy")
 
 # Serve the frontend if it has been built (Step 5); otherwise a friendly placeholder.
 if FRONTEND_DIR.is_dir():

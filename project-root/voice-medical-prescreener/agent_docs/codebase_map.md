@@ -4,15 +4,17 @@
 > re-exploring the whole project each session. Update it whenever you add or move
 > a folder/file. Keep each note to one line.
 
-**Last updated:** 2026-07-03 (Session 8 — full-stack build; real structure now matches most of the
-planned layout: DB 0003–0009, M3–M12 services, three portals)
+**Last updated:** 2026-07-05 (Session 9 — legacy demo isolated at `/legacy/` (ADR-0031);
+`/` is now a landing page linking the four entry points; fix/feature build per
+`context_fixed_problem.md` in progress)
 
 ---
 
 ## Current structure (real, today)
 
-> Session 8 built the whole reconciled system. The old Module-1 transcript app (`frontend/index.html`
-> + `app.js`) and its routes/services are UNCHANGED and still served at `/`.
+> Session 8 built the whole reconciled system. Session 9 moved the old Module-1 transcript app
+> into `frontend_legacy/` (served at `/legacy/`, behavior unchanged — ADR-0031) and put a
+> portal landing page at `/`.
 
 ```
 voice-medical-prescreener/
@@ -31,19 +33,22 @@ voice-medical-prescreener/
 │   ├── migrations/versions/      # 0001_baseline · 0002_add_stt_provider_and_doc_kind ·
 │   │                              #   0003_aggregate_root (clinics/users/patients/visits + deltas + backfill + seeds) ·
 │   │                              #   0004_intake_profile (case_profiles, module_events) · 0005_followup_questions ·
-│   │                              #   0006_risk_xai · 0007_reports · 0008_doctor_reviews_feedback · 0009_audit_log
-│   ├── prescreener.db            # SQLite (gitignored); ALL 15 tables + alembic_version (head 0009)
-│   ├── prescreener.db.pre-000{3,4,5,6,7}.bak  # per-migration backups (gitignored)
+│   │                              #   0006_risk_xai · 0007_reports · 0008_doctor_reviews_feedback · 0009_audit_log ·
+│   │                              #   0010_prescriptions_letterhead (visit-grain docs, vitals, letterhead, prescriptions — ADR-0032)
+│   ├── prescreener.db            # SQLite (gitignored); 16 tables + alembic_version (head 0010)
+│   ├── prescreener.db.pre-000{3,4,5,6,7}.bak · .pre-0010.bak  # per-migration backups (gitignored)
 │   ├── data/documents/           # generated .docx (gitignored)
 │   ├── app/
-│   │   ├── main.py               # lifespan init_db; registers transcripts, documents, visits, followup, risk,
-│   │   │                          #   dashboard, report routers; mounts /shared /medic /doctor + kiosk at /
+│   │   ├── main.py               # lifespan init_db + ENTRY_POINTS startup log; registers transcripts, documents,
+│   │   │                          #   visits, followup, risk, dashboard, report routers; mounts /shared /medic
+│   │   │                          #   /doctor /legacy + landing/kiosk at / (ADR-0031)
 │   │   ├── core/
 │   │   │   ├── config.py         # + dev_otp, followup_max_questions, completeness_threshold, per-bucket models
 │   │   │   └── llm_providers.py  # NEW: provider registry + MODULE_PROVIDERS map (ADR-0026) + fallback chain
 │   │   ├── api/
 │   │   │   ├── routes_transcripts.py · routes_documents.py   # (existing, untouched)
 │   │   │   ├── routes_visits.py  # NEW: patients/lookup + verify-otp; visits CRUD + utterances; intake; profile
+│   │   │   ├── routes_visit_documents.py # S9: POST /api/visits/{uuid}/documents/{transcript|summary_report}
 │   │   │   ├── routes_followup.py# NEW: followup/next (M7) · followup/answer (M8+M9)
 │   │   │   ├── routes_risk.py    # NEW: assess (M10 + rule) · risk (latest + XAI)
 │   │   │   ├── routes_dashboard.py # NEW: users list · submit (→auto-assess) · dashboard queues · field-edit PATCH · assign
@@ -51,9 +56,11 @@ voice-medical-prescreener/
 │   │   ├── schemas/              # transcript, document (existing) + visit, patient, profile, followup, risk, dashboard
 │   │   ├── services/
 │   │   │   ├── correction/       # (existing) reused as M2
-│   │   │   ├── documents/        # (existing) DocxWriter + storage
+│   │   │   ├── documents/        # (existing) DocxWriter + storage; S9 + visit_docx.py (visit-grain
+│   │   │   │                      #   transcript/summary_report writers) + generate_visit_document()
 │   │   │   ├── llm_client.py     # NEW: call_module() — assigned bucket → fallback, logs module_events
-│   │   │   ├── intake.py         # NEW: M3 extract (10-field summary_fields) → M4 summary → M6 gaps
+│   │   │   ├── intake.py         # NEW: M3 extract (10-field summary_fields; bilingual value_en/value_bn since S9,
+│   │   │   │                      #   ADR-0033) → M4 summary → M6 gaps
 │   │   │   ├── followup.py       # NEW: M7 question gen (Groq; no repeats; stored + spoken)
 │   │   │   ├── profile_update.py # NEW: M8 re-extract + merge (human fields protected)
 │   │   │   ├── completion.py     # NEW: M9 completeness (LOCAL)
@@ -63,18 +70,26 @@ voice-medical-prescreener/
 │   │   │   └── audit.py          # NEW: audit() one-line append writer
 │   │   └── db/
 │   │       ├── database.py       # engine/session; run_migrations() + _legacy_stamp_revision() (mixed-state fix)
-│   │       ├── models.py         # Utterance/Document (+visit_id/role/seq) + Clinic/User/Patient/Visit + CaseProfile/
-│   │       │                      #   ModuleEvent/FollowupQuestion/RiskAssessment/XaiExplanation/Report/DoctorReview/Feedback/AuditLog
+│   │       ├── models.py         # Utterance/Document (+visit_id/role/seq; utterance_id nullable since 0010) + Clinic/User/
+│   │       │                      #   Patient/Visit + CaseProfile/ModuleEvent/FollowupQuestion/RiskAssessment/XaiExplanation/
+│   │       │                      #   Report/DoctorReview/Feedback/AuditLog + Prescription (0010, ADR-0032)
 │   │       ├── repository.py     # (existing) utterance/document session-grain writers (NO raw mutator)
 │   │       └── repository_visits.py # NEW: normalize_phone, get/create patient+visit, add_utterance, set_visit_status
 │   └── tests/                    # 6 existing suites + test_migration_0003 · test_routes_visits · test_intake ·
-│                                  #   test_followup_loop · test_risk · test_staff_routes · test_report_review  (104 total)
+│                                  #   test_followup_loop · test_risk · test_staff_routes · test_report_review ·
+│                                  #   test_routes_static (entry points + legacy isolation) ·
+│                                  #   test_migration_0010 (visit-grain docs + prescriptions) ·
+│                                  #   test_visit_documents (transcript verbatim + summary report) ·
+│                                  #   test_bilingual_fields (value_en/value_bn + legacy back-compat)  (121 total)
 ├── frontend/                     # patient side (served at /)
-│   ├── index.html · app.js · styles.css   # OLD Module-1 transcript app (unchanged, at /)
-│   ├── kiosk.html · kiosk.js     # NEW patient kiosk (at /kiosk.html): phone→OTP→voice chat→10-field summary→submit→auto-logout
+│   ├── index.html                # NEW (S9): landing page linking the 4 entry points (ADR-0031)
+│   ├── kiosk.html · kiosk.js     # patient kiosk (at /kiosk.html): phone→OTP→voice chat→10-field summary→submit→auto-logout
+├── frontend_legacy/              # OLD Module-1 transcript app, isolated (served at /legacy/ — ADR-0031)
+│   ├── index.html · app.js · styles.css   # unchanged behavior; asset refs made relative
 ├── frontend_shared/              # NEW: shared portal assets (mounted at /shared)
 │   ├── shared.css                # clinical-blue design system (ADR-0029) + Noto Sans Bengali
-│   ├── shared.js                 # TIER_LABELS (only place codes→labels), EN/BN helper, api()/showError()
+│   ├── shared.js                 # TIER_LABELS (only place codes→labels), TIER_BANDS/tierBand (C2, display-only),
+│   │                              #   fieldValue() (bilingual value_bn/value_en + {value} legacy), EN/BN helper, api()/showError()
 │   ├── staff.js                  # queue render, phone lookup, verbatim panel, 10 editable field cards
 │   └── tts.js                    # speak() via speechSynthesis bn-BD (Step A1); text stays the fallback
 ├── frontend_medic/index.html     # NEW medic portal (at /medic/): login→queue→verbatim+fields→Assign & Forward
@@ -85,8 +100,9 @@ REMOVED in Session 4 (browser-only): `services/stt/**`, `api/routes_stt.py`, the
 requirements files, the STT config/.env block. (Still gone.)
 
 Run from the project root. App: `python -m uvicorn backend.app.main:app --reload --port 8001`
-(use the venv's Python). Tests: `pytest backend/tests/` (**104 passing**). Schema is Alembic-managed
-and migrates at startup — never delete the DB. Portals: `/kiosk.html`, `/medic/`, `/doctor/`.
+(use the venv's Python). Tests: `pytest backend/tests/` (**121 passing**). Schema is Alembic-managed
+and migrates at startup — never delete the DB. Entry points: `/` (landing), `/kiosk.html`,
+`/medic/`, `/doctor/`, `/legacy/`.
 
 ---
 

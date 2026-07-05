@@ -498,3 +498,29 @@ OTP verify (`DEV_OTP` env; no session table — the kiosk session is `visits.uui
 mockup's "Moderate" badge is a display label for tier `'medium'` (one shared frontend
 `TIER_LABELS` map); the mockup's clinical-blue visual system supersedes the Mintlify rule
 (ADR-0029, a flagged + human-approved locked-doc change).
+
+## 8. Session-9 fix/feature deltas (2026-07-05 — rev `0010`, ADR-0032; spec: `context_fixed_problem.md`)
+
+The human's Part-2 live test produced a bug/feature spec whose approved decisions add one
+migration (**`0010_prescriptions_letterhead`**, applied) — every §0 principle holds:
+
+1. **`documents.utterance_id` becomes NULLABLE** — visit-grain exports (full-visit raw
+   transcript KIOSK-4, staff summary report MEDIC-7, prescription DOCTOR-6) have no single
+   source utterance; they set `visit_id` only. New `documents.kind` values
+   (`'transcript' | 'summary_report' | 'prescription'`) are data-level (no CHECK on kind).
+2. **`patients.weight_kg` + `patients.bp`** — vitals for the staff detail views
+   (DOCTOR-3/MEDIC-6); weight is medic-editable. Age/gender were already `birth_year`/`sex`.
+3. **`users.qualification` / `registration_no` / `specialization` / `signature_path`** and
+   **`clinics.address` / `logo_path`** — reusable, editable prescription letterhead
+   (DOCTOR-4; human decision: DB-backed, not static config).
+4. **New `prescriptions` table** — `id, visit_id FK, doctor_id FK, payload JSON,
+   document_id FK → documents, created_at, updated_at`. The form lives in `payload`
+   (§0 principle 3: evolving shapes are JSON); the `Diagnosis` inside it is typed by the
+   human doctor and is NEVER AI-filled (rule #2, decision C1). `document_id` links the
+   exported `.docx`, retrievable later by both doctor and patient.
+
+Non-schema resolutions this session: risk "score" is a **display-only tier→band map** in
+`shared.js` (decision C2 — no numeric score generated or stored); bilingual summary values
+are stored as `value_bn`/`value_en` inside the existing `summary_fields` JSON (no
+migration); the legacy Phase-0 demo moved to `/legacy/` with a landing page at `/`
+(ADR-0031).

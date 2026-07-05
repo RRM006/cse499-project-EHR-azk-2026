@@ -23,12 +23,18 @@ def _new_uuid() -> str:
 
 
 class Clinic(Base):
-    """Tenant root (architecture.md principle 1). One row now; multi-clinic is additive later."""
+    """Tenant root (architecture.md principle 1). One row now; multi-clinic is additive later.
+
+    ``address``/``logo_path`` feed the prescription letterhead (DOCTOR-4, rev 0010) —
+    stored here so every prescription reuses them without re-entry.
+    """
 
     __tablename__ = "clinics"
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
     name: Mapped[str] = mapped_column(String(255), nullable=False)
+    address: Mapped[str | None] = mapped_column(Text, nullable=True)
+    logo_path: Mapped[str | None] = mapped_column(String(512), nullable=True)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=_utcnow)
 
 
@@ -49,6 +55,11 @@ class User(Base):
     name: Mapped[str] = mapped_column(String(255), nullable=False)
     role: Mapped[str] = mapped_column(String(16), nullable=False)
     email: Mapped[str | None] = mapped_column(String(255), unique=True, nullable=True)
+    # Doctor letterhead fields for the prescription module (DOCTOR-4, rev 0010).
+    qualification: Mapped[str | None] = mapped_column(String(255), nullable=True)
+    registration_no: Mapped[str | None] = mapped_column(String(64), nullable=True)
+    specialization: Mapped[str | None] = mapped_column(String(255), nullable=True)
+    signature_path: Mapped[str | None] = mapped_column(String(512), nullable=True)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=_utcnow)
 
 
@@ -71,6 +82,10 @@ class Patient(Base):
     display_name: Mapped[str | None] = mapped_column(String(255), nullable=True)
     sex: Mapped[str | None] = mapped_column(String(16), nullable=True)
     birth_year: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    # Vitals for the staff patient-details views (DOCTOR-3 / MEDIC-6, rev 0010);
+    # weight is medic-editable, bp is a free-form reading like "120/80".
+    weight_kg: Mapped[float | None] = mapped_column(Float, nullable=True)
+    bp: Mapped[str | None] = mapped_column(String(32), nullable=True)
     consent: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False, server_default="0")
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=_utcnow)
 
@@ -319,8 +334,9 @@ class Document(Base):
     correction). A Document is a *derived* file, regenerable from the Utterance, so
     it never holds the canonical words — it just records what was exported and where.
 
-    ``utterance_id`` is the session grain today. Future Patient/Visit tables can add
-    their own columns/foreign keys here without disturbing this one.
+    Two grains (rev 0010): legacy exports point at one ``utterance_id``; visit-grain
+    exports (kind 'transcript' | 'summary_report' | 'prescription') point at
+    ``visit_id`` only and leave ``utterance_id`` NULL.
     """
 
     __tablename__ = "documents"
@@ -329,9 +345,10 @@ class Document(Base):
     # names leak nothing patient-identifying and are safe to expose in URLs.
     id: Mapped[str] = mapped_column(String(36), primary_key=True, default=_new_uuid)
 
-    # Which session (utterance) this document was generated from.
-    utterance_id: Mapped[int] = mapped_column(
-        ForeignKey("utterances.id"), nullable=False, index=True
+    # Which session (utterance) this document was generated from. NULL for
+    # visit-grain exports, which have no single source utterance (rev 0010).
+    utterance_id: Mapped[int | None] = mapped_column(
+        ForeignKey("utterances.id"), nullable=True, index=True
     )
 
     # Which visit this export belongs to (aggregate root). Nullable: legacy exports
@@ -357,3 +374,26 @@ class Document(Base):
 
     def __repr__(self) -> str:  # pragma: no cover - debug aid only
         return f"<Document id={self.id!r} utterance_id={self.utterance_id} format={self.format!r}>"
+
+
+class Prescription(Base):
+    """DOCTOR-4/5/6 (rev 0010) — a doctor-authored prescription for one visit.
+
+    ``payload`` is the whole form as JSON (patient info, symptoms, diagnosis,
+    medicines[], advice, tests, follow-up date, language) so the shape can evolve
+    without migrations (principle 3). The Diagnosis inside it is typed by the human
+    doctor — NEVER AI-filled (rule #2, human decision C1). ``document_id`` links the
+    exported .docx once generated; retrievable later by both doctor and patient.
+    """
+
+    __tablename__ = "prescriptions"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    visit_id: Mapped[int] = mapped_column(ForeignKey("visits.id"), nullable=False, index=True)
+    doctor_id: Mapped[int] = mapped_column(ForeignKey("users.id"), nullable=False)
+    payload: Mapped[dict] = mapped_column(JSON, nullable=False)
+    document_id: Mapped[str | None] = mapped_column(ForeignKey("documents.id"), nullable=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=_utcnow)
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), default=_utcnow, onupdate=_utcnow
+    )

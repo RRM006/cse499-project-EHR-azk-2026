@@ -11,8 +11,11 @@ class DocumentOut(BaseModel):
     model_config = ConfigDict(from_attributes=True)  # build from ORM objects
 
     id: str
-    utterance_id: int
-    kind: str  # "raw" | "corrected" (or "combined" for legacy rows)
+    utterance_id: int | None  # NULL for visit-grain exports (rev 0010)
+    visit_id: int | None = None
+    # utterance-grain: "raw" | "corrected" ("combined" for legacy rows);
+    # visit-grain: "transcript" | "summary_report" | "prescription".
+    kind: str
     format: str
     filename: str
     created_at: datetime

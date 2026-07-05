@@ -1,6 +1,8 @@
 /* Shared helpers for all three portals (FE-0).
    - TIER_LABELS: the ONE place risk tier codes map to display labels (ADR-0030 e —
      the schema/API always speak 'low|medium|high|critical'; "Moderate" etc. live here).
+   - TIER_BANDS: display-only tier→percentage-band map (decision C2, Session 9).
+   - fieldValue(): bilingual summary-field values (value_bn/value_en, {value} legacy).
    - Bilingual EN/BN via data-en / data-bn attributes (mockup pattern).
    - api(): thin fetch wrapper that surfaces backend error details. */
 
@@ -11,6 +13,16 @@ const TIER_LABELS = {
   critical: { en: 'Critical', bn: 'ঝুঁকিপূর্ণ' },
 };
 
+/* Decision C2 (Session 9): the "risk score %" the staff UIs show is a FIXED band per
+   tier, purely presentational. No numeric score is generated, stored, or sent on the
+   wire — inventing per-case percentages would fake precision the model doesn't have. */
+const TIER_BANDS = {
+  low:      '0–25%',
+  medium:   '26–50%',
+  high:     '51–75%',
+  critical: '76–100%',
+};
+
 let currentLanguage = localStorage.getItem('lang') || 'en';
 
 function tierLabel(tier) {
@@ -18,9 +30,29 @@ function tierLabel(tier) {
   return entry ? entry[currentLanguage] : (tier || '—');
 }
 
+function tierBand(tier) {
+  return TIER_BANDS[tier] || '—';
+}
+
 function tierBadge(tier) {
   if (!tier) return '<span class="risk-badge">—</span>';
   return `<span class="risk-badge risk-${tier}">${tierLabel(tier)}</span>`;
+}
+
+/* One summary field ({value_bn, value_en, source, ...}) -> the display string for the
+   CURRENT language. Falls back across languages, then to the legacy {value} shape
+   (pre-Session-9 rows), then to ''. Callers supply their own empty placeholder.
+   Display-only: never writes back — the stored field is untouched. */
+function fieldValue(field) {
+  if (!field || typeof field !== 'object') return '';
+  const byLang = currentLanguage === 'bn'
+    ? [field.value_bn, field.value, field.value_en]
+    : [field.value_en, field.value, field.value_bn];
+  for (const v of byLang) {
+    const s = (v === undefined || v === null) ? '' : String(v).trim();
+    if (s) return s;
+  }
+  return '';
 }
 
 /* Re-render every element carrying data-en/data-bn in the chosen language. */

@@ -27,9 +27,17 @@ SUMMARY_FIELD_KEYS: tuple[str, ...] = (
 
 
 class SummaryFieldValue(BaseModel):
-    """One of the 10 fields, with provenance (who last set it)."""
+    """One of the 10 fields, with provenance (who last set it).
 
-    value: str = Field("", description="The field text; empty string when unknown.")
+    Bilingual since Session 9 (KIOSK-6/DOCTOR-2/MEDIC-1): M3/M8 fill ``value_en`` and
+    ``value_bn`` in one extraction call (no separate translation quota). ``value``
+    stays populated (same text as ``value_en``) so every pre-Session-9 consumer and
+    stored row keeps working — readers new and old fall back across the three.
+    """
+
+    value: str = Field("", description="Canonical/legacy single text (mirrors value_en).")
+    value_en: str = Field("", description="The field text in English.")
+    value_bn: str = Field("", description="The same content in Bangla (Bangla script).")
     source: Literal["ai", "human"] = Field("ai", description="Who produced the current value.")
     edited_by: int | None = Field(None, description="users.id of the staff editor, if human.")
     edited_at: datetime | None = None

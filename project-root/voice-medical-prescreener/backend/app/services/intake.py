@@ -29,8 +29,10 @@ _EXTRACT_SYSTEM = (
     "Return ONLY a JSON object (no markdown, no commentary) with EXACTLY these keys:\n"
     + ", ".join(SUMMARY_FIELD_KEYS)
     + ", symptom_details_structured.\n"
-    "Each of the 10 named keys maps to a short plain-text string in English "
-    "summarizing what the patient said for that field, or \"\" if not mentioned.\n"
+    "Each of the 10 named keys maps to an object {\"en\": \"...\", \"bn\": \"...\"} — "
+    "the SAME short summary of what the patient said for that field, written once in "
+    "plain English (en) and once in Bangla using Bangla script (bn). If the field was "
+    "not mentioned, use {\"en\": \"\", \"bn\": \"\"}.\n"
     "symptom_details_structured is an object {location, character, worse, better, "
     "pain_severity_0_10} (strings, severity an integer 0-10 or null).\n"
     "Base every value ONLY on the conversation text."
@@ -71,11 +73,22 @@ def _parse_json(text: str) -> dict:
 
 
 def _to_summary_fields(extracted: dict) -> SummaryFields:
-    """Coerce the model's extraction JSON into the enforced 10-field shape."""
+    """Coerce the model's extraction JSON into the enforced 10-field shape.
+
+    Accepts BOTH reply shapes per key: the bilingual object {"en", "bn"} (current
+    prompt) and a plain string (older prompt / model salvage — treated as English).
+    ``value`` mirrors ``value_en`` so pre-Session-9 consumers keep working.
+    """
     payload: dict = {}
     for key in SUMMARY_FIELD_KEYS:
         value = extracted.get(key, "")
-        payload[key] = {"value": str(value) if value is not None else "", "source": "ai"}
+        if isinstance(value, dict):
+            en = str(value.get("en") or "").strip()
+            bn = str(value.get("bn") or "").strip()
+        else:
+            en = str(value).strip() if value is not None else ""
+            bn = ""
+        payload[key] = {"value": en, "value_en": en, "value_bn": bn, "source": "ai"}
     structured = extracted.get("symptom_details_structured") or {}
     if isinstance(structured, dict):
         payload["symptom_details_structured"] = {
