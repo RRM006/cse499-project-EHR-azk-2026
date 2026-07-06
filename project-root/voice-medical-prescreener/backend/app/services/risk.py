@@ -115,6 +115,45 @@ def assess_visit(db: Session, visit: Visit, profile: CaseProfile | None) -> Risk
     return assessment
 
 
+class RiskOverrideBlocked(Exception):
+    """A staff override that would hide a red-flag Critical (rule #3)."""
+
+
+def override_assessment(
+    db: Session, visit: Visit, *, tier: str, reason: str | None = None
+) -> RiskAssessment:
+    """MEDIC-3 — append a HUMAN assessment row (model_provider='human').
+
+    Red flags and rule_overrode are carried forward from the latest row so the
+    safety story never disappears from any reader (rule #3). A red-flag Critical
+    cannot be downgraded by staff — only the doctor decides at review (rule #2).
+    Caller guarantees a latest assessment exists.
+    """
+    latest = latest_assessment(db, visit_id=visit.id)
+    if latest.red_flags and latest.tier == "critical" and tier != "critical":
+        raise RiskOverrideBlocked(
+            "This Critical tier was forced by the red-flag rule and cannot be "
+            "downgraded before the doctor's review."
+        )
+    assessment = RiskAssessment(
+        visit_id=visit.id,
+        tier=tier,
+        red_flags=list(latest.red_flags or []),
+        rule_overrode=latest.rule_overrode,
+        model_provider="human",
+    )
+    db.add(assessment)
+    db.commit()
+    db.refresh(assessment)
+    # Constitution: no risk row without a stored reason — human rows included.
+    reason_text = f"Risk tier set to '{tier}' by staff override."
+    if reason:
+        reason_text += f" Reason: {reason}"
+    db.add(XaiExplanation(risk_assessment_id=assessment.id, reason_text=reason_text, drivers=None))
+    db.commit()
+    return assessment
+
+
 def latest_assessment(db: Session, *, visit_id: int) -> RiskAssessment | None:
     return (
         db.query(RiskAssessment)

@@ -4,7 +4,14 @@ POST /api/visits/{uuid}/followup/next    — next prioritized question (text; th
                                            frontend also speaks it via TTS).
 POST /api/visits/{uuid}/followup/answer  — accept the voice answer, update the
                                            profile, return {complete, next?}.
+
+Both accept ?scope=fields (KIOSK-7 resume loop on the kiosk summary screen): the
+0.7-threshold gate does NOT apply — "complete" then means every one of the 10
+summary fields carries text, the shared question cap was reached, or every empty
+field has already been asked once ("নেই / জানি না" counts as answered).
 """
+
+from typing import Literal
 
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session
@@ -15,7 +22,7 @@ from backend.app.db.database import get_db
 from backend.app.db.models import CaseProfile, FollowupQuestion, Visit
 from backend.app.schemas.followup import AnswerOut, AnswerRequest, NextQuestionOut
 from backend.app.services.completion import completeness_score
-from backend.app.services.followup import generate_next_question
+from backend.app.services.followup import generate_next_question, missing_summary_fields
 from backend.app.services.llm_client import LLMCallError
 from backend.app.services.profile_update import process_answer
 
@@ -37,9 +44,32 @@ def _loop_state(profile: CaseProfile) -> tuple[float, bool]:
     return score, score >= get_settings().completeness_threshold
 
 
+def _fields_scope_step(
+    db: Session, visit: Visit, profile: CaseProfile
+) -> tuple[bool, float, FollowupQuestion | None]:
+    """One resume-loop step: (complete, score, question). Complete when all 10
+    fields are filled, or the generator stops (shared cap / everything asked)."""
+    score = completeness_score(profile)
+    missing = missing_summary_fields(profile)
+    if not missing:
+        return True, score, None
+    try:
+        question = generate_next_question(db, visit, profile, missing=missing)
+    except LLMCallError as exc:
+        raise HTTPException(status_code=502, detail=str(exc))
+    return question is None, score, question
+
+
 @router.post("/visits/{visit_uuid}/followup/next", response_model=NextQuestionOut)
-def next_question(visit_uuid: str, db: Session = Depends(get_db)) -> NextQuestionOut:
+def next_question(
+    visit_uuid: str,
+    scope: Literal["fields"] | None = None,
+    db: Session = Depends(get_db),
+) -> NextQuestionOut:
     visit, profile = _visit_and_profile(db, visit_uuid)
+    if scope == "fields":  # KIOSK-7 resume loop — no threshold gate
+        complete, score, question = _fields_scope_step(db, visit, profile)
+        return NextQuestionOut(complete=complete, completeness_score=score, question=question)
     score, threshold_met = _loop_state(profile)
     if threshold_met:
         return NextQuestionOut(complete=True, completeness_score=score)
@@ -54,7 +84,10 @@ def next_question(visit_uuid: str, db: Session = Depends(get_db)) -> NextQuestio
 
 @router.post("/visits/{visit_uuid}/followup/answer", response_model=AnswerOut)
 def answer_question(
-    visit_uuid: str, payload: AnswerRequest, db: Session = Depends(get_db)
+    visit_uuid: str,
+    payload: AnswerRequest,
+    scope: Literal["fields"] | None = None,
+    db: Session = Depends(get_db),
 ) -> AnswerOut:
     visit, _ = _visit_and_profile(db, visit_uuid)
     if visit.status != "in_progress":
@@ -77,6 +110,10 @@ def answer_question(
         profile = process_answer(db, visit=visit, question=question, answer=answer)
     except LLMCallError as exc:
         raise HTTPException(status_code=502, detail=str(exc))
+
+    if scope == "fields":  # KIOSK-7 resume loop — no threshold gate
+        complete, score, next_q = _fields_scope_step(db, visit, profile)
+        return AnswerOut(complete=complete, completeness_score=score, next_question=next_q)
 
     score, threshold_met = _loop_state(profile)
     if threshold_met:

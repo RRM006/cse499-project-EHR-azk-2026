@@ -16,6 +16,52 @@
 
 ---
 
+## Session 11 — 2026-07-06 — Steps 8–13 of 20: kiosk summary complete (KIOSK-4/5/6/7) + medic bilingual/polish/refresh (MEDIC-1/2/5) + risk override (MEDIC-3)
+- Did: **Step 8 (KIOSK-4):** bilingual "Download Raw Transcript (.docx)" button on the kiosk
+  summary screen (before Confirm & Submit), wired to the existing step-3 endpoint via a
+  temporary-anchor click (kiosk page never navigates away); no backend change.
+  **Step 9 (KIOSK-5):** summary redesigned — each of the 10 fields is its own card (18px
+  radius, backdrop blur, soft shadow, icon chip 🩺⏱️📋🤒📖💊⚠️🔄🩹💬, bold primary-blue
+  titles); clinically key fields (main problem, duration, symptom details, medicines,
+  allergies) get a left accent border + value badge; empty = muted-italic "Not mentioned /
+  উল্লেখ করা হয়নি"; clinical-blue tokens only. **Step 10 (KIOSK-6):** summary follows the
+  language toggle end-to-end — `renderSummary()` reads via `fieldValue()`, profile kept as
+  `state.lastProfile`, `onLanguageChange()` re-renders; legacy `{value}` rows display as-is.
+  **Step 11 (KIOSK-7, ADR-0034):** resume loop live — `?scope=fields` on `followup/next`
+  + `followup/answer` (no 0.7-threshold gate; missing = empty summary-field keys via new
+  `missing_summary_fields()`; `target_gap` forced to a real field key so "নেই/জানি না"
+  is never re-asked; SHARED per-visit question cap). Kiosk: progress chip ("৮/১০ তথ্য
+  সম্পন্ন"), resume voice dock on the summary screen (one recognition engine serves both
+  docks via `activeDock()`), Confirm & Submit hidden while a question is open, summary
+  regenerates after every answer, FAIL-OPEN (cap/API-error → submit returns; never trap
+  the patient). New `test_resume_loop.py` (5 tests). **Step 12 (MEDIC-1/2/5):** staff.js
+  fully bilingual (labels+icons, badges, verbatim chrome via t(); values via fieldValue();
+  new `staffLanguageRefresh()`), medic portal gets the EN/বাংলা toggle + data-en/bn on all
+  static text; "↻ Queue" → "↻ Refresh Queue / তালিকা রিফ্রেশ" (clears the phone filter +
+  reloads — its one clear job); field-card icon chips + queue hover in shared.css; doctor
+  portal (shares staff.js) regression-checked. **Step 13 (MEDIC-3, ADR-0035):**
+  `POST /api/visits/{uuid}/risk/override` — appends a `model_provider='human'`
+  risk_assessments row (AI rows never edited), carries red_flags + rule_overrode forward,
+  stores a reason (constitution), audit_logs from/to/reason; **red-flag Critical cannot be
+  downgraded by staff (409)** — only the doctor decides at review. Medic risk panel: tier
+  badge + C2 display band + AI/Human badge + red flags + XAI + override select (labels
+  from TIER_LABELS, band per tier) + reason box. New `test_risk_override.py` (3 tests).
+  **129 tests pass** (121 + 5 + 3). All frontend steps browser-verified with stubbed
+  network (no live LLM spend).
+- Decided: ADR-0034 (resume loop = `?scope=fields` on the existing endpoints; shared
+  question cap; asked-once = answered); ADR-0035 (risk override = appended human row, no
+  migration; red-flag-Critical downgrade blocked for staff).
+- Broke / problem: `preview_screenshot` tool times out this session (page itself healthy —
+  all assertions via eval/a11y snapshot); the step-9 visual is worth a human eyeball at
+  /kiosk.html (Ctrl+F5 first).
+- Deferred: Steps 14–20 (one per "go"): C1 suggested condition (14) · post-referral
+  summary + docx (15) · doctor toggle+polish (16) · patient-details card (17) ·
+  prescription form (18) · prescription docx + save (19) · final sweep (20). Real-M7
+  resume-loop questions over Groq untested by design — covered by the next live-mic run.
+- Next: Step 14 — MEDIC-4 / C1: "Possible Condition (AI Suggestion – Not a Diagnosis)"
+  section (clearly labeled, disclaimer, editable; doctor's Diagnosis never AI-filled —
+  needs its own ADR per the locked C1 note). See `current_task.md`.
+
 ## Session 10 — 2026-07-06 — Fix/feature build continues: steps 6–7 (KIOSK-1 OTP + KIOSK-2/3 TTS UX)
 - Did: **Step 6 DONE (KIOSK-1):** `frontend/kiosk.js` gains `initOtpInputs()` — typing a
   digit auto-focuses the next `.otp-input` (repeated digits like 000000 flow smoothly),

@@ -6,14 +6,17 @@
 
 **Status keys:** ⬜ Not started · 🟨 In progress · 🟦 Blocked · ✅ Done · ⛔ Retired
 
-**Last updated:** 2026-07-06 (Session 10 — fix/feature build, steps 6–7 done)
+**Last updated:** 2026-07-06 (Session 11 — fix/feature build, steps 8–13 done)
 **Current phase:** Fix/feature build from the human's Part-2 live test — 20-step approved plan
-(spec: `context_fixed_problem.md`), one step per "go". Steps 1–7 DONE (legacy isolation
-ADR-0031; Alembic 0010 applied ADR-0032; visit-grain docx seam; shared.js `fieldValue()` +
-C2 `TIER_BANDS`; M3/M8 bilingual values ADR-0033; kiosk OTP auto-advance KIOSK-1;
-per-message 🔊 + no-Bangla-voice hint KIOSK-2/3 — Repeat-button root cause CONFIRMED:
-no bn TTS voice on the Windows box, TC-V2 in test_log). **121 tests pass.**
-**Module in focus:** kiosk (M7 voice UX); next = step 8 (KIOSK-4 raw transcript download).
+(spec: `context_fixed_problem.md`), one step per "go". **Steps 1–13 DONE:** S9 = legacy
+isolation ADR-0031 · Alembic 0010 ADR-0032 · visit-grain docx seam · `fieldValue()` +
+`TIER_BANDS` · bilingual values ADR-0033. S10 = kiosk OTP KIOSK-1 · per-message 🔊 +
+no-bn-voice hint KIOSK-2/3. S11 = raw-transcript download KIOSK-4 · summary card redesign
+KIOSK-5 · language-consistent summary KIOSK-6 · **resume loop KIOSK-7 (ADR-0034)** ·
+medic bilingual/polish/Refresh-Queue MEDIC-1/2/5 · **risk override MEDIC-3 (ADR-0035:**
+human row appended, audit-logged, red-flag-Critical downgrade blocked**)**. **129 tests pass.**
+**Module in focus:** medic portal (M14-adjacent staff UI); next = step 14 (MEDIC-4 / C1
+suggested condition — plan + ADR first).
 **Progress:** Session 8 built the reconciled system end to end (see `changelog.md` S8 +
 `reconciliation.md`). **DB:** all 15 architecture.md tables applied (Alembic head `0009_audit_log`).
 **Backend:** kiosk phone + stub OTP → visit; intake (M3/M4/M6); follow-up loop (M7/M8/M9);
@@ -44,6 +47,15 @@ at `/`, startup entry-point log (ADR-0031). Step 2 DONE: Alembic **0010** applie
 `prescriptions` table — ADR-0032, architecture.md §8). **113 tests pass.** Module statuses
 unchanged — the affected areas (M7 loop UX, M12 exports, M14 dashboards) move when their
 steps land.
+**Session 11:** steps 8–13 landed. Kiosk summary is feature-complete for this build
+(KIOSK-4 raw .docx download · KIOSK-5 per-field cards · KIOSK-6 full language consistency ·
+KIOSK-7 resume loop: `?scope=fields` on the M7–M9 endpoints, shared question cap, progress
+chip, fail-open — ADR-0034). Medic portal: fully bilingual staff.js + EN/বাংলা toggle +
+Refresh-Queue clarity (MEDIC-1/2/5) and the MEDIC-3 risk panel + override endpoint
+(ADR-0035: appended `model_provider='human'` rows, audit_log from/to, staff cannot
+downgrade a red-flag Critical — 409). **129 tests pass** (new: test_resume_loop 5,
+test_risk_override 3). Module statuses still 🟨 — the gate remains the human live-voice
+re-run; M7's loop UX and M10's override path are now built-and-offline-tested.
 
 ---
 
@@ -57,10 +69,10 @@ steps land.
 | 4 | Initial Clinical Summary | 🟨 | A 2–4 sentence chief-complaint summary is generated from extracted fields and shown to the doctor. **Built** (`services/intake.py`, M4). |
 | 5 | ~~Emergency Detection~~ | ⛔ | **RETIRED (Session 7, ADR-0024).** The standalone module + its flowchart diamond/alert are removed. Its job is now a **rule-based red-flag check inside Module 10** (see M10). Number 5 is left as a permanent gap so M6–M15 keep their IDs. |
 | 6 | Missing Information Analysis | 🟨 | System outputs a checklist of present vs. missing data points for the case. Now fed **directly by M4** (M4→M6, no emergency branch). **Built** (`services/intake.py`, M6 → `case_profiles.gaps`). |
-| 7 | Follow-up Question Generation | 🟨 | System generates prioritized follow-up questions (Bangla/English) for the gaps, no repeats of answered items; each question is **shown as text AND spoken via TTS**, and the patient replies **by voice only** (ADR-0027/0028). **Built** (`services/followup.py` + kiosk STT/TTS; S10: per-message 🔊 + no-voice hint). TC-V2 partial: Windows dev box has NO bn TTS voice (text fallback + hint verified; audio needs a voice installed). Live voice loop pending (TC-V3/F2). |
+| 7 | Follow-up Question Generation | 🟨 | System generates prioritized follow-up questions (Bangla/English) for the gaps, no repeats of answered items; each question is **shown as text AND spoken via TTS**, and the patient replies **by voice only** (ADR-0027/0028). **Built** (`services/followup.py` + kiosk STT/TTS; S10: per-message 🔊 + no-voice hint; S11: KIOSK-7 resume loop — `?scope=fields` targets the empty summary fields, shared cap, "নেই/জানি না" counts as answered, ADR-0034). TC-V2 partial: Windows dev box has NO bn TTS voice (text fallback + hint verified; audio needs a voice installed). Live voice loop pending (TC-V3/F2). |
 | 8 | Response Processing & Profile Update | 🟨 | Patient answers are re-processed and merged into the profile with conflict handling. **Built** (`services/profile_update.py`, M8; human-edited fields are never overwritten). |
 | 9 | Case Completion Check | 🟨 | A completeness score is computed; loops back to Module 7 until threshold or max turns reached. **Built** (`services/completion.py`, LOCAL; threshold + max-turn exit, both env-tunable). |
-| 10 | Risk Assessment Engine | 🟨 | Each case is classified Low/Medium/High/Critical from rules + model; **a rule-based red-flag check forces Critical for clearly life-threatening symptoms (chest pain, stroke signs, severe breathing difficulty, loss of consciousness) and surfaces them prominently**; accuracy + red-flag recall recorded on a labeled test set. **Built** (`services/risk.py` + `red_flags.py`; rule survives total LLM outage; red-flag recall enforced per-phrase in tests). Accuracy on labeled real data pending. |
+| 10 | Risk Assessment Engine | 🟨 | Each case is classified Low/Medium/High/Critical from rules + model; **a rule-based red-flag check forces Critical for clearly life-threatening symptoms (chest pain, stroke signs, severe breathing difficulty, loss of consciousness) and surfaces them prominently**; accuracy + red-flag recall recorded on a labeled test set. **Built** (`services/risk.py` + `red_flags.py`; rule survives total LLM outage; red-flag recall enforced per-phrase in tests; S11: MEDIC-3 staff override appends a human row, audit-logged, red-flag-Critical downgrade blocked — ADR-0035). Accuracy on labeled real data pending. |
 | 11 | Explainable AI (XAI) | 🟨 | Every risk output has a plain-language reason listing the contributing factors. **Built** (`services/risk.py`, M11; deterministic fallback so no risk row is ever reason-less). |
 | 12 | Structured Clinical Report | 🟨 | A full report (all sections) is generated and exportable as PDF + dashboard view; contains **no diagnosis**; includes a **Red Flags** section sourced from M10. **Built** (`services/report.py`, LOCAL assembly + disclaimer; shown in doctor portal). Per-visit `.docx` export of the summary report + raw transcript SHIPPED (S9 step 3, `visit_docx.py`); PDF still pending. |
 | 13 | EHR Database | 🟨 | Transcripts, profiles, reports, and audit logs are stored and retrievable by patient ID/date; data encrypted. **Built** (all 15 tables, Alembic head `0009`; retrieval by phone + status; `audit_log` on every state change). Encryption-at-rest still pending. |

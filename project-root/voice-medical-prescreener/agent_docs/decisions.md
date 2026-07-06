@@ -479,6 +479,48 @@
   distort clinical meaning).
 - Status: Accepted
 
+## ADR-0034 — 2026-07-06 — KIOSK-7 resume loop = `?scope=fields` on the existing M7–M9 endpoints
+- Decision: The kiosk summary-screen resume loop reuses `POST /followup/next` and
+  `POST /followup/answer` with a `?scope=fields` query param. In that scope: (a) the
+  0.7 completeness-threshold gate does NOT apply — "complete" means all 10 summary
+  fields carry text, or the generator stops; (b) the missing list = the summary-field
+  KEYS empty in every language slot (`missing_summary_fields()`, reusing M9's
+  `field_has_text`), and the stored `target_gap` is forced to a real field key (the
+  LLM's echo is never trusted), so the followup_questions no-repeat memory guarantees
+  a field answered "নেই / No / জানি না" is never asked again even if the extractor
+  leaves it blank; (c) the per-visit question cap (`followup_max_questions`) is ONE
+  budget SHARED with the main conversation loop; (d) the kiosk UI is FAIL-OPEN —
+  cap reached or API error → Confirm & Submit comes back; the patient is never trapped.
+- Why: One code path (generation, no-repeat memory, cap, M8 merge, M9 rescore) instead
+  of a parallel loop; the shared cap is the strongest patient-fatigue guard and the
+  literal reading of the approved KIOSK-7 decision; fail-open matches the Module-1
+  fallback principle (a hiccup must never block care).
+- Rejected: Separate `/followup/resume-*` endpoints (duplicated guards/schemas);
+  a separate resume budget (more questions, a new config knob, weaker fatigue guard);
+  deterministically writing "নেই" into the field from the frontend (fabricates a
+  derived value outside M8's provenance rules).
+- Status: Accepted
+
+## ADR-0035 — 2026-07-06 — MEDIC-3 risk override = appended human assessment row; staff cannot downgrade a red-flag Critical
+- Decision: `POST /api/visits/{uuid}/risk/override` appends a NEW `risk_assessments`
+  row with `model_provider='human'` — AI rows are never edited (append-only history
+  stands). The human row carries the latest row's `red_flags` AND `rule_overrode`
+  forward, and gets a stored XAI reason ("…by staff override. Reason: …") so no risk
+  row is ever reason-less (constitution). Every override lands in `audit_log`
+  (`action='risk_override'`, detail = {from, to, reason}, actor_id = the medic). GUARD:
+  if the current tier is a red-flag Critical, any staff downgrade is refused (409) —
+  only the doctor's review can override it (rule #2: the doctor decides; rule #3:
+  never falsely reassure). The wire accepts tier CODES only — no numeric scores (C2).
+- Why: Zero migration (every reader — GET /risk, the dashboard queue, the doctor
+  panel — already takes the latest row, so the override propagates everywhere
+  automatically); full auditable history; the deterministic red-flag rule stays
+  un-silenceable below the doctor role.
+- Rejected: An `override_tier` column on risk_assessments (migration + every reader
+  updated); editing the AI row in place (destroys the audit story); allowing the
+  downgrade with a mandatory reason (a data-entry-level role could silence the one
+  safety rule that survives total LLM outage).
+- Status: Accepted
+
 ## ADR-0008 — 2026-06-18 — Default Whisper model is small/base; upgrade to a Bangla fine-tune later
 - Decision: Start with Whisper `small` (or `base` if we need a snappier live feel)
   for streaming on CPU. Upgrade to a Bangla-fine-tuned model (e.g.

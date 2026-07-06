@@ -36,12 +36,43 @@
     .mic-btn.listening { background: var(--danger-color); }
     .fallback-row { display: none; gap: 10px; width: 100%; max-width: 540px; }
 
-    /* summary */
+    /* summary (KIOSK-5: one card per field, clinical-blue tokens only) */
     .summary-layout { flex: 1; padding: 24px 28px; display: flex; flex-direction: column; gap: 16px; max-width: 980px; margin: 0 auto; width: 100%; overflow-y: auto; }
-    .summary-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 16px 22px; }
-    .summary-label { font-size: .72rem; text-transform: uppercase; letter-spacing: .05em; color: var(--text-muted); margin-bottom: 4px; }
+    .summary-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 14px 16px; }
+    .summary-item {
+      background: rgba(255,255,255,.78);
+      -webkit-backdrop-filter: blur(8px); backdrop-filter: blur(8px);
+      border: 1px solid var(--border-color); border-radius: 18px;
+      padding: 16px 18px; display: flex; flex-direction: column; gap: 9px;
+      box-shadow: 0 4px 16px rgba(15,76,129,.06);
+    }
+    .summary-item.highlight { border-left: 4px solid var(--secondary-color); }
+    .summary-item-head { display: flex; align-items: center; gap: 10px; }
+    .summary-icon {
+      width: 34px; height: 34px; border-radius: 10px; flex: none;
+      display: flex; align-items: center; justify-content: center; font-size: 1.05rem;
+      background: #F1F5F9; border: 1px solid var(--border-color);
+    }
+    .summary-item.highlight .summary-icon { background: #EFF6FF; border-color: #BFDBFE; }
+    .summary-label { font-size: .74rem; font-weight: 700; text-transform: uppercase; letter-spacing: .05em; color: var(--primary-color); }
     .summary-val { font-size: .95rem; line-height: 1.5; }
+    .summary-item.highlight .summary-val:not(.empty) {
+      display: inline-block; align-self: flex-start; background: #EFF6FF;
+      color: var(--primary-color); font-weight: 600;
+      border-radius: 8px; padding: 5px 12px;
+    }
+    .summary-val.empty { color: var(--text-muted); font-style: italic; }
     .summary-actions { display: flex; justify-content: flex-end; gap: 12px; align-items: center; }
+    /* KIOSK-7: completeness chip + resume-question voice dock */
+    .progress-chip {
+      display: none; margin-top: 10px; padding: 6px 16px; border-radius: 999px;
+      background: #EFF6FF; color: var(--primary-color); border: 1px solid #BFDBFE;
+      font-weight: 600; font-size: .85rem;
+    }
+    .progress-chip.complete { background: #ECFDF5; color: var(--accent-color); border-color: #D1FAE5; }
+    .resume-dock { display: none; flex-direction: column; gap: 12px; border-left: 4px solid var(--secondary-color); }
+    .resume-q-row { display: flex; align-items: flex-start; gap: 12px; }
+    .resume-question { font-size: 1.02rem; line-height: 1.5; margin-top: 2px; }
   </style>
 </head>
 <body>
@@ -125,13 +156,37 @@
       <div style="text-align:center;">
         <div class="welcome-title" data-en="Please Review Your Pre-Screening Summary" data-bn="দয়া করে আপনার প্রাক-পরীক্ষার বিবরণীটি পর্যালোচনা করুন">Please Review Your Pre-Screening Summary</div>
         <div class="welcome-sub" data-en="Compiled from your voice answers. It will be sent to the doctor." data-bn="আপনার ভয়েস উত্তর থেকে সংকলিত। এটি ডাক্তারের কাছে পাঠানো হবে।">Compiled from your voice answers. It will be sent to the doctor.</div>
+        <span class="progress-chip" id="summary-progress"></span>
       </div>
-      <div class="card"><div class="summary-grid" id="summary-grid"></div></div>
+      <div class="summary-grid" id="summary-grid"></div>
+
+      <!-- KIOSK-7: resume dock — asks ONLY still-missing fields, one at a time -->
+      <div class="card resume-dock" id="resume-dock">
+        <div class="resume-q-row">
+          <span class="summary-icon">🎤</span>
+          <div style="flex:1;">
+            <div class="summary-label" data-en="A few more questions before we finish" data-bn="শেষ করার আগে আরও কয়েকটি প্রশ্ন">A few more questions before we finish</div>
+            <div class="resume-question" id="resume-question"></div>
+          </div>
+          <button class="bubble-speak" type="button" onclick="repeatResumeQuestion()" title="🔊">🔊</button>
+        </div>
+        <div class="dock-transcript" id="resume-transcript"></div>
+        <div class="dock-row">
+          <span id="resume-hint" style="font-size:.85rem; color:var(--text-muted);"
+                data-en="Tap the mic when you are ready to speak" data-bn="বলতে প্রস্তুত হলে মাইকে চাপ দিন">Tap the mic when you are ready to speak</span>
+          <button class="mic-btn" id="resume-mic-btn" onclick="toggleListening()">🎤</button>
+        </div>
+        <div class="fallback-row" id="resume-fallback-row" style="max-width:none;">
+          <input type="text" class="input-field" id="resume-fallback-input" placeholder="Describe in Bangla or English...">
+          <button class="btn btn-primary" onclick="sendResumeTyped()" data-en="Send" data-bn="পাঠান">Send</button>
+        </div>
+      </div>
       <div class="summary-actions card" style="padding:16px 20px;">
         <span style="font-size:.85rem; color:var(--text-muted); margin-right:auto;"
               data-en="If anything is incorrect, tap Speak Again to correct." data-bn="কোনো তথ্য ভুল হলে, আবার বলুন চাপুন।">If anything is incorrect, tap Speak Again to correct.</span>
         <button class="btn btn-secondary" onclick="showScreen('screen-voice')" data-en="Speak Again" data-bn="আবার বলুন">Speak Again</button>
-        <button class="btn btn-accent" onclick="confirmSubmit()" data-en="Confirm & Submit" data-bn="নিশ্চিত ও জমা দিন">Confirm &amp; Submit</button>
+        <button class="btn btn-secondary" id="download-transcript-btn" onclick="downloadRawTranscript()" data-en="Download Raw Transcript (.docx)" data-bn="মূল কথোপকথন ডাউনলোড (.docx)">Download Raw Transcript (.docx)</button>
+        <button class="btn btn-accent" id="confirm-submit-btn" onclick="confirmSubmit()" data-en="Confirm & Submit" data-bn="নিশ্চিত ও জমা দিন">Confirm &amp; Submit</button>
       </div>
     </div>
   </div>

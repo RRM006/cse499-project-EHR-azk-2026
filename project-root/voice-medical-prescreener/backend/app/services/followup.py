@@ -17,6 +17,8 @@ from sqlalchemy.orm import Session
 from backend.app.core.config import get_settings
 from backend.app.db.models import CaseProfile, FollowupQuestion, Visit
 from backend.app.db.repository_visits import add_utterance
+from backend.app.schemas.profile import SUMMARY_FIELD_KEYS
+from backend.app.services.completion import field_has_text
 from backend.app.services.intake import _conversation_text, _parse_json
 from backend.app.services.llm_client import call_module
 
@@ -56,12 +58,25 @@ def questions_asked(db: Session, *, visit_id: int) -> list[FollowupQuestion]:
     )
 
 
+def missing_summary_fields(profile: CaseProfile) -> list[str]:
+    """The keys (of the fixed 10 summary fields) still empty in EVERY language slot —
+    the KIOSK-7 resume loop's checklist."""
+    fields = ((profile.entities or {}).get("summary_fields")) or {}
+    return [k for k in SUMMARY_FIELD_KEYS if not field_has_text(fields.get(k))]
+
+
 def generate_next_question(
-    db: Session, visit: Visit, profile: CaseProfile
+    db: Session, visit: Visit, profile: CaseProfile, *, missing: list[str] | None = None
 ) -> FollowupQuestion | None:
     """Ask M7 for the next question, or return None when the loop should stop
     (max turns reached, or nothing left to ask). Re-serves an open unanswered
     question instead of generating a duplicate.
+
+    ``missing`` overrides the M6 gap list (KIOSK-7 resume scope passes the empty
+    summary-field keys). The per-visit question cap is SHARED across both scopes,
+    and the no-repeat memory (target_gap of already-asked questions) is what makes
+    a "নেই / No / জানি না" answer count as answered: the field may stay empty, but
+    it is never asked again.
     """
     settings = get_settings()
 
@@ -73,7 +88,9 @@ def generate_next_question(
     if len(asked) >= settings.followup_max_questions:
         return None  # turn limit — avoid patient fatigue (M9 guardrail)
 
-    missing = list((profile.gaps or {}).get("missing") or [])
+    fields_scope = missing is not None
+    if missing is None:
+        missing = list((profile.gaps or {}).get("missing") or [])
     asked_gaps = {q.target_gap for q in asked if q.target_gap}
     remaining = [m for m in missing if m not in asked_gaps]
     if not remaining:
@@ -97,6 +114,11 @@ def generate_next_question(
         # Salvage: use the raw reply as the question rather than losing the turn.
         logger.warning("M7 returned non-JSON for visit %s; using raw text", visit.id)
         question_text, target_gap, priority = reply.strip(), remaining[0], 1
+
+    if fields_scope and target_gap not in remaining:
+        # The no-repeat memory only works on real field keys — never trust the LLM
+        # to echo one back verbatim.
+        target_gap = remaining[0]
 
     question = FollowupQuestion(
         visit_id=visit.id, target_gap=target_gap, question_text=question_text, priority=priority

@@ -49,8 +49,10 @@ voice-medical-prescreener/
 │   │   │   ├── routes_transcripts.py · routes_documents.py   # (existing, untouched)
 │   │   │   ├── routes_visits.py  # NEW: patients/lookup + verify-otp; visits CRUD + utterances; intake; profile
 │   │   │   ├── routes_visit_documents.py # S9: POST /api/visits/{uuid}/documents/{transcript|summary_report}
-│   │   │   ├── routes_followup.py# NEW: followup/next (M7) · followup/answer (M8+M9)
-│   │   │   ├── routes_risk.py    # NEW: assess (M10 + rule) · risk (latest + XAI)
+│   │   │   ├── routes_followup.py# NEW: followup/next (M7) · followup/answer (M8+M9); S11: ?scope=fields
+│   │   │   │                      #   = KIOSK-7 resume loop (no threshold gate; ADR-0034)
+│   │   │   ├── routes_risk.py    # NEW: assess (M10 + rule) · risk (latest + XAI); S11: risk/override
+│   │   │   │                      #   (MEDIC-3 human row, audit-logged, red-flag guard — ADR-0035)
 │   │   │   ├── routes_dashboard.py # NEW: users list · submit (→auto-assess) · dashboard queues · field-edit PATCH · assign
 │   │   │   └── routes_report.py  # NEW: report (M12) · review (M14) · feedback (M15)
 │   │   ├── schemas/              # transcript, document (existing) + visit, patient, profile, followup, risk, dashboard
@@ -61,10 +63,12 @@ voice-medical-prescreener/
 │   │   │   ├── llm_client.py     # NEW: call_module() — assigned bucket → fallback, logs module_events
 │   │   │   ├── intake.py         # NEW: M3 extract (10-field summary_fields; bilingual value_en/value_bn since S9,
 │   │   │   │                      #   ADR-0033) → M4 summary → M6 gaps
-│   │   │   ├── followup.py       # NEW: M7 question gen (Groq; no repeats; stored + spoken)
+│   │   │   ├── followup.py       # NEW: M7 question gen (Groq; no repeats; stored + spoken); S11:
+│   │   │   │                      #   missing_summary_fields() + missing-override param (resume scope)
 │   │   │   ├── profile_update.py # NEW: M8 re-extract + merge (human fields protected)
 │   │   │   ├── completion.py     # NEW: M9 completeness (LOCAL)
-│   │   │   ├── risk.py           # NEW: M10 classify + M11 XAI (rule forces critical; deterministic fallback)
+│   │   │   ├── risk.py           # NEW: M10 classify + M11 XAI (rule forces critical; deterministic fallback);
+│   │   │   │                      #   S11: override_assessment() + RiskOverrideBlocked (ADR-0035)
 │   │   │   ├── red_flags.py      # NEW: RED_FLAG_RULES (5 categories, bn/banglish/en) — LOCAL, no API
 │   │   │   ├── report.py         # NEW: M12 local report assembly (Red Flags + disclaimer)
 │   │   │   └── audit.py          # NEW: audit() one-line append writer
@@ -80,21 +84,29 @@ voice-medical-prescreener/
 │                                  #   test_routes_static (entry points + legacy isolation) ·
 │                                  #   test_migration_0010 (visit-grain docs + prescriptions) ·
 │                                  #   test_visit_documents (transcript verbatim + summary report) ·
-│                                  #   test_bilingual_fields (value_en/value_bn + legacy back-compat)  (121 total)
+│                                  #   test_bilingual_fields (value_en/value_bn + legacy back-compat) ·
+│                                  #   test_resume_loop (KIOSK-7 scope=fields, S11) ·
+│                                  #   test_risk_override (MEDIC-3 human row + red-flag guard, S11)  (129 total)
 ├── frontend/                     # patient side (served at /)
 │   ├── index.html                # NEW (S9): landing page linking the 4 entry points (ADR-0031)
 │   ├── kiosk.html · kiosk.js     # patient kiosk (at /kiosk.html): phone→OTP (auto-advance/Backspace/paste, S10
 │   │                              #   KIOSK-1)→voice chat (per-bubble 🔊 icons + no-bn-voice hint banner, S10
-│   │                              #   KIOSK-2/3)→10-field summary→submit→auto-logout
+│   │                              #   KIOSK-2/3)→summary (S11: per-field cards KIOSK-5, bilingual values KIOSK-6,
+│   │                              #   raw .docx download KIOSK-4, resume voice dock + progress chip KIOSK-7)
+│   │                              #   →submit→auto-logout
 ├── frontend_legacy/              # OLD Module-1 transcript app, isolated (served at /legacy/ — ADR-0031)
 │   ├── index.html · app.js · styles.css   # unchanged behavior; asset refs made relative
 ├── frontend_shared/              # NEW: shared portal assets (mounted at /shared)
 │   ├── shared.css                # clinical-blue design system (ADR-0029) + Noto Sans Bengali
 │   ├── shared.js                 # TIER_LABELS (only place codes→labels), TIER_BANDS/tierBand (C2, display-only),
 │   │                              #   fieldValue() (bilingual value_bn/value_en + {value} legacy), EN/BN helper, api()/showError()
-│   ├── staff.js                  # queue render, phone lookup, verbatim panel, 10 editable field cards
+│   ├── staff.js                  # queue render, phone lookup, verbatim panel, 10 editable field cards; S11:
+│   │                              #   fully bilingual (labels+icons via t(), values via fieldValue(),
+│   │                              #   staffLanguageRefresh() hook) — raw text re-rendered, never translated
 │   └── tts.js                    # speak() via speechSynthesis bn-BD (Step A1); text stays the fallback
-├── frontend_medic/index.html     # NEW medic portal (at /medic/): login→queue→verbatim+fields→Assign & Forward
+├── frontend_medic/index.html     # NEW medic portal (at /medic/): login→queue→verbatim+fields→Assign & Forward;
+│                                  #   S11: EN/বাংলা toggle (MEDIC-1), ↻ Refresh Queue (MEDIC-5), risk panel
+│                                  #   with C2 bands + override control (MEDIC-3)
 └── frontend_doctor/index.html    # NEW doctor portal (at /doctor/): login→queue→risk/red-flag/XAI panel→Override/Accept
 ```
 

@@ -72,6 +72,35 @@ transcribed by hand (the "ground truth"). Record the model + machine each time.
 
 ## Test entries (newest first)
 
+## 2026-07-06 — Session 11 — Steps 8–13: suite 121 → 129, all offline; kiosk + medic flows browser-verified with stubbed network
+- Setup: Windows dev box; `pytest backend/tests/` after every step; live Chrome preview
+  against the real server (port 8001) with `window.fetch` REPLACED by spies for every
+  flow test — zero live LLM calls, synthetic data only (rule #4). Cache rule applied
+  throughout (`fetch(url,{cache:'reload'})` + reload before asserting).
+- Metric(s): pytest counts; scripted DOM assertions pass/fail.
+- Result: **129/129 pass** (was 121; +5 `test_resume_loop.py`, +3 `test_risk_override.py`;
+  both new suites green on first run). Key offline assertions now enforced:
+  (a) resume scope ignores the 0.7 threshold (8/10-filled visit still gets a question);
+  (b) `target_gap` forced to a real field key; a field answered "নেই" is NOT re-asked and
+  "জানি না" on the last empty field ends the loop complete at score 0.8, both raw answers
+  stored verbatim (rule #1); (c) cap=0 → complete immediately (never trap); (d) 10/10
+  filled → complete with ZERO M7 calls; (e) `?scope=bogus` → 422; (f) risk override
+  appends a `model_provider='human'` row (AI row untouched, 2 rows total), audit_log
+  detail == {from: 'medium', to: 'high', reason}, GET /risk AND the dashboard queue serve
+  the human tier; (g) red-flag Critical downgrade → 409, re-affirming critical carries
+  red_flags + rule_overrode forward, and the carried flags keep blocking later downgrades;
+  (h) bad tier code → 422 (C2: codes only). Browser: kiosk resume walk-through
+  (8/10 chip → Q1 spoken+shown → 9/10 → Q2 → 10/10 green chip, dock gone, submit back;
+  Bangla chip "৮/১০ তথ্য সম্পন্ন"; fail-open on network error), KIOSK-4 download POST +
+  anchor click, KIOSK-5 computed styles (18px radius, blur(8px), accent border
+  rgb(42,117,211)), KIOSK-6 EN↔BN value swap with legacy-row fallback, medic full EN↔BN
+  round-trip with the RAW Banglish utterance byte-identical both ways, MEDIC-3 panel
+  (Moderate·26–50%·AI-Assessed → override POST → High·51–75%·Human Set). Zero console
+  errors everywhere.
+- Notes: `preview_screenshot` timed out all session (tool issue; page healthy — evidence
+  via preview_eval + a11y snapshot). Human should eyeball /kiosk.html + /medic/ once.
+  Real-M7 resume questions over Groq intentionally untested — belongs to the live re-run.
+
 ## 2026-07-06 — Session 10 — Steps 6–7: kiosk OTP + TTS UX; TC-V2 PARTIAL result (Windows: no bn voice)
 - Setup: Windows dev box; live Chrome preview against the real server (port 8001); scripted
   DOM events via preview_eval (no DB writes — screens driven directly); `speak()` spy for

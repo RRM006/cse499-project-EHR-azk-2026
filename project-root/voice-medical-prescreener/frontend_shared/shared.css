@@ -88,7 +88,8 @@ body {
 .staff-grid { display: grid; grid-template-columns: 340px 1fr; flex: 1; min-height: 0; }
 .queue-sidebar { background: var(--bg-white); border-right: 1px solid var(--border-color); overflow-y: auto; }
 .queue-header { padding: 14px 20px; border-bottom: 1px solid var(--border-color); font-weight: 600; font-size: .9rem; color: var(--primary-color); }
-.queue-item { padding: 14px 20px; border-bottom: 1px solid var(--border-color); cursor: pointer; }
+.queue-item { padding: 14px 20px; border-bottom: 1px solid var(--border-color); cursor: pointer; transition: background .12s ease; }
+.queue-item:hover { background: #F8FAFC; }
 .queue-item:hover { background: #F8FAFC; }
 .queue-item.active { background: #EFF6FF; border-left: 4px solid var(--secondary-color); }
 .queue-item-meta { display: flex; justify-content: space-between; margin-bottom: 6px; font-size: .75rem; color: var(--text-muted); }
@@ -111,6 +112,7 @@ body {
 /* --- collapsible 10-field cards --- */
 .field-card { background: var(--bg-white); border: 1px solid var(--border-color); border-radius: var(--radius); overflow: hidden; box-shadow: var(--shadow-sm); }
 .field-card-header { padding: 13px 18px; cursor: pointer; display: flex; justify-content: space-between; align-items: center; font-weight: 600; font-size: .92rem; color: var(--primary-color); }
+.field-card-icon { display: inline-flex; width: 26px; height: 26px; border-radius: 8px; background: #F1F5F9; border: 1px solid var(--border-color); align-items: center; justify-content: center; font-size: .85rem; margin-right: 10px; vertical-align: middle; }
 .field-card.open .field-card-header { border-bottom: 1px solid var(--border-color); background: #F8FAFC; }
 .field-card-content { padding: 16px 18px; display: none; }
 .field-card.open .field-card-content { display: flex; gap: 14px; align-items: flex-start; }

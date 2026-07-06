@@ -1,7 +1,10 @@
 """Risk routes (BE-4): M10 assessment (rule-forced critical) + M11 explanation.
 
-POST /api/visits/{uuid}/assess — append a new assessment (rule + model).
-GET  /api/visits/{uuid}/risk   — latest assessment + its stored reason.
+POST /api/visits/{uuid}/assess        — append a new assessment (rule + model).
+GET  /api/visits/{uuid}/risk          — latest assessment + its stored reason.
+POST /api/visits/{uuid}/risk/override — MEDIC-3: staff sets the tier (appended as a
+                                        model_provider='human' row; audit-logged;
+                                        red-flag Criticals cannot be downgraded).
 """
 
 from fastapi import APIRouter, Depends, HTTPException
@@ -10,8 +13,14 @@ from sqlalchemy.orm import Session
 from backend.app.db import repository_visits as repo
 from backend.app.db.database import get_db
 from backend.app.db.models import CaseProfile, Visit, XaiExplanation
-from backend.app.schemas.risk import RiskDetailOut, XaiOut
-from backend.app.services.risk import assess_visit, latest_assessment
+from backend.app.schemas.risk import RiskDetailOut, RiskOverrideRequest, XaiOut
+from backend.app.services.audit import audit
+from backend.app.services.risk import (
+    RiskOverrideBlocked,
+    assess_visit,
+    latest_assessment,
+    override_assessment,
+)
 
 router = APIRouter(prefix="/api", tags=["risk"])
 
@@ -54,4 +63,27 @@ def get_risk(visit_uuid: str, db: Session = Depends(get_db)) -> RiskDetailOut:
     assessment = latest_assessment(db, visit_id=visit.id)
     if assessment is None:
         raise HTTPException(status_code=404, detail="No risk assessment yet — run /assess first.")
+    return _to_detail(db, assessment)
+
+
+@router.post("/visits/{visit_uuid}/risk/override", response_model=RiskDetailOut)
+def override_risk(
+    visit_uuid: str, payload: RiskOverrideRequest, db: Session = Depends(get_db)
+) -> RiskDetailOut:
+    """MEDIC-3 — append a human tier (never edits AI rows; full history kept).
+    Every override lands in audit_log with from/to and the stated reason."""
+    visit = _get_visit_or_404(db, visit_uuid)
+    latest = latest_assessment(db, visit_id=visit.id)
+    if latest is None:
+        raise HTTPException(status_code=404, detail="No risk assessment yet — run /assess first.")
+    old_tier = latest.tier
+    try:
+        assessment = override_assessment(db, visit, tier=payload.tier, reason=payload.reason)
+    except RiskOverrideBlocked as exc:
+        raise HTTPException(status_code=409, detail=str(exc))
+    audit(
+        db, action="risk_override", entity_type="visit", entity_id=visit.uuid,
+        actor_id=payload.editor_id,
+        detail={"from": old_tier, "to": payload.tier, "reason": payload.reason},
+    )
     return _to_detail(db, assessment)

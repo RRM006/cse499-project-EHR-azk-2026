@@ -6,6 +6,7 @@ map (reconciliation item e / ADR-0030).
 """
 
 from datetime import datetime
+from typing import Literal
 
 from pydantic import BaseModel, ConfigDict, Field
 
@@ -35,3 +36,12 @@ class RiskDetailOut(RiskAssessmentOut):
     """The latest assessment plus its stored explanation."""
 
     explanation: XaiOut | None = None
+
+
+class RiskOverrideRequest(BaseModel):
+    """MEDIC-3 — a staff override of the current tier before referral.
+    Wire codes only; NO numeric scores are accepted or stored (C2)."""
+
+    tier: Literal["low", "medium", "high", "critical"]
+    editor_id: int | None = None
+    reason: str | None = None
