@@ -16,6 +16,44 @@
 
 ---
 
+## Session 12 — 2026-07-06 — Steps 14–16 of 20: C1 suggested condition (MEDIC-4) + post-referral summary & docx (MEDIC-6/7) + doctor toggle/polish (DOCTOR-1/2/7)
+- Did: **Step 14 (MEDIC-4/C1, ADR-0036):** new module **M10C** (Flash bucket, deliberately a
+  SEPARATE call from M10 so the risk prompt's no-disease-names rule is never contaminated)
+  generates a bilingual "Possible Condition (AI Suggestion – Not a Diagnosis)" + reasoning at
+  kiosk submit, best-effort (LLM down → no suggestion, submit never blocked). Stored at
+  `case_profiles.entities["suggested_condition"]` (no migration) with 10-field-style provenance
+  AND the "not a diagnosis" disclaimers embedded IN the object — every payload carrying the
+  suggestion carries them. `PATCH /visits/{uuid}/profile/condition` staff edit (403 non-staff,
+  all language slots untranslated, disclaimer re-attached server-side, audit `profile.condition_edit`).
+  Shared `renderConditionCard()` in staff.js; medic mounts `#condition-card`; kiosk has no mount.
+  New `test_suggested_condition.py` (5). **Step 15 (MEDIC-6/7):** "Submit & Forward" now lands on
+  a bilingual post-referral summary (snapshot-as-referred): patient card (name/phone/age-from-
+  birth-year/**weight inline-edit**/BP), risk tier + C2 band + flags + XAI, the disclaimered
+  condition, all 10 Q&A rows, ⬇ Download Report (.docx) + Back to Queue. New
+  `PATCH /patients/{id}/vitals` (staff-only, 0–500 kg validated, audit `patient.vitals_edit`);
+  `GET /visits/{uuid}` now embeds the patient with vitals (`VisitDetailWithPatientOut`, defined in
+  patient.py to avoid a schema import cycle). M12 report sections gain vitals +
+  `suggested_condition`; the summary_report docx renders the C1 block with both disclaimers; and
+  the docx is assembled from a **FRESH report at download time** — staleness after staff
+  edits/overrides was the hidden "download doesn't really work" failure. New
+  `test_medic_summary.py` (5, incl. the staleness regression). **Step 16 (DOCTOR-1/2/7):** doctor
+  portal fully bilingual (EN/বাংলা toggle, data-en/bn on all chrome, safety panel re-renders from
+  state via `renderSafety()`, placeholders switch); **↻ Queue removed** (auto-refresh + post-review
+  reload already cover it; the medic's Refresh-Queue stays — it clears the phone filter);
+  `@media print` block (case content prints, chrome doesn't); responsive flex-wrap.
+  **139 tests pass** (129 + 5 + 5). All frontend steps browser-verified with stubbed network.
+- Decided: ADR-0036 (C1 = separate M10C call; embedded disclaimer; staff-only; never the doctor's
+  Diagnosis field); ADR-0037 (post-referral summary = snapshot + fresh-report-on-download +
+  patient embedded in visit detail + patient-scoped vitals PATCH).
+- Broke / problem: `preview_screenshot` worked early in the session then timed out again
+  (S11 flakiness) — post-referral screen + doctor toggle proven via eval + a11y snapshot;
+  worth a human eyeball of `/medic/` after a forward and `/doctor/` in বাংলা (Ctrl+F5 first).
+- Deferred: Steps 17–20 (one per "go"): DOCTOR-3 patient-details card (17, mounts the shared
+  condition card + vitals from the now-embedded patient) · prescription form (18, Diagnosis
+  defaults EMPTY — rule #2, per ADR-0036) · prescription docx + save (19) · final sweep (20).
+  DOCTOR-7 stays 🟨 until 17–19 land its remaining identification targets.
+- Next: Step 17 — DOCTOR-3: patient-details card in the doctor portal. See `current_task.md`.
+
 ## Session 11 — 2026-07-06 — Steps 8–13 of 20: kiosk summary complete (KIOSK-4/5/6/7) + medic bilingual/polish/refresh (MEDIC-1/2/5) + risk override (MEDIC-3)
 - Did: **Step 8 (KIOSK-4):** bilingual "Download Raw Transcript (.docx)" button on the kiosk
   summary screen (before Confirm & Submit), wired to the existing step-3 endpoint via a

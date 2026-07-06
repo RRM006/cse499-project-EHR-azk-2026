@@ -35,5 +35,26 @@ class FieldEditRequest(BaseModel):
     editor_id: int = Field(..., description="users.id of the staff editor (auth is stubbed).")
 
 
+class VitalsEditRequest(BaseModel):
+    """A staff edit of the patient's vitals (MEDIC-6: weight is medic-editable;
+    BP rides along for the DOCTOR-3 details card). At least one field required."""
+
+    weight_kg: float | None = Field(None, gt=0, lt=500, description="Weight in kilograms.")
+    bp: str | None = Field(None, max_length=32, description="Free-form reading, e.g. '120/80'.")
+    editor_id: int = Field(..., description="users.id of the staff editor (auth is stubbed).")
+
+
+class ConditionEditRequest(BaseModel):
+    """A staff edit/replacement of the C1 suggested condition (MEDIC-4, ADR-0036).
+
+    Staff-facing only — the result NEVER pre-fills the doctor's prescription
+    Diagnosis field (rule #2). The server re-attaches the disclaimer itself.
+    """
+
+    condition: str = Field(..., min_length=1, description="Replacement condition text.")
+    reasoning: str = Field("", description="Why — free text shown beside the condition.")
+    editor_id: int = Field(..., description="users.id of the staff editor (auth is stubbed).")
+
+
 class AssignRequest(BaseModel):
     doctor_id: int = Field(..., description="users.id of the doctor to forward the case to.")

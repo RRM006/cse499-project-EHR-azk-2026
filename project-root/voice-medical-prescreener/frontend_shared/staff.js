@@ -70,6 +70,7 @@ async function openCase(uuid) {
     document.getElementById('no-case').style.display = 'none';
     document.getElementById('case-detail').style.display = 'flex';
     renderVerbatim(detail);
+    renderConditionCard(profile);
     renderFields(profile);
     if (PORTAL.onCaseLoaded) await PORTAL.onCaseLoaded(currentCase);
     loadQueue(); // refresh active highlight
@@ -155,6 +156,90 @@ function renderFields(profile) {
   });
 }
 
+/* C1 (MEDIC-4, ADR-0036): the AI suggested condition — a clearly labeled,
+   disclaimered SUGGESTION, never a diagnosis (rule #2). Staff portals opt in by
+   having a #condition-card mount in their page; the kiosk never has one. */
+function suggestionText(s, enKey, bnKey) {
+  const byLang = currentLanguage === 'bn' ? [s[bnKey], s[enKey]] : [s[enKey], s[bnKey]];
+  for (const v of byLang) {
+    const text = (v === undefined || v === null) ? '' : String(v).trim();
+    if (text) return text;
+  }
+  return '';
+}
+
+function renderConditionCard(profile) {
+  const card = document.getElementById('condition-card');
+  if (!card) return;
+  card.style.display = 'flex';
+  const s = ((profile && profile.entities) || {}).suggested_condition || null;
+  const badge = !s ? '' : (s.source === 'human'
+    ? `<span class="source-badge source-human">${t('Human Edited', 'মানব-সম্পাদিত')}</span>`
+    : `<span class="source-badge source-ai">${t('AI Suggested', 'এআই-পরামর্শকৃত')}</span>`);
+  card.innerHTML =
+    `<div style="display:flex; justify-content:space-between; align-items:flex-start; gap:14px; flex-wrap:wrap;">
+       <h3 style="font-size:1.05rem; color:var(--primary-color);">🔎 ${t('Possible Condition', 'সম্ভাব্য অবস্থা')}
+         <span style="font-weight:600; font-size:.78rem; color:var(--text-muted);">(${t('AI Suggestion – Not a Diagnosis', 'এআই পরামর্শ – রোগনির্ণয় নয়')})</span></h3>
+       <div style="display:flex; gap:8px; align-items:center;">${badge}` +
+       (PORTAL.canEdit ? `<button class="btn btn-secondary condition-edit-btn" style="padding:6px 12px;font-size:.8rem;">✏️ ${t('Edit', 'সম্পাদনা')}</button>` : '') +
+    `  </div>
+     </div>
+     <div class="condition-value" style="font-size:1rem; font-weight:700; color:var(--primary-color);"></div>
+     <div class="condition-reasoning" style="display:none; font-size:.85rem; color:var(--text-main); background:var(--bg-main); padding:10px 14px; border-radius:6px; border-left:3px solid var(--secondary-color);"></div>
+     <div class="condition-disclaimer" style="font-size:.78rem; font-weight:600; color:var(--warning-color);"></div>
+     <div class="condition-editor" style="display:none; flex-direction:column; gap:8px;">
+       <input class="input-field condition-input" type="text" placeholder="${t('Condition', 'অবস্থা')}">
+       <textarea class="input-field condition-reasoning-input" rows="2" placeholder="${t('Reasoning (why)', 'যুক্তি (কেন)')}"></textarea>
+       <div style="display:flex; gap:8px;">
+         <button class="btn btn-primary condition-save" style="padding:6px 14px;font-size:.8rem;">${t('Save', 'সংরক্ষণ')}</button>
+         <button class="btn btn-secondary condition-cancel" style="padding:6px 14px;font-size:.8rem;">${t('Cancel', 'বাতিল')}</button>
+       </div>
+     </div>`;
+  const condition = s ? (suggestionText(s, 'condition_en', 'condition_bn') || s.condition || '') : '';
+  const reasoning = s ? suggestionText(s, 'reasoning_en', 'reasoning_bn') : '';
+  const valueBox = card.querySelector('.condition-value');
+  if (s) {
+    valueBox.textContent = condition || '—';
+  } else {
+    valueBox.style.cssText = 'font-size:.9rem; color:var(--text-muted); font-style:italic;';
+    valueBox.textContent = t('No AI suggestion is available for this case.',
+                             'এই কেসের জন্য কোনো এআই পরামর্শ পাওয়া যায়নি।');
+  }
+  if (reasoning) {
+    const box = card.querySelector('.condition-reasoning');
+    box.style.display = 'block';
+    box.textContent = `🧠 ${t('Reasoning', 'যুক্তি')}: ${reasoning}`;
+  }
+  // The disclaimer is always visible with a suggestion — stored text preferred (rule #2).
+  if (s) {
+    card.querySelector('.condition-disclaimer').textContent = '⚠️ ' + (currentLanguage === 'bn'
+      ? (s.disclaimer_bn || s.disclaimer || 'এটি শুধুমাত্র এআই পরামর্শ — রোগনির্ণয় নয়। সকল চিকিৎসা সিদ্ধান্ত ডাক্তার নেবেন।')
+      : (s.disclaimer || 'AI suggestion only — NOT a diagnosis. The doctor makes all clinical decisions.'));
+  }
+  if (PORTAL.canEdit) {
+    const editor = card.querySelector('.condition-editor');
+    card.querySelector('.condition-edit-btn').onclick = () => {
+      card.querySelector('.condition-input').value = condition;
+      card.querySelector('.condition-reasoning-input').value = reasoning;
+      editor.style.display = 'flex';
+    };
+    card.querySelector('.condition-cancel').onclick = () => { editor.style.display = 'none'; };
+    card.querySelector('.condition-save').onclick = async () => {
+      const value = card.querySelector('.condition-input').value.trim();
+      if (!value) return showError(t('Condition cannot be empty.', 'অবস্থা খালি রাখা যাবে না।'));
+      try {
+        const updated = await api('PATCH', `/api/visits/${currentCase.uuid}/profile/condition`, {
+          condition: value,
+          reasoning: card.querySelector('.condition-reasoning-input').value.trim(),
+          editor_id: PORTAL.userId,
+        });
+        currentCase.profile = updated;
+        renderConditionCard(updated);
+      } catch (e) { showError(e.message); }
+    };
+  }
+}
+
 function toggleVerbatim() {
   document.getElementById('verbatim-panel').classList.toggle('collapsed');
 }
@@ -166,6 +251,7 @@ function staffLanguageRefresh() {
   renderQueue(lastQueueItems);
   if (currentCase) {
     renderVerbatim(currentCase.detail);
+    renderConditionCard(currentCase.profile);
     renderFields(currentCase.profile);
   }
 }

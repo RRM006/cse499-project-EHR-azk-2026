@@ -86,6 +86,10 @@
             <div class="xai-box" id="risk-xai" style="display:none; margin-top:0;"></div>
           </div>
 
+          <!-- MEDIC-4 / C1 (ADR-0036): suggestion only — never the doctor's Diagnosis.
+               Rendered by staff.js renderConditionCard(); shared with the doctor portal. -->
+          <div class="card" id="condition-card" style="display:none; flex-direction:column; gap:10px;"></div>
+
           <div class="card" style="display:flex; justify-content:space-between; align-items:center; gap:14px; flex-wrap:wrap;">
             <div>
               <h3 style="font-size:1.05rem; color:var(--primary-color);" data-en="Patient Summary Case Verification" data-bn="রোগীর সারাংশ যাচাই">Patient Summary Case Verification</h3>
@@ -99,6 +103,10 @@
           </div>
           <div id="field-cards" style="display:flex; flex-direction:column; gap:12px;"></div>
         </div>
+
+        <!-- MEDIC-6/7: post-referral structured summary + .docx download.
+             Rendered by renderPostReferral() from the snapshot taken at forward time. -->
+        <div id="postref-screen" style="display:none; flex-direction:column; gap:18px;"></div>
       </div>
     </div>
   </div>
@@ -195,19 +203,197 @@
       const opt = document.querySelector('#doctor-select option[value=""]');
       if (opt) opt.textContent = t('-- Choose Doctor --', '-- ডাক্তার নির্বাচন করুন --');
       if (currentRisk) renderRiskPanel(currentRisk);   // MEDIC-3 panel follows too
+      if (postrefSnap) renderPostReferral();           // MEDIC-6 summary follows too
     }
 
     async function submitForward() {
       if (!currentCase) return showError(t('Select a case first.', 'আগে একটি কেস নির্বাচন করুন।'));
-      const doctorId = document.getElementById('doctor-select').value;
+      const sel = document.getElementById('doctor-select');
+      const doctorId = sel.value;
       if (!doctorId) return showError(t('Choose a doctor to assign.', 'নির্ধারণের জন্য একজন ডাক্তার নির্বাচন করুন।'));
       try {
         await api('POST', `/api/visits/${currentCase.uuid}/assign`, { doctor_id: Number(doctorId) });
+        // MEDIC-6: hand-off confirmation — snapshot of the case AS REFERRED.
+        postrefSnap = {
+          case: currentCase, risk: currentRisk,
+          doctorName: sel.options[sel.selectedIndex].text,
+        };
         currentCase = null;
         document.getElementById('case-detail').style.display = 'none';
-        document.getElementById('no-case').style.display = 'block';
+        document.getElementById('postref-screen').style.display = 'flex';
+        renderPostReferral();
         loadQueue();
       } catch (e) { showError(e.message); }
+    }
+
+    /* ---- MEDIC-6/7: post-referral summary + .docx download ---- */
+    let postrefSnap = null;   // { case: {uuid, detail, profile}, risk, doctorName }
+
+    function backToQueue() {
+      postrefSnap = null;
+      document.getElementById('postref-screen').style.display = 'none';
+      document.getElementById('no-case').style.display = 'block';
+      loadQueue();
+    }
+
+    async function downloadSummaryReport(btn) {
+      if (!postrefSnap) return;
+      btn.disabled = true;
+      try {
+        // Server regenerates the report fresh, so this download reflects every edit.
+        const doc = await api('POST', `/api/visits/${postrefSnap.case.uuid}/documents/summary_report`);
+        const a = document.createElement('a');
+        a.href = doc.download_url;
+        a.download = doc.filename || '';
+        document.body.appendChild(a);
+        a.click();
+        a.remove();
+      } catch (e) { showError(e.message); }
+      btn.disabled = false;
+    }
+
+    async function saveWeight() {
+      const p = (postrefSnap.case.detail || {}).patient;
+      if (!p) return;
+      const raw = document.getElementById('weight-input').value.trim();
+      const weight = Number(raw);
+      if (!raw || !isFinite(weight) || weight <= 0 || weight >= 500) {
+        return showError(t('Enter a valid weight in kg.', 'কেজিতে সঠিক ওজন লিখুন।'));
+      }
+      try {
+        postrefSnap.case.detail.patient =
+          await api('PATCH', `/api/patients/${p.id}/vitals`,
+                    { weight_kg: weight, editor_id: PORTAL.userId });
+        renderPostReferral();
+      } catch (e) { showError(e.message); }
+    }
+
+    function renderPostReferral() {
+      if (!postrefSnap) return;
+      const box = document.getElementById('postref-screen');
+      const { detail, profile } = postrefSnap.case;
+      const risk = postrefSnap.risk;
+      const p = detail.patient || {};
+      const age = p.birth_year ? String(new Date().getFullYear() - p.birth_year) : '—';
+      const s = ((profile || {}).entities || {}).suggested_condition || null;
+
+      const row = (label, valueId) =>
+        `<div style="display:flex; gap:10px; font-size:.9rem;">
+           <span style="min-width:140px; font-weight:600; color:var(--text-muted);">${label}</span>
+           <span id="${valueId}" style="flex:1;"></span>
+         </div>`;
+
+      box.innerHTML =
+        `<div class="card" style="display:flex; justify-content:space-between; align-items:center; gap:14px; flex-wrap:wrap; border-left:4px solid var(--accent-color);">
+           <div>
+             <h3 style="font-size:1.1rem; color:var(--accent-color);">✅ ${t('Referral Complete', 'রেফারাল সম্পন্ন')}</h3>
+             <p style="font-size:.85rem; color:var(--text-muted);" id="postref-doctor"></p>
+           </div>
+           <div style="display:flex; gap:8px; flex-wrap:wrap;">
+             <button class="btn btn-primary" onclick="downloadSummaryReport(this)">⬇ ${t('Download Report (.docx)', 'রিপোর্ট ডাউনলোড (.docx)')}</button>
+             <button class="btn btn-secondary" onclick="backToQueue()">← ${t('Back to Queue', 'তালিকায় ফিরুন')}</button>
+           </div>
+         </div>
+         <div class="card" style="display:flex; flex-direction:column; gap:8px;">
+           <h3 style="font-size:1rem; color:var(--primary-color); margin-bottom:4px;">👤 ${t('Patient Details', 'রোগীর তথ্য')}</h3>` +
+           row(t('Name', 'নাম'), 'pr-name') +
+           row(t('Phone', 'ফোন'), 'pr-phone') +
+           row(t('Age', 'বয়স'), 'pr-age') +
+          `<div style="display:flex; gap:10px; font-size:.9rem; align-items:center;">
+             <span style="min-width:140px; font-weight:600; color:var(--text-muted);">${t('Weight', 'ওজন')}</span>
+             <span id="pr-weight"></span>
+             <span id="weight-editor" style="display:none; gap:6px; align-items:center;">
+               <input class="input-field" id="weight-input" type="number" min="1" max="499" step="0.1" style="width:110px; padding:6px 10px;" placeholder="kg">
+               <button class="btn btn-primary" style="padding:5px 12px; font-size:.78rem;" onclick="saveWeight()">${t('Save', 'সংরক্ষণ')}</button>
+               <button class="btn btn-secondary" style="padding:5px 12px; font-size:.78rem;" onclick="document.getElementById('weight-editor').style.display='none'">${t('Cancel', 'বাতিল')}</button>
+             </span>
+             <button class="btn btn-secondary" id="weight-edit-btn" style="padding:5px 12px; font-size:.78rem;">✏️ ${t('Edit', 'সম্পাদনা')}</button>
+           </div>` +
+           row(t('Blood Pressure', 'রক্তচাপ'), 'pr-bp') +
+        `</div>
+         <div class="card" style="display:flex; flex-direction:column; gap:10px;">
+           <h3 style="font-size:1rem; color:var(--primary-color);">${t('AI Risk Assessment', 'এআই ঝুঁকি নিরূপণ')}</h3>
+           <div id="pr-risk" style="display:flex; align-items:center; gap:10px; flex-wrap:wrap;"></div>
+           <div id="pr-flags"></div>
+           <div id="pr-condition" style="display:none; flex-direction:column; gap:6px; border-top:1px dashed var(--border-color); padding-top:10px;">
+             <div style="font-weight:700; font-size:.85rem; color:var(--primary-color);">🔎 ${t('Possible Condition (AI Suggestion – Not a Diagnosis)', 'সম্ভাব্য অবস্থা (এআই পরামর্শ – রোগনির্ণয় নয়)')}</div>
+             <div id="pr-condition-value" style="font-weight:700;"></div>
+             <div id="pr-condition-reasoning" style="font-size:.85rem; color:var(--text-main);"></div>
+             <div id="pr-condition-disclaimer" style="font-size:.76rem; font-weight:600; color:var(--warning-color);"></div>
+           </div>
+         </div>
+         <div class="card" style="display:flex; flex-direction:column; gap:8px;">
+           <h3 style="font-size:1rem; color:var(--primary-color); margin-bottom:4px;">📋 ${t('Pre-Screening Summary (10 items)', 'প্রাক-পরীক্ষার সারাংশ (১০টি তথ্য)')}</h3>
+           <div id="pr-fields" style="display:flex; flex-direction:column; gap:6px;"></div>
+         </div>`;
+
+      // Dynamic values via textContent (never innerHTML — LLM/staff text).
+      document.getElementById('postref-doctor').textContent =
+        `${t('Case forwarded to', 'কেস প্রেরণ করা হয়েছে')}: ${postrefSnap.doctorName}`;
+      document.getElementById('pr-name').textContent = p.display_name || '—';
+      document.getElementById('pr-phone').textContent = p.external_ref || '—';
+      document.getElementById('pr-age').textContent = age;
+      document.getElementById('pr-weight').textContent =
+        p.weight_kg != null ? `${p.weight_kg} kg` : '—';
+      document.getElementById('pr-bp').textContent = p.bp || '—';
+      document.getElementById('weight-edit-btn').onclick = () => {
+        document.getElementById('weight-input').value = p.weight_kg != null ? p.weight_kg : '';
+        document.getElementById('weight-editor').style.display = 'inline-flex';
+      };
+
+      const riskBox = document.getElementById('pr-risk');
+      if (risk) {
+        riskBox.innerHTML = tierBadge(risk.tier) +
+          `<span style="font-weight:700; color:var(--primary-color);">${tierBand(risk.tier)}</span>` +
+          (risk.model_provider === 'human'
+            ? `<span class="source-badge source-human">${t('Human Set', 'মানব-নির্ধারিত')}</span>`
+            : `<span class="source-badge source-ai">${t('AI-Assessed', 'এআই-নিরূপিত')}</span>`);
+        const flags = document.getElementById('pr-flags');
+        (risk.red_flags || []).forEach((f) => {
+          const d = document.createElement('div');
+          d.className = 'red-flag-item';
+          d.textContent = `▸ ${t('Red Flag', 'বিপদ সংকেত')}: ${f}`;
+          flags.appendChild(d);
+        });
+        if (risk.explanation) {
+          const xai = document.createElement('div');
+          xai.style.cssText = 'font-size:.85rem; color:var(--text-main);';
+          xai.textContent = `🧠 ${t('Reasoning', 'যুক্তি')}: ${risk.explanation.reason_text}`;
+          flags.appendChild(xai);
+        }
+      } else {
+        riskBox.textContent = t('Not assessed.', 'নিরূপণ হয়নি।');
+      }
+
+      if (s) {
+        document.getElementById('pr-condition').style.display = 'flex';
+        document.getElementById('pr-condition-value').textContent =
+          suggestionText(s, 'condition_en', 'condition_bn') || s.condition || '—';
+        const reasoning = suggestionText(s, 'reasoning_en', 'reasoning_bn');
+        if (reasoning) {
+          document.getElementById('pr-condition-reasoning').textContent =
+            `${t('Reasoning', 'যুক্তি')}: ${reasoning}`;
+        }
+        document.getElementById('pr-condition-disclaimer').textContent = '⚠️ ' +
+          (currentLanguage === 'bn' ? (s.disclaimer_bn || s.disclaimer || '') : (s.disclaimer || ''));
+      }
+
+      const fieldsBox = document.getElementById('pr-fields');
+      const fields = ((profile || {}).entities || {}).summary_fields || {};
+      Object.keys(STAFF_FIELD_LABELS).forEach((key) => {
+        const label = STAFF_FIELD_LABELS[key];
+        const rowDiv = document.createElement('div');
+        rowDiv.style.cssText = 'display:flex; gap:10px; font-size:.88rem; padding:6px 0; border-bottom:1px dashed var(--border-color);';
+        const l = document.createElement('span');
+        l.style.cssText = 'min-width:280px; font-weight:600; color:var(--text-muted);';
+        l.textContent = `${label.icon} ${t(label.en, label.bn)}`;
+        const v = document.createElement('span');
+        v.style.flex = '1';
+        v.textContent = fieldValue(fields[key]) || '—';
+        rowDiv.appendChild(l);
+        rowDiv.appendChild(v);
+        fieldsBox.appendChild(rowDiv);
+      });
     }
   </script>
 </body>

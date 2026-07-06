@@ -101,8 +101,8 @@ def generate_visit_document(
     or the staff ``summary_report`` (MEDIC-7). Stores the file and records a row
     with ``visit_id`` set and ``utterance_id`` NULL.
 
-    Both kinds are LOCAL — no API call. ``summary_report`` reuses the stored M12
-    report (generating one first if the visit has none; M12 assembly is local too).
+    Both kinds are LOCAL — no API call. ``summary_report`` assembles a fresh M12
+    report every time (local too), so staff edits and overrides always show.
     """
     if kind not in VISIT_DOCUMENT_KINDS:
         raise ValueError(
@@ -112,14 +112,17 @@ def generate_visit_document(
 
     # Local imports: keep the module import-light and avoid a services cycle.
     from backend.app.db.repository_visits import list_visit_utterances
-    from backend.app.services.report import generate_report, latest_report
+    from backend.app.services.report import generate_report
 
     patient = db.get(Patient, visit.patient_id) if visit.patient_id else None
     if kind == "transcript":
         utterances = list_visit_utterances(db, visit_id=visit.id)
         data = render_visit_transcript(visit, patient, utterances)
     else:  # summary_report
-        report = latest_report(db, visit_id=visit.id) or generate_report(db, visit)
+        # Always assemble FRESH (local + free): the download must reflect staff
+        # field edits and risk overrides made after any earlier report (MEDIC-7).
+        # Report rows are append-only, so history is preserved, not replaced.
+        report = generate_report(db, visit)
         data = render_visit_summary_report(visit, patient, report.sections or {})
 
     storage = storage or build_storage()

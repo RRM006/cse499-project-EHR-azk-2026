@@ -24,6 +24,7 @@ MODULE_PROVIDERS: dict[str, str] = {
     "M7": GROQ,
     "M8": GEMINI_FLASH_LITE,
     "M10": GEMINI_FLASH,  # base classification only — the red-flag RULE is local
+    "M10C": GEMINI_FLASH,  # C1 suggested condition — separate call, never mixed into M10
     "M11": GEMINI_FLASH,
     "M12": GEMINI_FLASH,
 }

@@ -72,6 +72,36 @@ transcribed by hand (the "ground truth"). Record the model + machine each time.
 
 ## Test entries (newest first)
 
+## 2026-07-06 — Session 12 — Steps 14–16: suite 129 → 139, all offline; medic condition/post-referral + doctor toggle browser-verified with stubbed network
+- Setup: Arch Linux laptop, venv Python 3.14, in-memory SQLite (StaticPool) + tmp-dir document
+  storage, `llm_client._attempt` monkeypatched (zero live LLM calls — rule #4). Browser checks
+  on the running uvicorn (port 8001) with `window.fetch` stubbed for all mutating calls.
+- Metric(s): pytest pass count; behavioral assertions per new endpoint/screen.
+- Result: **139/139 pass** (~6.3 s). New `test_suggested_condition.py` (5): bilingual M10C
+  suggestion stored at submit with `source:'ai'` + BOTH disclaimers + its own `module_events`
+  row (provider gemini_flash); LLM failure → submit still 200 and no suggestion key; no
+  profile → still submits; staff edit fills all language slots untranslated, `source:'human'`,
+  audit `profile.condition_edit`, disclaimer re-attached; guards 403 (desk/unknown editor),
+  404, 422 (empty condition), 400 (no profile). New `test_medic_summary.py` (5): patient
+  (with vitals) embedded in GET /visits/{uuid}; vitals PATCH updates + audits
+  (`patient.vitals_edit`, detail weight/bp); guards 403/404/422 (weight −3 and 700)/400
+  (nothing to update); summary_report .docx contains the C1 label + condition (EN+BN) +
+  reasoning + C1 disclaimer + "72.5 kg" + "130/85" + M12 disclaimer; **staleness regression**:
+  field edited AFTER a first download → second download shows the new value (fresh report,
+  ADR-0037).
+- Browser (eval + a11y snapshot; screenshot tool worked early, then timed out again):
+  medic condition card renders EN↔BN with badge/reasoning/disclaimer, empty state, edit
+  round-trip (PATCH url+body captured, re-renders Human Edited, empty-value blocked);
+  post-referral screen shows doctor name, age 41 computed from birth_year 1985, weight edit
+  (invalid −5 blocked client-side; 72.5 saved via PATCH), download anchor gets the right
+  `download_url`/filename, Back-to-Queue resets state; doctor portal: ↻ Queue gone,
+  15 data-bn nodes, BN subtitle/buttons/placeholders/red-flag line/tier badge (ঝুঁকিপূর্ণ),
+  `@media print` rule present, not-assessed state renders. Zero console errors.
+- Notes: rule #1 untouched (no utterance writes anywhere in these paths); rule #2 boundary
+  carried: the C1 disclaimer is asserted as a PAYLOAD property, and step 18 must default the
+  prescription Diagnosis to EMPTY. Human eyeball still wanted: `/medic/` after a real forward
+  and `/doctor/` in বাংলা (Ctrl+F5 first).
+
 ## 2026-07-06 — Session 11 — Steps 8–13: suite 121 → 129, all offline; kiosk + medic flows browser-verified with stubbed network
 - Setup: Windows dev box; `pytest backend/tests/` after every step; live Chrome preview
   against the real server (port 8001) with `window.fetch` REPLACED by spies for every

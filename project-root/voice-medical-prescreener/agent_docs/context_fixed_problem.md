@@ -131,13 +131,20 @@ allowing submit.
 
 ## 2. Doctor Dashboard — `http://localhost:8001/doctor/`
 
-### DOCTOR-1 · Remove `↻ Queue` · ⬜
+### DOCTOR-1 · Remove `↻ Queue` · ✅ (Session 12, step 16)
 The **↻ Queue** button has no clear purpose. If it is not used, remove it.
+**Done:** removed — the queue auto-refreshes every 15s and reloads after every review, so the
+button had no distinct job (unlike the medic's, which clears the phone filter — MEDIC-5).
 
-### DOCTOR-2 · Bangla / English toggle · ⬜
+### DOCTOR-2 · Bangla / English toggle · ✅ (Session 12, step 16)
 Add a language toggle for the **entire** dashboard. All UI text, patient details, AI summary, and
 the **10 pre-screening questions & answers** switch between Bangla and English; patient responses
 translate with the selected language.
+**Done:** EN/বাংলা toggle in the header; every static string carries data-en/bn; the safety panel
+renders from state (`renderSafety()`) so risk/red-flags/XAI strings switch too; queue, verbatim
+chrome, and the 10 field cards switch via the shared `staffLanguageRefresh()` (values via
+`fieldValue()`); placeholders switch via `updatePlaceholders()`. Raw verbatim text is re-rendered
+but never translated (rule #1).
 
 ### DOCTOR-3 · Patient details · ⬜
 Display a clean patient summary: Name · Phone Number · Age · Gender · Weight · BP ·
@@ -163,9 +170,13 @@ After clicking **Submit**:
 - Automatically download it.
 - Save it in the system so both the doctor and the patient can access it later.
 
-### DOCTOR-7 · UI/UX · ⬜
+### DOCTOR-7 · UI/UX · 🟨 (Session 12, step 16 — base polish done)
 Modern medical dashboard: clean cards, icons, spacing, typography. Make Risk, AI Suggestion,
 Diagnosis, and Prescription Status easy to identify. Layout responsive and print-friendly.
+**Done so far:** icon on the nav title, flex-wrap on nav/review bar (responsive), `@media print`
+block (case content prints; header/nav/sidebar/review chrome don't), safety panel unchanged as
+the glanceable risk story. **Remaining:** the AI-Suggestion mount (step 17), Diagnosis +
+Prescription Status identification (steps 18–19) — this item closes with those steps.
 
 ---
 
@@ -186,24 +197,40 @@ AI auto-generates a **Risk Score (0–100%)**, displayed as **Low / Medium / Hig
 coding. The medic can edit/override the AI-assigned risk level before referral. (Wire codes stay
 `low/medium/high/critical`; labels come from `shared.js` `TIER_LABELS`; log overrides to `audit_log`.)
 
-### MEDIC-4 · AI suggested condition · ⬜
+### MEDIC-4 · AI suggested condition · ✅ (Session 12, step 14 — ADR-0036)
 Add a section showing **Possible Condition(s)** suggested by AI plus **Reasoning** explaining why,
 based on the patient's symptoms. Example — **Possible Condition:** GERD (Acid Reflux);
 **Reason:** chest burning after meals, nighttime symptoms, and sour burps are consistent with GERD.
 The medic can edit/replace the suggested condition.
+**Done:** new module **M10C** (Flash bucket, separate call from M10) generates a bilingual
+condition + reasoning at kiosk submit (best-effort — never blocks); stored at
+`entities["suggested_condition"]` with provenance + the embedded "not a diagnosis" disclaimer;
+`PATCH /profile/condition` staff edit (403 for non-staff, audit-logged); shared
+`renderConditionCard()` card in the medic portal (doctor mount arrives at step 17); the kiosk
+never shows it and the doctor's Diagnosis field is never pre-filled (step 18 enforces EMPTY).
+Tests: `test_suggested_condition.py` (5).
 
 ### MEDIC-5 · `↻ Queue` button · ⬜
 The purpose of the **↻ Queue** button/menu is unclear. If it has a functional purpose, make it clear
 in the UI; if not, remove it to reduce clutter.
 
-### MEDIC-6 · Patient summary after referral · ⬜
+### MEDIC-6 · Patient summary after referral · ✅ (Session 12, step 15)
 After referring a patient to a doctor, generate a structured summary: Patient Name · Phone Number ·
 Age · **Weight** (editable by the medic) · AI Risk Score · AI Suggested Condition · AI Reasoning ·
 all 10 pre-screening questions and answers in a clean, formatted layout.
+**Done:** "Submit & Forward" now lands on a post-referral summary screen (bilingual): patient card
+(name/phone/age-from-birth-year/**weight inline-edit**/BP), risk tier + C2 band + red flags + XAI,
+the C1 suggested condition with its disclaimer, and all 10 Q&A rows. Weight edits go through the
+new `PATCH /api/patients/{id}/vitals` (staff-only, audit-logged `patient.vitals_edit`);
+`GET /visits/{uuid}` now embeds the patient with vitals (`VisitDetailWithPatientOut`).
 
-### MEDIC-7 · Download report (`.docx`) · ⬜
+### MEDIC-7 · Download report (`.docx`) · ✅ (Session 12, step 15)
 Add a **Download (.docx)** option to export the patient summary as a professionally formatted
 document suitable for sharing or printing. **Download must actually work.**
+**Done:** "⬇ Download Report (.docx)" on the post-referral screen (temp-anchor, KIOSK-4 pattern).
+The `summary_report` docx now renders the C1 possible-condition section (with its embedded
+disclaimer) + patient vitals, and is assembled from a **fresh** M12 report at download time so
+staff edits/overrides always show (staleness regression covered by `test_medic_summary.py`, 5 tests).
 
 ---
 

@@ -6,17 +6,19 @@
 
 **Status keys:** ⬜ Not started · 🟨 In progress · 🟦 Blocked · ✅ Done · ⛔ Retired
 
-**Last updated:** 2026-07-06 (Session 11 — fix/feature build, steps 8–13 done)
+**Last updated:** 2026-07-06 (Session 12 — fix/feature build, steps 14–16 done)
 **Current phase:** Fix/feature build from the human's Part-2 live test — 20-step approved plan
-(spec: `context_fixed_problem.md`), one step per "go". **Steps 1–13 DONE:** S9 = legacy
+(spec: `context_fixed_problem.md`), one step per "go". **Steps 1–16 DONE:** S9 = legacy
 isolation ADR-0031 · Alembic 0010 ADR-0032 · visit-grain docx seam · `fieldValue()` +
 `TIER_BANDS` · bilingual values ADR-0033. S10 = kiosk OTP KIOSK-1 · per-message 🔊 +
-no-bn-voice hint KIOSK-2/3. S11 = raw-transcript download KIOSK-4 · summary card redesign
-KIOSK-5 · language-consistent summary KIOSK-6 · **resume loop KIOSK-7 (ADR-0034)** ·
-medic bilingual/polish/Refresh-Queue MEDIC-1/2/5 · **risk override MEDIC-3 (ADR-0035:**
-human row appended, audit-logged, red-flag-Critical downgrade blocked**)**. **129 tests pass.**
-**Module in focus:** medic portal (M14-adjacent staff UI); next = step 14 (MEDIC-4 / C1
-suggested condition — plan + ADR first).
+no-bn-voice hint KIOSK-2/3. S11 = kiosk summary complete KIOSK-4/5/6/7 (resume loop ADR-0034) ·
+medic bilingual/polish MEDIC-1/2/5 · risk override MEDIC-3 (ADR-0035). S12 = **C1 suggested
+condition MEDIC-4 (ADR-0036:** separate M10C call, embedded disclaimer, staff-only, never the
+doctor's Diagnosis**)** · **post-referral summary + fresh .docx MEDIC-6/7 (ADR-0037:** vitals
+PATCH, patient embedded in visit detail, report regenerated at download**)** · doctor
+bilingual/polish/↻-removal DOCTOR-1/2 (+DOCTOR-7 base). **139 tests pass.**
+**Module in focus:** doctor portal (M14); next = step 17 (DOCTOR-3 patient-details card —
+short plan, then "go").
 **Progress:** Session 8 built the reconciled system end to end (see `changelog.md` S8 +
 `reconciliation.md`). **DB:** all 15 architecture.md tables applied (Alembic head `0009_audit_log`).
 **Backend:** kiosk phone + stub OTP → visit; intake (M3/M4/M6); follow-up loop (M7/M8/M9);
@@ -56,6 +58,19 @@ Refresh-Queue clarity (MEDIC-1/2/5) and the MEDIC-3 risk panel + override endpoi
 downgrade a red-flag Critical — 409). **129 tests pass** (new: test_resume_loop 5,
 test_risk_override 3). Module statuses still 🟨 — the gate remains the human live-voice
 re-run; M7's loop UX and M10's override path are now built-and-offline-tested.
+**Session 12:** steps 14–16 landed. The medic portal is feature-complete for this build:
+**MEDIC-4** C1 suggested condition (ADR-0036 — new module `M10C` on the Flash bucket, its own
+module_events code, generated best-effort at kiosk submit, stored in
+`entities["suggested_condition"]` with embedded "not a diagnosis" disclaimers, staff edit via
+`PATCH /profile/condition`, shared `renderConditionCard()`; the kiosk never shows it) and
+**MEDIC-6/7** post-referral summary + working .docx (ADR-0037 — `PATCH /patients/{id}/vitals`
+weight edit, patient embedded in `GET /visits/{uuid}`, the summary_report docx now carries the
+C1 block + vitals and regenerates the M12 report FRESH at download so staff edits/overrides
+always show). Doctor portal: **DOCTOR-1** ↻ Queue removed, **DOCTOR-2** fully bilingual
+(safety panel re-renders from state), DOCTOR-7 base polish + print CSS (finishes with 17–19).
+**139 tests pass** (new: test_suggested_condition 5, test_medic_summary 5). Statuses still 🟨 —
+gate unchanged (human live-voice re-run); M12's export path and M14's medic side are
+built-and-offline-tested.
 
 ---
 
@@ -74,9 +89,9 @@ re-run; M7's loop UX and M10's override path are now built-and-offline-tested.
 | 9 | Case Completion Check | 🟨 | A completeness score is computed; loops back to Module 7 until threshold or max turns reached. **Built** (`services/completion.py`, LOCAL; threshold + max-turn exit, both env-tunable). |
 | 10 | Risk Assessment Engine | 🟨 | Each case is classified Low/Medium/High/Critical from rules + model; **a rule-based red-flag check forces Critical for clearly life-threatening symptoms (chest pain, stroke signs, severe breathing difficulty, loss of consciousness) and surfaces them prominently**; accuracy + red-flag recall recorded on a labeled test set. **Built** (`services/risk.py` + `red_flags.py`; rule survives total LLM outage; red-flag recall enforced per-phrase in tests; S11: MEDIC-3 staff override appends a human row, audit-logged, red-flag-Critical downgrade blocked — ADR-0035). Accuracy on labeled real data pending. |
 | 11 | Explainable AI (XAI) | 🟨 | Every risk output has a plain-language reason listing the contributing factors. **Built** (`services/risk.py`, M11; deterministic fallback so no risk row is ever reason-less). |
-| 12 | Structured Clinical Report | 🟨 | A full report (all sections) is generated and exportable as PDF + dashboard view; contains **no diagnosis**; includes a **Red Flags** section sourced from M10. **Built** (`services/report.py`, LOCAL assembly + disclaimer; shown in doctor portal). Per-visit `.docx` export of the summary report + raw transcript SHIPPED (S9 step 3, `visit_docx.py`); PDF still pending. |
+| 12 | Structured Clinical Report | 🟨 | A full report (all sections) is generated and exportable as PDF + dashboard view; contains **no diagnosis**; includes a **Red Flags** section sourced from M10. **Built** (`services/report.py`, LOCAL assembly + disclaimer; shown in doctor portal). Per-visit `.docx` export of the summary report + raw transcript SHIPPED (S9 step 3, `visit_docx.py`); S12: summary_report carries the C1 possible-condition block + vitals and regenerates FRESH at download (ADR-0037). PDF still pending. |
 | 13 | EHR Database | 🟨 | Transcripts, profiles, reports, and audit logs are stored and retrievable by patient ID/date; data encrypted. **Built** (all 15 tables, Alembic head `0009`; retrieval by phone + status; `audit_log` on every state change). Encryption-at-rest still pending. |
-| 14 | Doctor Dashboard | 🟨 | Web UI shows report, risk, flags, XAI; doctor can override/annotate; high/critical cases alerted. **Built** (`frontend_doctor/`: queue, risk/red-flags/XAI panel, field edit, Override/Accept). |
+| 14 | Doctor Dashboard | 🟨 | Web UI shows report, risk, flags, XAI; doctor can override/annotate; high/critical cases alerted. **Built** (`frontend_doctor/`: queue, risk/red-flags/XAI panel, field edit, Override/Accept; S12: fully bilingual, ↻ Queue removed, print CSS. Medic side: C1 condition card + post-referral summary + .docx download, S12). |
 | 15 | Feedback & Continuous Learning | 🟨 | Doctor feedback is collected and usable to retrain/fine-tune; regression check before deploying updates. **Built** (feedback stored via `POST /api/visits/{uuid}/feedback`); retrain/regression pipeline still future. |
 
 ---

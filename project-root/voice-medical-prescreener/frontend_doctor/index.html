@@ -8,63 +8,73 @@
   <style>
     .login-wrap { display: flex; flex: 1; align-items: center; justify-content: center; padding: 40px; }
     #portal-main { display: none; flex: 1; flex-direction: column; min-height: 0; }
-    .top-nav { background: var(--bg-white); border-bottom: 1px solid var(--border-color); padding: 10px 24px; display: flex; justify-content: space-between; align-items: center; gap: 12px; }
+    .top-nav { background: var(--bg-white); border-bottom: 1px solid var(--border-color); padding: 10px 24px; display: flex; justify-content: space-between; align-items: center; gap: 12px; flex-wrap: wrap; }
+    /* DOCTOR-7: print-friendly — the case content prints, the chrome doesn't. */
+    @media print {
+      .portal-header, .top-nav, .queue-sidebar, #review-bar, .lang-toggle { display: none !important; }
+      .detail-workspace, .staff-grid { overflow: visible !important; display: block !important; }
+    }
   </style>
 </head>
 <body>
   <div class="portal-header">
     <div><span class="portal-title">Niramoy Pre-Screening</span>
-      <span class="portal-subtitle">Doctor Clinical Portal</span></div>
-    <div style="font-size:.8rem; font-weight:600; color:var(--text-muted);" id="user-tag"></div>
+      <span class="portal-subtitle" data-en="Doctor Clinical Portal" data-bn="ডাক্তার ক্লিনিক্যাল পোর্টাল">Doctor Clinical Portal</span></div>
+    <div style="display:flex; align-items:center; gap:14px;">
+      <div class="lang-toggle">
+        <button class="lang-btn" data-lang="en" onclick="setLanguage('en')">English</button>
+        <button class="lang-btn" data-lang="bn" onclick="setLanguage('bn')">বাংলা</button>
+      </div>
+      <div style="font-size:.8rem; font-weight:600; color:var(--text-muted);" id="user-tag"></div>
+    </div>
   </div>
   <div id="error-banner" class="error-banner" style="margin:10px 24px 0;"></div>
 
   <!-- stub login (auth is stubbed; pick a seeded doctor) -->
   <div class="login-wrap" id="login-screen">
     <div class="card" style="max-width:400px; width:100%;">
-      <h2 style="color:var(--primary-color); text-align:center; margin-bottom:6px;">Doctor Clinical Portal</h2>
-      <p style="font-size:.75rem; color:var(--text-muted); text-align:center; margin-bottom:22px;">Registered Physicians Only (demo login)</p>
-      <label style="font-size:.72rem; text-transform:uppercase; color:var(--text-muted);">Doctor</label>
+      <h2 style="color:var(--primary-color); text-align:center; margin-bottom:6px;" data-en="Doctor Clinical Portal" data-bn="ডাক্তার ক্লিনিক্যাল পোর্টাল">Doctor Clinical Portal</h2>
+      <p style="font-size:.75rem; color:var(--text-muted); text-align:center; margin-bottom:22px;" data-en="Registered Physicians Only (demo login)" data-bn="শুধুমাত্র নিবন্ধিত চিকিৎসক (ডেমো লগইন)">Registered Physicians Only (demo login)</p>
+      <label style="font-size:.72rem; text-transform:uppercase; color:var(--text-muted);" data-en="Doctor" data-bn="ডাক্তার">Doctor</label>
       <select class="input-field" id="doctor-login-select" style="margin:6px 0 14px;"></select>
-      <label style="font-size:.72rem; text-transform:uppercase; color:var(--text-muted);">Password</label>
+      <label style="font-size:.72rem; text-transform:uppercase; color:var(--text-muted);" data-en="Password" data-bn="পাসওয়ার্ড">Password</label>
       <input class="input-field" type="password" value="demo-password" style="margin:6px 0 18px;">
-      <button class="btn btn-primary" style="width:100%; padding:12px;" onclick="login()">Authenticate &amp; Enter</button>
+      <button class="btn btn-primary" style="width:100%; padding:12px;" onclick="login()" data-en="Authenticate &amp; Enter" data-bn="প্রবেশ করুন">Authenticate &amp; Enter</button>
     </div>
   </div>
 
   <div id="portal-main">
     <div class="top-nav">
-      <div style="font-weight:600; font-size:.9rem;">My Assigned Patients</div>
-      <div style="display:flex; gap:8px;">
-        <input class="input-field" id="phone-search" placeholder="Patient Mobile Lookup..." style="width:280px; padding:8px 12px; font-size:.85rem;"
-               onkeydown="if(event.key==='Enter') searchPhone()">
-        <button class="btn btn-secondary" onclick="loadQueue()" style="padding:8px 14px; font-size:.85rem;">↻ Queue</button>
-      </div>
+      <div style="font-weight:600; font-size:.9rem;">🧑‍⚕️ <span data-en="My Assigned Patients" data-bn="আমার নির্ধারিত রোগীরা">My Assigned Patients</span></div>
+      <!-- DOCTOR-1: the ↻ Queue button is gone — the queue already auto-refreshes
+           every 15s and re-loads after every review; the button had no distinct job. -->
+      <input class="input-field" id="phone-search" placeholder="Patient Mobile Lookup (+880...)" style="width:280px; padding:8px 12px; font-size:.85rem;"
+             onkeydown="if(event.key==='Enter') searchPhone()">
     </div>
     <div class="staff-grid">
       <div class="queue-sidebar">
-        <div class="queue-header">Assigned Queue (<span id="queue-count">0</span>)</div>
+        <div class="queue-header"><span data-en="Assigned Queue" data-bn="নির্ধারিত তালিকা">Assigned Queue</span> (<span id="queue-count">0</span>)</div>
         <div id="queue-list"></div>
       </div>
       <div class="detail-workspace">
         <div id="no-case" style="margin:auto; text-align:center; color:var(--text-muted);">
           <div style="font-size:3rem;">🧑‍⚕️</div>
-          <h3>Select Patient</h3>
-          <p style="font-size:.85rem;">Click a patient to scan risk alerts and the verified pre-screening summary.</p>
+          <h3 data-en="Select Patient" data-bn="রোগী নির্বাচন করুন">Select Patient</h3>
+          <p style="font-size:.85rem;" data-en="Click a patient to scan risk alerts and the verified pre-screening summary." data-bn="ঝুঁকি সতর্কতা ও যাচাইকৃত প্রাক-পরীক্ষার সারাংশ দেখতে একজন রোগী নির্বাচন করুন।">Click a patient to scan risk alerts and the verified pre-screening summary.</p>
         </div>
         <div id="case-detail" style="display:none; flex-direction:column; gap:18px;">
           <div class="verbatim-panel" id="verbatim-panel">
             <div class="verbatim-header" onclick="toggleVerbatim()">
-              <span>❝ Patient's Own Words<span class="verbatim-badge">Raw — unedited</span></span><span>▾</span>
+              <span>❝ <span data-en="Patient's Own Words" data-bn="রোগীর নিজের কথা">Patient's Own Words</span><span class="verbatim-badge" data-en="Raw — unedited" data-bn="মূল — অসম্পাদিত">Raw — unedited</span></span><span>▾</span>
             </div>
             <div class="verbatim-body" id="verbatim-body"></div>
           </div>
 
-          <!-- glanceable risk / red flags / XAI -->
+          <!-- glanceable risk / red flags / XAI (DOCTOR-7: the safety story first) -->
           <div class="safety-panel" id="safety-panel">
             <div style="text-align:center; min-width:150px; border-right:1px solid #FCA5A5; padding-right:16px;">
               <div style="font-size:2rem;">⚠️</div>
-              <div style="font-size:.75rem; font-weight:700; text-transform:uppercase; color:var(--danger-color);">Risk Assessment</div>
+              <div style="font-size:.75rem; font-weight:700; text-transform:uppercase; color:var(--danger-color);" data-en="Risk Assessment" data-bn="ঝুঁকি নিরূপণ">Risk Assessment</div>
               <div class="safety-tier" id="risk-tier">—</div>
             </div>
             <div style="flex:1;">
@@ -75,10 +85,10 @@
 
           <div id="field-cards" style="display:flex; flex-direction:column; gap:12px;"></div>
 
-          <div class="card" style="display:flex; justify-content:flex-end; gap:12px; align-items:center;">
-            <input class="input-field" id="review-notes" placeholder="Notes / annotation (optional)" style="flex:1;">
-            <button class="btn btn-danger-outline" onclick="review('low')">Override to Low-Risk</button>
-            <button class="btn btn-primary" onclick="review(null)">Accept &amp; Write to EHR</button>
+          <div class="card" id="review-bar" style="display:flex; justify-content:flex-end; gap:12px; align-items:center; flex-wrap:wrap;">
+            <input class="input-field" id="review-notes" placeholder="Notes / annotation (optional)" style="flex:1; min-width:220px;">
+            <button class="btn btn-danger-outline" onclick="review('low')" data-en="Override to Low-Risk" data-bn="স্বাভাবিক ঝুঁকিতে নামান">Override to Low-Risk</button>
+            <button class="btn btn-primary" onclick="review(null)" data-en="Accept &amp; Write to EHR" data-bn="গ্রহণ করে EHR-এ লিখুন">Accept &amp; Write to EHR</button>
           </div>
         </div>
       </div>
@@ -89,8 +99,10 @@
   <script src="/shared/staff.js"></script>
   <script>
     const PORTAL = { role: 'doctor', userId: null, canEdit: true, onCaseLoaded: loadRisk };
+    let currentRisk = null;   // kept so the safety panel re-renders on language toggle
 
     async function boot() {
+      updatePlaceholders();
       try {
         const doctors = await api('GET', '/api/users?role=doctor');
         document.getElementById('doctor-login-select').innerHTML =
@@ -101,7 +113,7 @@
 
     function login() {
       const sel = document.getElementById('doctor-login-select');
-      if (!sel.value) return showError('No doctor accounts found — check the DB seed.');
+      if (!sel.value) return showError(t('No doctor accounts found — check the DB seed.', 'কোনো ডাক্তার অ্যাকাউন্ট নেই — ডাটাবেস সিড দেখুন।'));
       PORTAL.userId = Number(sel.value);
       document.getElementById('user-tag').textContent = `👤 ${sel.options[sel.selectedIndex].text}`;
       document.getElementById('login-screen').style.display = 'none';
@@ -111,36 +123,60 @@
     }
 
     async function loadRisk(c) {
+      currentRisk = null;
+      try { currentRisk = await api('GET', `/api/visits/${c.uuid}/risk`); } catch (_) {}
+      renderSafety();
+    }
+
+    /* DOCTOR-2: render-from-state so the panel rebuilds on language toggle. */
+    function renderSafety() {
       const panel = document.getElementById('safety-panel');
       const flags = document.getElementById('red-flags-list');
       const xaiBox = document.getElementById('xai-box');
       flags.innerHTML = '';
       xaiBox.style.display = 'none';
-      try {
-        const risk = await api('GET', `/api/visits/${c.uuid}/risk`);
-        document.getElementById('risk-tier').innerHTML = tierBadge(risk.tier);
-        panel.className = 'safety-panel tier-' + risk.tier;
-        (risk.red_flags || []).forEach((f) => {
-          const d = document.createElement('div');
-          d.className = 'red-flag-item';
-          d.textContent = `▸ Red Flag: ${f}${risk.rule_overrode ? ' (rule forced Critical)' : ''}`;
-          flags.appendChild(d);
-        });
-        if (!risk.red_flags || !risk.red_flags.length) {
-          flags.innerHTML = '<div style="font-size:.85rem;color:var(--text-muted);">No red flags triggered.</div>';
-        }
-        if (risk.explanation) {
-          xaiBox.style.display = 'block';
-          xaiBox.textContent = `🧠 Explainable-AI Reasoning: ${risk.explanation.reason_text}`;
-        }
-      } catch (_) {
+      const risk = currentRisk;
+      if (!risk) {
         document.getElementById('risk-tier').textContent = '—';
-        flags.innerHTML = '<div style="font-size:.85rem;color:var(--text-muted);">Not assessed yet.</div>';
+        panel.className = 'safety-panel';
+        flags.innerHTML = `<div style="font-size:.85rem;color:var(--text-muted);">${t('Not assessed yet.', 'এখনও নিরূপণ হয়নি।')}</div>`;
+        return;
+      }
+      document.getElementById('risk-tier').innerHTML = tierBadge(risk.tier);
+      panel.className = 'safety-panel tier-' + risk.tier;
+      (risk.red_flags || []).forEach((f) => {
+        const d = document.createElement('div');
+        d.className = 'red-flag-item';
+        d.textContent = `▸ ${t('Red Flag', 'বিপদ সংকেত')}: ${f}` +
+          (risk.rule_overrode ? ` (${t('rule forced Critical', 'নিয়ম অনুযায়ী ঝুঁকিপূর্ণ')})` : '');
+        flags.appendChild(d);
+      });
+      if (!risk.red_flags || !risk.red_flags.length) {
+        flags.innerHTML = `<div style="font-size:.85rem;color:var(--text-muted);">${t('No red flags triggered.', 'কোনো বিপদ সংকেত পাওয়া যায়নি।')}</div>`;
+      }
+      if (risk.explanation) {
+        xaiBox.style.display = 'block';
+        xaiBox.textContent = `🧠 ${t('Explainable-AI Reasoning', 'ব্যাখ্যাযোগ্য এআই যুক্তি')}: ${risk.explanation.reason_text}`;
       }
     }
 
+    function updatePlaceholders() {
+      document.getElementById('phone-search').placeholder =
+        t('Patient Mobile Lookup (+880...)', 'রোগীর মোবাইল খুঁজুন (+৮৮০...)');
+      document.getElementById('review-notes').placeholder =
+        t('Notes / annotation (optional)', 'নোট / মন্তব্য (ঐচ্ছিক)');
+    }
+
+    /* DOCTOR-2: everything staff.js rendered rebuilds via the shared hook; the
+       raw verbatim text re-renders but is never translated (rule #1). */
+    function onLanguageChange() {
+      staffLanguageRefresh();
+      renderSafety();
+      updatePlaceholders();
+    }
+
     async function review(overrideTier) {
-      if (!currentCase) return showError('Select a case first.');
+      if (!currentCase) return showError(t('Select a case first.', 'আগে একটি কেস নির্বাচন করুন।'));
       try {
         await api('POST', `/api/visits/${currentCase.uuid}/review`, {
           reviewer_id: PORTAL.userId,
@@ -149,6 +185,7 @@
           notes: document.getElementById('review-notes').value || null,
         });
         currentCase = null;
+        currentRisk = null;
         document.getElementById('case-detail').style.display = 'none';
         document.getElementById('no-case').style.display = 'block';
         document.getElementById('review-notes').value = '';

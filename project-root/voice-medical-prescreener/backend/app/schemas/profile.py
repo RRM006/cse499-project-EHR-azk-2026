@@ -69,6 +69,28 @@ class SummaryFields(BaseModel):
     current_concern: SummaryFieldValue = SummaryFieldValue()
 
 
+class SuggestedCondition(BaseModel):
+    """The C1 "Possible Condition" suggestion (ADR-0036) — staff-facing ONLY.
+
+    The one approved exception to rule #2's no-disease-names posture: a clearly
+    labeled, disclaimered, editable SUGGESTION stored at
+    ``entities["suggested_condition"]``. The disclaimer constants travel INSIDE
+    the object so every payload that carries the suggestion carries them.
+    Never shown to the patient; never pre-fills the doctor's Diagnosis field.
+    """
+
+    condition: str = Field("", description="Canonical/legacy single text (mirrors condition_en).")
+    condition_en: str = ""
+    condition_bn: str = ""
+    reasoning_en: str = Field("", description="Why — cites only the patient's reported symptoms.")
+    reasoning_bn: str = ""
+    source: Literal["ai", "human"] = "ai"
+    edited_by: int | None = Field(None, description="users.id of the staff editor, if human.")
+    edited_at: str | None = Field(None, description="ISO timestamp of the staff edit, if human.")
+    disclaimer: str = Field(..., description="Always present — 'not a diagnosis' (rule #2).")
+    disclaimer_bn: str = Field(..., description="The same disclaimer in Bangla.")
+
+
 class CaseProfileOut(BaseModel):
     model_config = ConfigDict(from_attributes=True)
 

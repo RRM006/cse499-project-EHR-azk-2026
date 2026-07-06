@@ -53,13 +53,16 @@ voice-medical-prescreener/
 │   │   │   │                      #   = KIOSK-7 resume loop (no threshold gate; ADR-0034)
 │   │   │   ├── routes_risk.py    # NEW: assess (M10 + rule) · risk (latest + XAI); S11: risk/override
 │   │   │   │                      #   (MEDIC-3 human row, audit-logged, red-flag guard — ADR-0035)
-│   │   │   ├── routes_dashboard.py # NEW: users list · submit (→auto-assess) · dashboard queues · field-edit PATCH · assign
+│   │   │   ├── routes_dashboard.py # NEW: users list · submit (→auto-assess; S12: +M10C suggestion, best-effort) ·
+│   │   │   │                      #   dashboard queues · field-edit PATCH · assign; S12: PATCH profile/condition
+│   │   │   │                      #   (C1 staff edit, ADR-0036) + PATCH patients/{id}/vitals (ADR-0037)
 │   │   │   └── routes_report.py  # NEW: report (M12) · review (M14) · feedback (M15)
 │   │   ├── schemas/              # transcript, document (existing) + visit, patient, profile, followup, risk, dashboard
 │   │   ├── services/
 │   │   │   ├── correction/       # (existing) reused as M2
 │   │   │   ├── documents/        # (existing) DocxWriter + storage; S9 + visit_docx.py (visit-grain
-│   │   │   │                      #   transcript/summary_report writers) + generate_visit_document()
+│   │   │   │                      #   transcript/summary_report writers) + generate_visit_document();
+│   │   │   │                      #   S12: summary_report renders the C1 block + regenerates FRESH (ADR-0037)
 │   │   │   ├── llm_client.py     # NEW: call_module() — assigned bucket → fallback, logs module_events
 │   │   │   ├── intake.py         # NEW: M3 extract (10-field summary_fields; bilingual value_en/value_bn since S9,
 │   │   │   │                      #   ADR-0033) → M4 summary → M6 gaps
@@ -69,8 +72,12 @@ voice-medical-prescreener/
 │   │   │   ├── completion.py     # NEW: M9 completeness (LOCAL)
 │   │   │   ├── risk.py           # NEW: M10 classify + M11 XAI (rule forces critical; deterministic fallback);
 │   │   │   │                      #   S11: override_assessment() + RiskOverrideBlocked (ADR-0035)
+│   │   │   ├── suggestion.py     # S12: M10C — C1 "Possible Condition (AI Suggestion – Not a Diagnosis)"
+│   │   │   │                      #   (ADR-0036: separate call from M10; disclaimer CONSTANTS embedded in the
+│   │   │   │                      #   stored entities["suggested_condition"]; best-effort, never blocks submit)
 │   │   │   ├── red_flags.py      # NEW: RED_FLAG_RULES (5 categories, bn/banglish/en) — LOCAL, no API
-│   │   │   ├── report.py         # NEW: M12 local report assembly (Red Flags + disclaimer)
+│   │   │   ├── report.py         # NEW: M12 local report assembly (Red Flags + disclaimer); S12: sections gain
+│   │   │   │                      #   patient vitals + suggested_condition (ADR-0037)
 │   │   │   └── audit.py          # NEW: audit() one-line append writer
 │   │   └── db/
 │   │       ├── database.py       # engine/session; run_migrations() + _legacy_stamp_revision() (mixed-state fix)
@@ -86,7 +93,9 @@ voice-medical-prescreener/
 │                                  #   test_visit_documents (transcript verbatim + summary report) ·
 │                                  #   test_bilingual_fields (value_en/value_bn + legacy back-compat) ·
 │                                  #   test_resume_loop (KIOSK-7 scope=fields, S11) ·
-│                                  #   test_risk_override (MEDIC-3 human row + red-flag guard, S11)  (129 total)
+│                                  #   test_risk_override (MEDIC-3 human row + red-flag guard, S11) ·
+│                                  #   test_suggested_condition (C1 M10C + edit path + disclaimer, S12) ·
+│                                  #   test_medic_summary (vitals PATCH + docx freshness, S12)  (139 total)
 ├── frontend/                     # patient side (served at /)
 │   ├── index.html                # NEW (S9): landing page linking the 4 entry points (ADR-0031)
 │   ├── kiosk.html · kiosk.js     # patient kiosk (at /kiosk.html): phone→OTP (auto-advance/Backspace/paste, S10
@@ -102,19 +111,25 @@ voice-medical-prescreener/
 │   │                              #   fieldValue() (bilingual value_bn/value_en + {value} legacy), EN/BN helper, api()/showError()
 │   ├── staff.js                  # queue render, phone lookup, verbatim panel, 10 editable field cards; S11:
 │   │                              #   fully bilingual (labels+icons via t(), values via fieldValue(),
-│   │                              #   staffLanguageRefresh() hook) — raw text re-rendered, never translated
+│   │                              #   staffLanguageRefresh() hook) — raw text re-rendered, never translated;
+│   │                              #   S12: renderConditionCard() (C1 — portals opt in via #condition-card mount;
+│   │                              #   the kiosk never has one)
 │   └── tts.js                    # speak() via speechSynthesis bn-BD (Step A1); text stays the fallback
 ├── frontend_medic/index.html     # NEW medic portal (at /medic/): login→queue→verbatim+fields→Assign & Forward;
 │                                  #   S11: EN/বাংলা toggle (MEDIC-1), ↻ Refresh Queue (MEDIC-5), risk panel
-│                                  #   with C2 bands + override control (MEDIC-3)
-└── frontend_doctor/index.html    # NEW doctor portal (at /doctor/): login→queue→risk/red-flag/XAI panel→Override/Accept
+│                                  #   with C2 bands + override control (MEDIC-3); S12: #condition-card mount
+│                                  #   (MEDIC-4) + post-referral summary screen with weight inline-edit +
+│                                  #   summary_report .docx download (MEDIC-6/7)
+└── frontend_doctor/index.html    # NEW doctor portal (at /doctor/): login→queue→risk/red-flag/XAI panel→Override/Accept;
+                                   #   S12: fully bilingual (renderSafety() from state), ↻ Queue removed (DOCTOR-1/2),
+                                   #   print CSS + responsive nav (DOCTOR-7 base)
 ```
 
 REMOVED in Session 4 (browser-only): `services/stt/**`, `api/routes_stt.py`, the per-provider
 requirements files, the STT config/.env block. (Still gone.)
 
 Run from the project root. App: `python -m uvicorn backend.app.main:app --reload --port 8001`
-(use the venv's Python). Tests: `pytest backend/tests/` (**121 passing**). Schema is Alembic-managed
+(use the venv's Python). Tests: `pytest backend/tests/` (**139 passing**). Schema is Alembic-managed
 and migrates at startup — never delete the DB. Entry points: `/` (landing), `/kiosk.html`,
 `/medic/`, `/doctor/`, `/legacy/`.
 

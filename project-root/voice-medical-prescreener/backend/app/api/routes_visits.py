@@ -17,7 +17,7 @@ from sqlalchemy.orm import Session
 from backend.app.core.config import get_settings
 from backend.app.db import repository_visits as repo
 from backend.app.db.database import get_db
-from backend.app.db.models import CaseProfile, Visit
+from backend.app.db.models import CaseProfile, Patient, Visit
 from backend.app.schemas.profile import CaseProfileOut
 from backend.app.services.intake import run_intake
 from backend.app.services.llm_client import LLMCallError
@@ -27,11 +27,11 @@ from backend.app.schemas.patient import (
     PatientLookupOut,
     PatientLookupRequest,
     PatientOut,
+    VisitDetailWithPatientOut,
 )
 from backend.app.schemas.visit import (
     StoreVisitUtteranceRequest,
     VisitCreate,
-    VisitDetailOut,
     VisitOut,
     VisitUtteranceOut,
 )
@@ -103,14 +103,17 @@ def list_visits(
     return repo.list_visits(db, status=status, limit=limit)
 
 
-@router.get("/visits/{visit_uuid}", response_model=VisitDetailOut)
-def get_visit(visit_uuid: str, db: Session = Depends(get_db)) -> VisitDetailOut:
+@router.get("/visits/{visit_uuid}", response_model=VisitDetailWithPatientOut)
+def get_visit(visit_uuid: str, db: Session = Depends(get_db)) -> VisitDetailWithPatientOut:
     visit = _get_visit_or_404(db, visit_uuid)
-    detail = VisitDetailOut.model_validate(visit)
+    detail = VisitDetailWithPatientOut.model_validate(visit)
     detail.utterances = [
         VisitUtteranceOut.model_validate(u)
         for u in repo.list_visit_utterances(db, visit_id=visit.id)
     ]
+    if visit.patient_id:
+        patient = db.get(Patient, visit.patient_id)
+        detail.patient = PatientOut.model_validate(patient) if patient else None
     return detail
 
 

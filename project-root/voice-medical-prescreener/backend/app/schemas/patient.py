@@ -9,7 +9,7 @@ from datetime import datetime
 
 from pydantic import BaseModel, ConfigDict, Field
 
-from backend.app.schemas.visit import VisitOut
+from backend.app.schemas.visit import VisitDetailOut, VisitOut
 
 
 class PatientLookupRequest(BaseModel):
@@ -26,8 +26,19 @@ class PatientOut(BaseModel):
     display_name: str | None
     sex: str | None
     birth_year: int | None
+    # Vitals (rev 0010) for the staff detail views; weight is medic-editable (MEDIC-6).
+    weight_kg: float | None = None
+    bp: str | None = None
     consent: bool
     created_at: datetime
+
+
+class VisitDetailWithPatientOut(VisitDetailOut):
+    """GET /visits/{uuid} response: the visit, its turns, AND its patient (vitals
+    included) — one call serves the staff detail screens (MEDIC-6 / DOCTOR-3).
+    Defined here, not in visit.py, because patient.py already imports visit.py."""
+
+    patient: PatientOut | None = None
 
 
 class PatientLookupOut(BaseModel):

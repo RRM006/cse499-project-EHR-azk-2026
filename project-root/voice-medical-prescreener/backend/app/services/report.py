@@ -41,7 +41,8 @@ def generate_report(db: Session, visit: Visit) -> Report:
         )
 
     patient = db.get(Patient, visit.patient_id) if visit.patient_id else None
-    fields = ((profile.entities if profile else None) or {}).get("summary_fields") or {}
+    entities = (profile.entities if profile else None) or {}
+    fields = entities.get("summary_fields") or {}
 
     qa = []
     answers = {u.id: u for u in list_visit_utterances(db, visit_id=visit.id)}
@@ -66,9 +67,13 @@ def generate_report(db: Session, visit: Visit) -> Report:
             "phone": patient.external_ref if patient else None,
             "sex": patient.sex if patient else None,
             "birth_year": patient.birth_year if patient else None,
+            "weight_kg": patient.weight_kg if patient else None,
+            "bp": patient.bp if patient else None,
         },
         "chief_complaint": profile.summary if profile else None,
         "summary_fields": {k: fields.get(k) for k in SUMMARY_FIELD_KEYS},
+        # C1 (ADR-0036): the labeled suggestion, disclaimer embedded — or None.
+        "suggested_condition": entities.get("suggested_condition"),
         "followup_qa": qa,
         "risk": {
             "tier": assessment.tier if assessment else None,

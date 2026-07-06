@@ -154,6 +154,32 @@ def render_visit_summary_report(
         doc.add_heading("Chief Complaint (AI summary)", level=2)
         doc.add_paragraph(sections["chief_complaint"])
 
+    # C1 (ADR-0036): the labeled suggestion — never rendered without its disclaimer.
+    suggestion = sections.get("suggested_condition") or {}
+    condition_en = str(suggestion.get("condition_en") or suggestion.get("condition") or "").strip()
+    condition_bn = str(suggestion.get("condition_bn") or "").strip()
+    condition = condition_en or condition_bn
+    if condition:
+        doc.add_heading(
+            "Possible Condition (AI Suggestion – Not a Diagnosis) / "
+            "সম্ভাব্য অবস্থা (এআই পরামর্শ – রোগনির্ণয় নয়)",
+            level=2,
+        )
+        if condition_bn and condition_bn != condition:
+            condition += f" / {condition_bn}"
+        para = doc.add_paragraph()
+        para.add_run(condition).bold = True
+        reasoning = str(
+            suggestion.get("reasoning_en") or suggestion.get("reasoning_bn") or ""
+        ).strip()
+        if reasoning:
+            doc.add_paragraph(f"Reasoning: {reasoning}")
+        c1_disclaimer = doc.add_paragraph()
+        c1_disclaimer.add_run(
+            str(suggestion.get("disclaimer") or "") + " "
+            + str(suggestion.get("disclaimer_bn") or "")
+        ).italic = True
+
     doc.add_heading("Pre-Screening Summary (10 fields, AI-extracted)", level=2)
     fields = sections.get("summary_fields") or {}
     table = doc.add_table(rows=0, cols=2)

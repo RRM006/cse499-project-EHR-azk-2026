@@ -19,11 +19,23 @@ from sqlalchemy.orm import Session
 from backend.app.db import repository_visits as repo
 from backend.app.db.database import get_db
 from backend.app.db.models import CaseProfile, Patient, User, Visit
-from backend.app.schemas.dashboard import AssignRequest, DashboardItemOut, FieldEditRequest
-from backend.app.schemas.profile import SUMMARY_FIELD_KEYS, CaseProfileOut
+from backend.app.schemas.dashboard import (
+    AssignRequest,
+    ConditionEditRequest,
+    DashboardItemOut,
+    FieldEditRequest,
+    VitalsEditRequest,
+)
+from backend.app.schemas.patient import PatientOut
+from backend.app.schemas.profile import SUMMARY_FIELD_KEYS, CaseProfileOut, SuggestedCondition
 from backend.app.schemas.visit import VisitOut
 from backend.app.services.audit import audit
 from backend.app.services.risk import assess_visit, latest_assessment
+from backend.app.services.suggestion import (
+    CONDITION_DISCLAIMER,
+    CONDITION_DISCLAIMER_BN,
+    suggest_condition,
+)
 
 router = APIRouter(prefix="/api", tags=["staff"])
 
@@ -90,9 +102,10 @@ def submit_visit(visit_uuid: str, db: Session = Depends(get_db)) -> VisitOut:
     ):
         raise HTTPException(status_code=400, detail="Nothing to submit — no patient speech yet.")
 
+    profile = db.query(CaseProfile).filter(CaseProfile.visit_id == visit.id).first()
     if latest_assessment(db, visit_id=visit.id) is None:
-        profile = db.query(CaseProfile).filter(CaseProfile.visit_id == visit.id).first()
         assess_visit(db, visit, profile)  # never raises the visit away: rule side is local
+    suggest_condition(db, visit, profile)  # C1 (best-effort) — staff-facing, never blocks
 
     updated = repo.set_visit_status(db, visit=visit, status="awaiting_review")
     audit(db, action="visit.submit", entity_type="visit", entity_id=visit.uuid,
@@ -188,6 +201,76 @@ def edit_profile_field(
     audit(db, action="profile.field_edit", entity_type="visit", entity_id=visit.uuid,
           actor_id=editor.id, clinic_id=visit.clinic_id,
           detail={"field": field_key, "new_value": payload.value})
+    return profile
+
+
+@router.patch("/patients/{patient_id}/vitals", response_model=PatientOut)
+def edit_patient_vitals(
+    patient_id: int, payload: VitalsEditRequest, db: Session = Depends(get_db)
+) -> PatientOut:
+    """MEDIC-6: weight (and BP) are staff-recorded vitals, not something the AI
+    infers — so this touches the patients row directly, audit-logged. The raw
+    transcript and derived profile are untouched."""
+    editor = db.get(User, payload.editor_id)
+    if editor is None or editor.role not in ("medic", "doctor", "admin"):
+        raise HTTPException(status_code=403, detail="Editor must be a medic, doctor, or admin.")
+    patient = db.get(Patient, patient_id)
+    if patient is None:
+        raise HTTPException(status_code=404, detail=f"Patient {patient_id} not found")
+    if payload.weight_kg is None and payload.bp is None:
+        raise HTTPException(status_code=400, detail="Nothing to update — send weight_kg or bp.")
+
+    if payload.weight_kg is not None:
+        patient.weight_kg = payload.weight_kg
+    if payload.bp is not None:
+        patient.bp = payload.bp.strip()
+    db.commit()
+    db.refresh(patient)
+    audit(db, action="patient.vitals_edit", entity_type="patient", entity_id=patient.id,
+          actor_id=editor.id, clinic_id=patient.clinic_id,
+          detail={"weight_kg": payload.weight_kg, "bp": payload.bp})
+    return patient
+
+
+@router.patch("/visits/{visit_uuid}/profile/condition", response_model=CaseProfileOut)
+def edit_suggested_condition(
+    visit_uuid: str, payload: ConditionEditRequest, db: Session = Depends(get_db)
+) -> CaseProfileOut:
+    """C1 staff edit (MEDIC-4, ADR-0036): replace the AI's suggested condition.
+
+    Same rules as the 10-field edit: staff text fills every language slot
+    untranslated and source becomes 'human'. The disclaimer is re-attached
+    server-side so no payload can strip it; this value never flows into the
+    doctor's prescription Diagnosis field (rule #2)."""
+    visit = _get_visit_or_404(db, visit_uuid)
+    editor = db.get(User, payload.editor_id)
+    if editor is None or editor.role not in ("medic", "doctor", "admin"):
+        raise HTTPException(status_code=403, detail="Editor must be a medic, doctor, or admin.")
+    profile = db.query(CaseProfile).filter(CaseProfile.visit_id == visit.id).first()
+    if profile is None:
+        raise HTTPException(status_code=400, detail="No profile yet — run intake first.")
+
+    suggestion = SuggestedCondition(
+        condition=payload.condition,
+        condition_en=payload.condition,
+        condition_bn=payload.condition,
+        reasoning_en=payload.reasoning,
+        reasoning_bn=payload.reasoning,
+        source="human",
+        edited_by=editor.id,
+        edited_at=datetime.now(timezone.utc).isoformat(),
+        disclaimer=CONDITION_DISCLAIMER,
+        disclaimer_bn=CONDITION_DISCLAIMER_BN,
+    ).model_dump()
+    entities = dict(profile.entities or {})
+    entities["suggested_condition"] = suggestion
+    profile.entities = entities
+    profile.updated_at = datetime.now(timezone.utc)
+    db.commit()
+    db.refresh(profile)
+    audit(db, action="profile.condition_edit", entity_type="visit", entity_id=visit.uuid,
+          actor_id=editor.id, clinic_id=visit.clinic_id,
+          detail={"condition": payload.condition})
     return profile
 
 
