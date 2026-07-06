@@ -72,6 +72,43 @@ transcribed by hand (the "ground truth"). Record the model + machine each time.
 
 ## Test entries (newest first)
 
+## 2026-07-06 — Session 13 — Steps 17–19: suite 139 → 150, all offline; doctor patient-card + prescription form/.docx browser- and live-verified
+- Setup: Windows dev box, venv Python 3.14, `pytest backend/tests/` after each step. In-memory
+  SQLite (StaticPool) + tmp-dir document storage; zero live LLM calls (rule #4). Browser checks
+  on the running uvicorn (port 8001) with `window.api`/`fetch` stubbed for mutating calls; plus
+  ONE real end-to-end prescription POST/curl (the .docx is LOCAL — no LLM — so it was safe to run).
+- Metric(s): pytest pass count; behavioral assertions per endpoint/screen; live docx content.
+- Result: **150/150 pass** (139 → +6 `test_prescription_context.py` → 145 → +5
+  `test_prescription_docx.py` → 150). Step 17 (DOCTOR-3) was frontend-only (no test delta).
+  `test_prescription_context` (6): context returns seeded letterhead (clinic + doctor); contract
+  holds with NULL letterhead; 404 unknown visit, 404 unknown doctor, **400 non-doctor role**;
+  `seed_demo_letterhead()` idempotent + non-clobbering (a custom qualification survives, a NULL
+  slot is filled once). `test_prescription_docx` (5): POST persists a `prescriptions` row + a
+  linked `documents` row (kind `prescription`, `visit_id` set, `utterance_id` NULL); the .docx
+  contains clinic/patient/**typed diagnosis "Viral fever"**/medicine "Napa 500mg"/tests "CBC";
+  **rule-#2 regression** — POST with EMPTY diagnosis while a `suggested_condition` (GERD) is stored
+  → the docx contains neither "GERD" nor "Acid Reflux" (the writer reads only the payload, so the
+  AI condition is structurally incapable of leaking into Diagnosis); 400 non-doctor, 404 bad visit.
+- Live end-to-end (real server + real dev DB, no LLM): `POST /api/visits/{uuid}/prescription`
+  (doctor 2) → `{prescription_id:1, document:{kind:"prescription", download_url}}`; downloaded the
+  .docx and confirmed it contains Viral fever + Napa + 500mg + Demo Clinic + Kamal Hossain + CBC +
+  Signature. `GET .../prescription/context` returned the seeded letterhead live; unknown-doctor and
+  bad-visit both 404.
+- Browser (eval + a11y + working screenshots): DOCTOR-3 patient card shows Name/Phone/Age 41
+  (from birth_year 1985)/Gender/Weight/BP, the C2 band "HIGH 51–75%" beside the tier, the C1
+  condition card + disclaimer; vitals edit fires `PATCH /patients/42/vitals` `{editor_id,weight_kg,
+  bp}` and updates, empty/invalid-weight guards block the call. Prescription form: letterhead +
+  patient + symptoms autofill, **Diagnosis empty on load**, medicine add/remove + language-toggle
+  keep typed values, ≥1-row guard, payload correct; Submit POSTs `{doctor_id, payload}`,
+  auto-downloads (anchor href `/api/documents/…/download`, filename), shows "✅ Saved & Downloaded".
+  EN↔বাংলা switches all chrome; raw verbatim + patient name never translated (rule #1). Zero
+  console errors throughout.
+- Notes: preview server stopped between edits twice (restarted cleanly; the startup letterhead
+  seed only runs on (re)start). Human eyeball still wanted: the full `/doctor/` prescription flow
+  through the real UI against an assigned case, in EN + বাংলা (Ctrl+F5 first). The live curl left
+  one demo `prescription_id=1` row in the dev DB (harmless). Prescription rendering / real-mic
+  run (TC-V2/V3/F2/R1/A1) remain the human's live tasks.
+
 ## 2026-07-06 — Session 12 — Steps 14–16: suite 129 → 139, all offline; medic condition/post-referral + doctor toggle browser-verified with stubbed network
 - Setup: Arch Linux laptop, venv Python 3.14, in-memory SQLite (StaticPool) + tmp-dir document
   storage, `llm_client._attempt` monkeypatched (zero live LLM calls — rule #4). Browser checks

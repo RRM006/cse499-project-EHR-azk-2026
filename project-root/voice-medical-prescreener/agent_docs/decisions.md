@@ -575,6 +575,58 @@
   latest-report reuse with a manual "regenerate" button (staff would forget).
 - Status: Accepted
 
+## ADR-0038 — 2026-07-06 — DOCTOR-4/5 prescription: form + letterhead-prefill in step 18, save + .docx at Submit in step 19; Diagnosis never AI-filled
+- Decision: (a) The prescription work splits cleanly: **step 18 = the form + a
+  read-only prefill endpoint**; the DB write (a `prescriptions` row) and the .docx are
+  created **together at Submit in the DOCTOR-6 step (19)** — matching DOCTOR-6's "after
+  Submit → generate + save + download" wording. Nothing persists in step 18.
+  (b) Prefill endpoint `GET /api/visits/{uuid}/prescription/context?doctor_id=` returns
+  **letterhead only** (clinic {name,address,logo_path} + doctor
+  {qualification,registration_no,specialization,signature_path}); the patient details and
+  the 10 symptom fields are assembled client-side from the already-loaded case, so they
+  are not re-sent. 404 on unknown visit/doctor, 400 if the user is not a doctor.
+  (c) The **Diagnosis field is always EMPTY on load and authored by the doctor** — it is
+  never pre-filled from the C1 AI suggested condition (constitution rule #2, human
+  decision C1 / ADR-0036). The context contract has no diagnosis/condition field at all.
+  (d) **Letterhead is seeded, editable in the form, saved in the prescription payload**:
+  an idempotent `seed_demo_letterhead()` (run in `lifespan`) fills NULL letterhead columns
+  on the demo clinic + doctors with sample values; the form prefills from them and the
+  doctor can edit, but edits ride inside the prescription `payload` JSON and are NOT
+  written back to the `users`/`clinics` rows (so the seeded profile stays the reusable
+  default). Medicine rows add/remove; symptoms auto-fill from `summary_fields`.
+- Why: Persisting at Submit keeps one write path (row + doc created atomically with a
+  linked `document_id`) and leaves step 18 a tight, testable read-only slice. Seeding
+  makes the demo letterhead look professional on both machines with no manual DB step;
+  filling NULLs only means it never clobbers a real edit and is safe on every startup.
+- Rejected: Saving a draft prescription row in step 18 (two write paths + upsert/draft
+  state the spec never asked for); writing letterhead edits back to the profile (more
+  endpoints, and the seeded default is enough for reuse); extending `UserOut`/`GET /users`
+  with letterhead (pollutes the login contract shared by both portals).
+- Status: Accepted
+
+## ADR-0039 — 2026-07-06 — DOCTOR-6: prescription Submit = dedicated POST that saves the row + renders the .docx; a new prescription per Submit
+- Decision: Submit is a dedicated `POST /api/visits/{uuid}/prescription` with body
+  `{doctor_id, payload}` (NOT the `/documents/{kind}` seam, which regenerates from stored
+  state and takes no body). It renders the .docx locally (`render_prescription(payload)` in
+  `visit_docx.py`), stores it via the existing storage seam + `repo.create_document`
+  (kind `"prescription"`, `visit_id` set, `utterance_id` NULL), and persists a
+  `prescriptions` row linked by `document_id` (`generate_prescription_document()` in
+  `services/documents/__init__.py`). Returns `{prescription_id, document: DocumentOut}`;
+  the UI auto-downloads via the existing `GET /documents/{id}/download`. **A new
+  prescription + document is created per Submit** (append; documents are already
+  append-only) — no upsert/versioning. Audit `prescription.created`.
+- Why: The prescription needs the form payload as a request body, so it can't reuse the
+  regenerate-from-state document endpoint. Storing the whole form as `payload` JSON (rev
+  0010) keeps the shape migration-free. Crucially, the .docx writer reads ONLY the submitted
+  payload — it never touches `entities["suggested_condition"]` — so the Diagnosis is
+  structurally incapable of being AI-filled (rule #2); a regression test posts an empty
+  diagnosis with a stored AI condition and asserts the condition never appears in the docx.
+- Rejected: Adding `"prescription"` to `VISIT_DOCUMENT_KINDS` + the `/documents/{kind}`
+  route (no body channel for the form); upserting one prescription per visit (append is
+  simpler and preserves every issued version); generating the docx client-side (python-docx
+  server-side keeps one rendering path and the file server-stored for later retrieval).
+- Status: Accepted
+
 ## ADR-0008 — 2026-06-18 — Default Whisper model is small/base; upgrade to a Bangla fine-tune later
 - Decision: Start with Whisper `small` (or `base` if we need a snappier live feel)
   for streaming on CPU. Upgrade to a Bangla-fine-tuned model (e.g.

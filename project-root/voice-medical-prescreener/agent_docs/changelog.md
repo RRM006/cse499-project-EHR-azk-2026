@@ -16,6 +16,71 @@
 
 ---
 
+## Session 13 — 2026-07-06 — Steps 17–19 of 20: DOCTOR-3 patient-details · DOCTOR-4/5 prescription form · DOCTOR-6 prescription .docx + save
+- Did (step 19, DOCTOR-6, ADR-0039): the prescription **Submit** now saves + downloads.
+  New `render_prescription(payload)` in `services/documents/visit_docx.py` (LOCAL .docx:
+  letterhead · patient · symptoms · **Diagnosis verbatim from payload** · medicines table ·
+  advice/tests/follow-up · signature) and `generate_prescription_document()` in
+  `services/documents/__init__.py` (render → store → `create_document(kind="prescription")` →
+  persist a `prescriptions` row linked by `document_id`). New endpoint
+  `POST /api/visits/{uuid}/prescription` (body `{doctor_id, payload}`; 404 visit/doctor, 400
+  non-doctor; audit `prescription.created`; returns `{prescription_id, document}`). A **new**
+  prescription + docx per Submit (append). Frontend: `submitPrescription()` POSTs, auto-downloads
+  the .docx (anchor-click, like the medic), and shows a "✅ Saved & Downloaded" confirmation with a
+  re-download link (the step-18 preview fn removed). The .docx writer reads ONLY the payload, so
+  the Diagnosis is structurally un-AI-fillable (rule #2) — regression-tested. New
+  `test_prescription_docx.py` (5). **150 tests pass** (145 + 5). Verified live: real POST created a
+  prescription row + linked document, downloaded the .docx and confirmed it contains the diagnosis,
+  medicine, clinic, patient; frontend Submit wiring checked with a stubbed POST (body/auto-download/
+  confirmation), no console errors.
+- Did (step 18, DOCTOR-4/5, ADR-0038): a **Prescription form** in the doctor portal.
+  Backend (small, read-only): `GET /api/visits/{uuid}/prescription/context?doctor_id=`
+  (new `routes_prescription.py` + `schemas/prescription.py`) returns **letterhead only**
+  (clinic + doctor); 404 unknown visit/doctor, 400 non-doctor. Patient + the 10 symptoms
+  are assembled client-side from the already-loaded case (no re-send). An idempotent
+  `seed_demo_letterhead()` (new `backend/app/db/seed.py`, run in `lifespan`) fills the NULL
+  letterhead columns on the demo clinic + doctors with sample values (never clobbers a real
+  value). New `test_prescription_context.py` (6). **No prescription is persisted in step 18**
+  — the DB row + .docx are created together at Submit in step 19 (DOCTOR-6). Frontend
+  (`frontend_doctor/index.html`): "📝 Write Prescription" in the review bar opens a full-screen
+  `#prescription-screen` form — letterhead (editable, prefilled) · Date · Patient
+  (auto-filled) · Symptoms (auto-filled from `summary_fields`) · **Diagnosis EMPTY, doctor-
+  authored, never AI-filled (rule #2)** · Medicines table with **add/remove rows** · Advice ·
+  Tests · Follow-up · signature line. `rxDraft` state survives the EN↔বাংলা toggle;
+  `collectPrescriptionPayload()` assembles the payload (empty medicine rows filtered);
+  Submit shows an inline preview (the .docx/download replaces it in step 19). **145 tests
+  pass** (139 + 6). Browser-verified (stubbed context): full autofill, empty Diagnosis,
+  add/remove + language-toggle persistence, ≥1-row guard, payload correct, no console errors,
+  screenshot of the rendered form.
+- Did (step 17, DOCTOR-3, frontend-only, `frontend_doctor/index.html`): the doctor case
+  view now shows — right after the safety panel — a **Patient Details card** (Name · Phone ·
+  Age-from-`birth_year` · Gender · Weight · Blood Pressure) reading the patient embedded in
+  `GET /visits/{uuid}` (`VisitDetailWithPatientOut`), with **inline weight + BP editing** that
+  reuses `PATCH /patients/{id}/vitals` (already permits role=doctor — **zero backend change**);
+  a mounted **`#condition-card`** so the shared `renderConditionCard()` surfaces the C1 AI
+  suggestion + reasoning + "not a diagnosis" disclaimer (identical to the medic — closes part of
+  DOCTOR-7); and the **C2 display band** (`tierBand()`) beside the risk tier badge in
+  `renderSafety()`. New page functions: `onDoctorCaseLoaded()` (renders patient details then
+  loads risk — replaces `loadRisk` as the `PORTAL.onCaseLoaded` hook), `renderPatientDetails()`,
+  `saveVitals()` (weight range + ≥1-field validation), `genderLabel()`; `onLanguageChange()`
+  re-renders the patient card. Bilingual throughout; raw verbatim + patient name are never
+  translated (rule #1). **139 tests still pass** (no backend touched). Browser-verified with
+  stubbed network: all 6 fields correct, band renders "HIGH 51–75%", condition card + disclaimer,
+  EN↔বাংলা toggle, edit fires `PATCH /api/patients/42/vitals` body `{editor_id, weight_kg, bp}`
+  and updates the card, empty/invalid-weight guards block the call, no console errors, screenshot
+  confirms the layout order (safety → patient → condition).
+- Decided: **ADR-0038** (step 18, form + read-only letterhead prefill; save deferred) +
+  **ADR-0039** (step 19, dedicated `POST …/prescription` saves row + renders .docx; new
+  prescription per Submit; Diagnosis structurally un-AI-fillable). Step 17 needed no ADR
+  (reuses C1/ADR-0036, C2 band, ADR-0037).
+- Broke / problem: none. The preview server stopped between edits twice (restarted cleanly);
+  `preview_screenshot` worked this session. Note: the startup letterhead seed only runs on
+  server (re)start.
+- Deferred: Step 20 (final): full `pytest` sweep + doc sweep + flip the `context_fixed_problem`
+  DOCTOR-3/4/5/6/7 (+ any still-open KIOSK/MEDIC/STRUCT) statuses to done; sanity-eyeball all
+  three portals. The whole 20-step build then closes.
+- Next: Step 20 — final test + doc sweep + `context_fixed_problem` status flips. See `current_task.md`.
+
 ## Session 12 — 2026-07-06 — Steps 14–16 of 20: C1 suggested condition (MEDIC-4) + post-referral summary & docx (MEDIC-6/7) + doctor toggle/polish (DOCTOR-1/2/7)
 - Did: **Step 14 (MEDIC-4/C1, ADR-0036):** new module **M10C** (Flash bucket, deliberately a
   SEPARATE call from M10 so the risk prompt's no-disease-names rule is never contaminated)

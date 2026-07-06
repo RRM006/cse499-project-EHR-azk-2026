@@ -17,12 +17,14 @@ from fastapi.staticfiles import StaticFiles
 from backend.app.api.routes_documents import router as documents_router
 from backend.app.api.routes_dashboard import router as dashboard_router
 from backend.app.api.routes_followup import router as followup_router
+from backend.app.api.routes_prescription import router as prescription_router
 from backend.app.api.routes_report import router as report_router
 from backend.app.api.routes_risk import router as risk_router
 from backend.app.api.routes_transcripts import router as transcripts_router
 from backend.app.api.routes_visit_documents import router as visit_documents_router
 from backend.app.api.routes_visits import router as visits_router
-from backend.app.db.database import init_db
+from backend.app.db.database import SessionLocal, init_db
+from backend.app.db.seed import seed_demo_letterhead
 
 # backend/app/main.py -> parents[2] == project root, then the static portal dirs
 _PROJECT_ROOT = Path(__file__).resolve().parents[2]
@@ -47,6 +49,8 @@ ENTRY_POINTS = [
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     init_db()  # create SQLite tables if missing
+    with SessionLocal() as db:  # idempotent demo letterhead (fills NULLs only)
+        seed_demo_letterhead(db)
     logger.info("App entry points (relative to the server root, e.g. http://localhost:8001):")
     for name, path in ENTRY_POINTS:
         logger.info("  %-22s %s", name, path)
@@ -64,6 +68,7 @@ app.include_router(followup_router)
 app.include_router(risk_router)
 app.include_router(dashboard_router)
 app.include_router(report_router)
+app.include_router(prescription_router)
 
 
 @app.get("/health", tags=["meta"])

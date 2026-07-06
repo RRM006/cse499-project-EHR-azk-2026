@@ -83,14 +83,27 @@
             </div>
           </div>
 
+          <!-- DOCTOR-3: patient-details card (identity + editable vitals). Rendered by
+               renderPatientDetails() from the patient embedded in GET /visits/{uuid}. -->
+          <div class="card" id="patient-details" style="display:none; flex-direction:column; gap:8px;"></div>
+
+          <!-- DOCTOR-7 / C1 (ADR-0036): the AI suggested condition — shared with the medic,
+               rendered by staff.js renderConditionCard(); a suggestion only, never a diagnosis. -->
+          <div class="card" id="condition-card" style="display:none; flex-direction:column; gap:10px;"></div>
+
           <div id="field-cards" style="display:flex; flex-direction:column; gap:12px;"></div>
 
           <div class="card" id="review-bar" style="display:flex; justify-content:flex-end; gap:12px; align-items:center; flex-wrap:wrap;">
             <input class="input-field" id="review-notes" placeholder="Notes / annotation (optional)" style="flex:1; min-width:220px;">
+            <button class="btn btn-secondary" onclick="openPrescription()" data-en="📝 Write Prescription" data-bn="📝 প্রেসক্রিপশন লিখুন">📝 Write Prescription</button>
             <button class="btn btn-danger-outline" onclick="review('low')" data-en="Override to Low-Risk" data-bn="স্বাভাবিক ঝুঁকিতে নামান">Override to Low-Risk</button>
             <button class="btn btn-primary" onclick="review(null)" data-en="Accept &amp; Write to EHR" data-bn="গ্রহণ করে EHR-এ লিখুন">Accept &amp; Write to EHR</button>
           </div>
         </div>
+
+        <!-- DOCTOR-4/5: prescription form — full-screen over the case view, opened from the
+             review bar. Diagnosis is doctor-authored (rule #2). Save + .docx = DOCTOR-6 (step 19). -->
+        <div id="prescription-screen" style="display:none; flex-direction:column; gap:18px;"></div>
       </div>
     </div>
   </div>
@@ -98,7 +111,7 @@
   <script src="/shared/shared.js"></script>
   <script src="/shared/staff.js"></script>
   <script>
-    const PORTAL = { role: 'doctor', userId: null, canEdit: true, onCaseLoaded: loadRisk };
+    const PORTAL = { role: 'doctor', userId: null, canEdit: true, onCaseLoaded: onDoctorCaseLoaded };
     let currentRisk = null;   // kept so the safety panel re-renders on language toggle
 
     async function boot() {
@@ -122,10 +135,102 @@
       setInterval(loadQueue, 15000);
     }
 
+    /* DOCTOR-3: patient-details + risk load together when a case opens. detail is
+       already set by staff.js openCase() before this hook runs. */
+    async function onDoctorCaseLoaded(c) {
+      document.getElementById('prescription-screen').style.display = 'none';  // clean switch
+      renderPatientDetails();
+      await loadRisk(c);
+    }
+
     async function loadRisk(c) {
       currentRisk = null;
       try { currentRisk = await api('GET', `/api/visits/${c.uuid}/risk`); } catch (_) {}
       renderSafety();
+    }
+
+    /* DOCTOR-3: at-a-glance identity + medic/doctor-recorded vitals (weight + BP),
+       from the patient embedded in GET /visits/{uuid}. Vitals editing reuses the
+       shared PATCH /patients/{id}/vitals (role=doctor already allowed). Never touches
+       the raw transcript or the derived profile (rule #1). */
+    function genderLabel(sex) {
+      const map = {
+        male:   { en: 'Male',   bn: 'পুরুষ' },
+        female: { en: 'Female', bn: 'মহিলা' },
+        other:  { en: 'Other',  bn: 'অন্যান্য' },
+      };
+      const key = (sex || '').toLowerCase();
+      return map[key] ? t(map[key].en, map[key].bn) : (sex || '—');
+    }
+
+    function renderPatientDetails() {
+      const card = document.getElementById('patient-details');
+      if (!card || !currentCase) return;
+      const p = (currentCase.detail || {}).patient || {};
+      const age = p.birth_year ? String(new Date().getFullYear() - p.birth_year) : '—';
+      card.style.display = 'flex';
+
+      const row = (label, valueId) =>
+        `<div style="display:flex; gap:10px; font-size:.9rem;">
+           <span style="min-width:130px; font-weight:600; color:var(--text-muted);">${label}</span>
+           <span id="${valueId}" style="flex:1;"></span>
+         </div>`;
+
+      card.innerHTML =
+        `<div style="display:flex; justify-content:space-between; align-items:center; gap:14px; flex-wrap:wrap;">
+           <h3 style="font-size:1.05rem; color:var(--primary-color);">👤 ${t('Patient Details', 'রোগীর তথ্য')}</h3>
+           <button class="btn btn-secondary" id="vitals-edit-btn" style="padding:6px 12px; font-size:.8rem;">✏️ ${t('Edit Vitals', 'ভাইটাল সম্পাদনা')}</button>
+         </div>` +
+        row(t('Name', 'নাম'), 'pd-name') +
+        row(t('Phone', 'ফোন'), 'pd-phone') +
+        row(t('Age', 'বয়স'), 'pd-age') +
+        row(t('Gender', 'লিঙ্গ'), 'pd-gender') +
+        row(t('Weight', 'ওজন'), 'pd-weight') +
+        row(t('Blood Pressure', 'রক্তচাপ'), 'pd-bp') +
+        `<div id="vitals-editor" style="display:none; gap:8px; align-items:center; flex-wrap:wrap; border-top:1px dashed var(--border-color); padding-top:10px; margin-top:4px;">
+           <input class="input-field" id="vitals-weight" type="number" min="1" max="499" step="0.1" style="width:130px; padding:6px 10px;" placeholder="${t('Weight (kg)', 'ওজন (কেজি)')}">
+           <input class="input-field" id="vitals-bp" type="text" style="width:150px; padding:6px 10px;" placeholder="${t('BP e.g. 120/80', 'রক্তচাপ যেমন ১২০/৮০')}">
+           <button class="btn btn-primary" style="padding:6px 14px; font-size:.8rem;" onclick="saveVitals()">${t('Save', 'সংরক্ষণ')}</button>
+           <button class="btn btn-secondary" style="padding:6px 14px; font-size:.8rem;" onclick="document.getElementById('vitals-editor').style.display='none'">${t('Cancel', 'বাতিল')}</button>
+         </div>`;
+
+      // Dynamic values via textContent (never innerHTML — patient-supplied / staff text).
+      document.getElementById('pd-name').textContent = p.display_name || '—';
+      document.getElementById('pd-phone').textContent = p.external_ref || '—';
+      document.getElementById('pd-age').textContent = age;
+      document.getElementById('pd-gender').textContent = genderLabel(p.sex);
+      document.getElementById('pd-weight').textContent = p.weight_kg != null ? `${p.weight_kg} kg` : '—';
+      document.getElementById('pd-bp').textContent = p.bp || '—';
+
+      document.getElementById('vitals-edit-btn').onclick = () => {
+        document.getElementById('vitals-weight').value = p.weight_kg != null ? p.weight_kg : '';
+        document.getElementById('vitals-bp').value = p.bp || '';
+        document.getElementById('vitals-editor').style.display = 'flex';
+      };
+    }
+
+    async function saveVitals() {
+      if (!currentCase) return;
+      const p = (currentCase.detail || {}).patient;
+      if (!p) return;
+      const rawW = document.getElementById('vitals-weight').value.trim();
+      const rawBp = document.getElementById('vitals-bp').value.trim();
+      const body = { editor_id: PORTAL.userId };
+      if (rawW) {
+        const w = Number(rawW);
+        if (!isFinite(w) || w <= 0 || w >= 500) {
+          return showError(t('Enter a valid weight in kg.', 'কেজিতে সঠিক ওজন লিখুন।'));
+        }
+        body.weight_kg = w;
+      }
+      if (rawBp) body.bp = rawBp;
+      if (body.weight_kg === undefined && body.bp === undefined) {
+        return showError(t('Enter a weight or blood pressure to save.', 'সংরক্ষণে ওজন বা রক্তচাপ লিখুন।'));
+      }
+      try {
+        currentCase.detail.patient = await api('PATCH', `/api/patients/${p.id}/vitals`, body);
+        renderPatientDetails();
+      } catch (e) { showError(e.message); }
     }
 
     /* DOCTOR-2: render-from-state so the panel rebuilds on language toggle. */
@@ -142,7 +247,8 @@
         flags.innerHTML = `<div style="font-size:.85rem;color:var(--text-muted);">${t('Not assessed yet.', 'এখনও নিরূপণ হয়নি।')}</div>`;
         return;
       }
-      document.getElementById('risk-tier').innerHTML = tierBadge(risk.tier);
+      document.getElementById('risk-tier').innerHTML = tierBadge(risk.tier) +
+        `<div style="font-size:.8rem; font-weight:700; color:var(--primary-color); margin-top:4px;">${tierBand(risk.tier)}</div>`;
       panel.className = 'safety-panel tier-' + risk.tier;
       (risk.red_flags || []).forEach((f) => {
         const d = document.createElement('div');
@@ -171,8 +277,11 @@
        raw verbatim text re-renders but is never translated (rule #1). */
     function onLanguageChange() {
       staffLanguageRefresh();
+      renderPatientDetails();
       renderSafety();
       updatePlaceholders();
+      const rx = document.getElementById('prescription-screen');
+      if (rxDraft && rx.style.display !== 'none') { collectDraftFromForm(); renderPrescriptionForm(); }
     }
 
     async function review(overrideTier) {
@@ -192,6 +301,247 @@
         loadQueue();
       } catch (e) { showError(e.message); }
     }
+
+    /* ---- DOCTOR-4/5: prescription form. Letterhead comes from the server; patient +
+       the 10 symptoms are auto-filled from the already-loaded case. The Diagnosis is
+       authored by the doctor and is NEVER pre-filled by the AI (rule #2 / ADR-0036).
+       Save + .docx download are wired in the DOCTOR-6 step; here Submit assembles +
+       previews the payload so the form is demonstrable. ---- */
+    let rxContext = null;   // letterhead from GET .../prescription/context
+    let rxDraft = null;     // editable form state; survives the language toggle
+
+    function escAttr(s) {
+      return String(s == null ? '' : s)
+        .replace(/&/g, '&amp;').replace(/"/g, '&quot;')
+        .replace(/</g, '&lt;').replace(/>/g, '&gt;');
+    }
+    function emptyMedicine() { return { name: '', strength: '', dosage: '', timing: '', duration: '' }; }
+
+    function buildSymptomText() {
+      const fields = ((currentCase.profile || {}).entities || {}).summary_fields || {};
+      const lines = [];
+      Object.keys(STAFF_FIELD_LABELS).forEach((key) => {
+        const v = fieldValue(fields[key]);
+        if (v) lines.push(`${t(STAFF_FIELD_LABELS[key].en, STAFF_FIELD_LABELS[key].bn)}: ${v}`);
+      });
+      return lines.join('\n');
+    }
+
+    async function openPrescription() {
+      if (!currentCase) return showError(t('Select a case first.', 'আগে একটি কেস নির্বাচন করুন।'));
+      try {
+        rxContext = await api('GET',
+          `/api/visits/${currentCase.uuid}/prescription/context?doctor_id=${PORTAL.userId}`);
+      } catch (e) { return showError(e.message); }
+      const p = (currentCase.detail || {}).patient || {};
+      const age = p.birth_year ? String(new Date().getFullYear() - p.birth_year) : '';
+      rxDraft = {
+        clinicName: rxContext.clinic.name || '', clinicAddress: rxContext.clinic.address || '',
+        doctorName: rxContext.doctor.name || '', qualification: rxContext.doctor.qualification || '',
+        registration: rxContext.doctor.registration_no || '',
+        specialization: rxContext.doctor.specialization || '',
+        date: new Date().toISOString().slice(0, 10),
+        patientName: p.display_name || '', patientPhone: p.external_ref || '', patientAge: age,
+        patientSex: p.sex || '', patientWeight: p.weight_kg != null ? String(p.weight_kg) : '',
+        patientBp: p.bp || '',
+        symptoms: buildSymptomText(),
+        diagnosis: '',              // rule #2 — always empty on load, doctor authors it
+        medicines: [emptyMedicine()],
+        advice: '', tests: '', followup: '',
+      };
+      document.getElementById('case-detail').style.display = 'none';
+      document.getElementById('prescription-screen').style.display = 'flex';
+      renderPrescriptionForm();
+    }
+
+    function collectDraftFromForm() {
+      if (!rxDraft) return;
+      const val = (id) => { const el = document.getElementById(id); return el ? el.value : ''; };
+      rxDraft.clinicName = val('rx-clinic-name');
+      rxDraft.clinicAddress = val('rx-clinic-address');
+      rxDraft.doctorName = val('rx-doctor-name');
+      rxDraft.qualification = val('rx-qualification');
+      rxDraft.registration = val('rx-registration');
+      rxDraft.specialization = val('rx-specialization');
+      rxDraft.date = val('rx-date');
+      rxDraft.symptoms = val('rx-symptoms');
+      rxDraft.diagnosis = val('rx-diagnosis');
+      rxDraft.advice = val('rx-advice');
+      rxDraft.tests = val('rx-tests');
+      rxDraft.followup = val('rx-followup');
+      rxDraft.medicines = rxDraft.medicines.map((_, i) => ({
+        name: val(`rx-med-name-${i}`), strength: val(`rx-med-strength-${i}`),
+        dosage: val(`rx-med-dosage-${i}`), timing: val(`rx-med-timing-${i}`),
+        duration: val(`rx-med-duration-${i}`),
+      }));
+    }
+
+    function addMedicineRow() {
+      collectDraftFromForm(); rxDraft.medicines.push(emptyMedicine()); renderPrescriptionForm();
+    }
+    function removeMedicineRow(i) {
+      collectDraftFromForm();
+      if (rxDraft.medicines.length > 1) rxDraft.medicines.splice(i, 1);
+      renderPrescriptionForm();
+    }
+
+    function collectPrescriptionPayload() {
+      collectDraftFromForm();
+      const d = rxDraft;
+      return {
+        language: currentLanguage, date: d.date,
+        clinic: { name: d.clinicName, address: d.clinicAddress,
+                  logo_path: (rxContext && rxContext.clinic.logo_path) || null },
+        doctor: { id: PORTAL.userId, name: d.doctorName, qualification: d.qualification,
+                  registration_no: d.registration, specialization: d.specialization,
+                  signature_path: (rxContext && rxContext.doctor.signature_path) || null },
+        patient: { name: d.patientName, phone: d.patientPhone, age: d.patientAge,
+                   sex: d.patientSex, weight_kg: d.patientWeight, bp: d.patientBp },
+        symptoms: d.symptoms, diagnosis: d.diagnosis,
+        medicines: d.medicines.filter((m) => m.name.trim()),
+        advice: d.advice, tests: d.tests, followup_date: d.followup,
+      };
+    }
+
+    function backToCase() {
+      document.getElementById('prescription-screen').style.display = 'none';
+      document.getElementById('case-detail').style.display = 'flex';
+    }
+
+    async function submitPrescription(btn) {
+      // DOCTOR-6: save the prescription + generate its .docx, then auto-download.
+      const payload = collectPrescriptionPayload();
+      if (btn) btn.disabled = true;
+      try {
+        const res = await api('POST', `/api/visits/${currentCase.uuid}/prescription`,
+          { doctor_id: PORTAL.userId, payload });
+        const a = document.createElement('a');
+        a.href = res.document.download_url;
+        a.download = res.document.filename || '';
+        document.body.appendChild(a); a.click(); a.remove();
+        renderPrescriptionSaved(res);
+      } catch (e) { showError(e.message); }
+      if (btn) btn.disabled = false;
+    }
+
+    function renderPrescriptionSaved(res) {
+      const box = document.getElementById('rx-preview');
+      box.style.display = 'flex';
+      box.innerHTML =
+        `<h3 style="font-size:1rem; color:var(--accent-color);">✅ ${t('Prescription Saved & Downloaded', 'প্রেসক্রিপশন সংরক্ষিত ও ডাউনলোড হয়েছে')}</h3>
+         <p style="font-size:.82rem; color:var(--text-muted);">${t('Saved to the system — retrievable later by the doctor and patient.', 'সিস্টেমে সংরক্ষিত — ডাক্তার ও রোগী পরে দেখতে পারবেন।')}</p>
+         <a class="btn btn-secondary" style="align-self:flex-start; padding:6px 14px; font-size:.82rem;" href="${res.document.download_url}" download>⬇ ${t('Download again', 'আবার ডাউনলোড')}</a>`;
+      box.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    }
+
+    function renderPrescriptionForm() {
+      const box = document.getElementById('prescription-screen');
+      const d = rxDraft;
+      const lbl = (en, bn) => t(en, bn);
+      const field = (id, value, ph) =>
+        `<input class="input-field" id="${id}" value="${escAttr(value)}" placeholder="${escAttr(ph)}" style="padding:8px 10px; width:100%;">`;
+      const area = (id, value, ph, rows) =>
+        `<textarea class="input-field" id="${id}" rows="${rows || 3}" placeholder="${escAttr(ph)}" style="padding:8px 10px; width:100%; resize:vertical;">${escAttr(value)}</textarea>`;
+      const labeled = (label, control) =>
+        `<div style="display:flex; flex-direction:column; gap:4px;">
+           <label style="font-size:.72rem; text-transform:uppercase; font-weight:600; color:var(--text-muted);">${label}</label>${control}
+         </div>`;
+
+      const medRows = d.medicines.map((m, i) =>
+        `<tr>
+           <td style="padding:4px;">${field(`rx-med-name-${i}`, m.name, lbl('Medicine name', 'ওষুধের নাম'))}</td>
+           <td style="padding:4px;">${field(`rx-med-strength-${i}`, m.strength, lbl('e.g. 500mg', 'যেমন ৫০০মি.গ্রা.'))}</td>
+           <td style="padding:4px;">${field(`rx-med-dosage-${i}`, m.dosage, lbl('e.g. 1+0+1', 'যেমন ১+০+১'))}</td>
+           <td style="padding:4px;">${field(`rx-med-timing-${i}`, m.timing, lbl('after meals', 'খাওয়ার পরে'))}</td>
+           <td style="padding:4px;">${field(`rx-med-duration-${i}`, m.duration, lbl('7 days', '৭ দিন'))}</td>
+           <td style="padding:4px; text-align:center;">
+             <button class="btn btn-danger-outline" style="padding:4px 10px;" title="${lbl('Remove', 'মুছুন')}" onclick="removeMedicineRow(${i})">✕</button>
+           </td>
+         </tr>`).join('');
+
+      box.innerHTML =
+        `<div class="card" style="display:flex; justify-content:space-between; align-items:center; gap:14px; flex-wrap:wrap; border-left:4px solid var(--secondary-color);">
+           <div>
+             <h3 style="font-size:1.1rem; color:var(--primary-color);">📝 ${lbl('Prescription', 'প্রেসক্রিপশন')}</h3>
+             <p style="font-size:.8rem; color:var(--text-muted);">${lbl('Diagnosis is authored by you — it is never pre-filled by the AI.', 'রোগনির্ণয় আপনি লিখবেন — এআই কখনো তা পূরণ করে না।')}</p>
+           </div>
+           <div style="display:flex; gap:8px; flex-wrap:wrap;">
+             <button class="btn btn-primary" onclick="submitPrescription(this)">${lbl('Generate Prescription', 'প্রেসক্রিপশন তৈরি')}</button>
+             <button class="btn btn-secondary" onclick="backToCase()">← ${lbl('Back to Case', 'কেসে ফিরুন')}</button>
+           </div>
+         </div>
+
+         <div class="card" style="display:flex; flex-direction:column; gap:12px;">
+           <h3 style="font-size:1rem; color:var(--primary-color);">🏥 ${lbl('Letterhead', 'লেটারহেড')}</h3>
+           <div style="display:grid; grid-template-columns:2fr 1fr; gap:12px;">
+             ${labeled(lbl('Clinic / Hospital', 'ক্লিনিক / হাসপাতাল'), field('rx-clinic-name', d.clinicName, ''))}
+             ${labeled(lbl('Date', 'তারিখ'), `<input class="input-field" type="date" id="rx-date" value="${escAttr(d.date)}" style="padding:8px 10px; width:100%;">`)}
+           </div>
+           ${labeled(lbl('Clinic Address', 'ক্লিনিকের ঠিকানা'), field('rx-clinic-address', d.clinicAddress, ''))}
+           <div style="display:grid; grid-template-columns:1fr 1fr; gap:12px;">
+             ${labeled(lbl('Doctor', 'ডাক্তার'), field('rx-doctor-name', d.doctorName, ''))}
+             ${labeled(lbl('Qualification', 'যোগ্যতা'), field('rx-qualification', d.qualification, ''))}
+             ${labeled(lbl('Registration No.', 'রেজিস্ট্রেশন নং'), field('rx-registration', d.registration, ''))}
+             ${labeled(lbl('Specialization', 'বিশেষত্ব'), field('rx-specialization', d.specialization, ''))}
+           </div>
+         </div>
+
+         <div class="card" style="display:flex; flex-direction:column; gap:8px;">
+           <h3 style="font-size:1rem; color:var(--primary-color);">👤 ${lbl('Patient', 'রোগী')}
+             <span style="font-weight:600; font-size:.75rem; color:var(--text-muted);">(${lbl('auto-filled from referral', 'রেফারাল থেকে স্বয়ংক্রিয়')})</span></h3>
+           <div id="rx-patient-line" style="font-size:.9rem;"></div>
+         </div>
+
+         <div class="card" style="display:flex; flex-direction:column; gap:12px;">
+           ${labeled('📋 ' + lbl('Symptoms / Chief Complaints', 'উপসর্গ / প্রধান অভিযোগ'), area('rx-symptoms', d.symptoms, '', 5))}
+           ${labeled('🩺 ' + lbl('Diagnosis', 'রোগনির্ণয়'), area('rx-diagnosis', d.diagnosis, lbl('Enter diagnosis (doctor authored)', 'রোগনির্ণয় লিখুন (ডাক্তার কর্তৃক)'), 2))}
+         </div>
+
+         <div class="card" style="display:flex; flex-direction:column; gap:10px;">
+           <div style="display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:8px;">
+             <h3 style="font-size:1rem; color:var(--primary-color);">💊 ${lbl('Medicines', 'ওষুধসমূহ')}</h3>
+             <button class="btn btn-secondary" style="padding:6px 12px; font-size:.8rem;" onclick="addMedicineRow()">➕ ${lbl('Add Medicine', 'ওষুধ যোগ করুন')}</button>
+           </div>
+           <div style="overflow-x:auto;">
+             <table style="width:100%; border-collapse:collapse; font-size:.85rem;">
+               <thead><tr style="text-align:left; color:var(--text-muted);">
+                 <th style="padding:4px;">${lbl('Name', 'নাম')}</th><th style="padding:4px;">${lbl('Strength', 'মাত্রা')}</th>
+                 <th style="padding:4px;">${lbl('Dosage', 'ডোজ')}</th><th style="padding:4px;">${lbl('Timing', 'সময়')}</th>
+                 <th style="padding:4px;">${lbl('Duration', 'স্থায়িত্ব')}</th><th style="padding:4px;"></th>
+               </tr></thead>
+               <tbody>${medRows}</tbody>
+             </table>
+           </div>
+         </div>
+
+         <div class="card" style="display:flex; flex-direction:column; gap:12px;">
+           ${labeled('💬 ' + lbl('Advice / Lifestyle', 'পরামর্শ / জীবনযাপন'), area('rx-advice', d.advice, '', 2))}
+           ${labeled('🔬 ' + lbl('Required Tests', 'প্রয়োজনীয় পরীক্ষা'), area('rx-tests', d.tests, '', 2))}
+           ${labeled('📅 ' + lbl('Follow-up Date', 'ফলো-আপ তারিখ'), `<input class="input-field" type="date" id="rx-followup" value="${escAttr(d.followup)}" style="padding:8px 10px; max-width:220px;">`)}
+           <div style="margin-top:16px; text-align:right;">
+             <div id="rx-signature" style="display:inline-block; border-top:1px solid var(--text-main); padding-top:6px; min-width:220px; text-align:center; font-size:.85rem;"></div>
+           </div>
+         </div>
+
+         <div class="card" id="rx-preview" style="display:none; flex-direction:column; gap:8px; border-left:4px solid var(--accent-color);"></div>`;
+
+      // Patient + signature via textContent (patient/staff text — never innerHTML).
+      const parts = [];
+      if (d.patientName) parts.push(d.patientName);
+      if (d.patientPhone) parts.push(d.patientPhone);
+      if (d.patientAge) parts.push(`${lbl('Age', 'বয়স')} ${d.patientAge}`);
+      if (d.patientSex) parts.push(genderLabel(d.patientSex));
+      if (d.patientWeight) parts.push(`${d.patientWeight} kg`);
+      if (d.patientBp) parts.push(`BP ${d.patientBp}`);
+      document.getElementById('rx-patient-line').textContent = parts.join('  ·  ') || '—';
+      const sig = document.getElementById('rx-signature');
+      sig.textContent = d.doctorName || '';
+      const sub = document.createElement('div');
+      sub.style.color = 'var(--text-muted)';
+      sub.textContent = lbl('Signature & Stamp', 'স্বাক্ষর ও সিল');
+      sig.appendChild(sub);
+    }
+
   </script>
 </body>
 </html>

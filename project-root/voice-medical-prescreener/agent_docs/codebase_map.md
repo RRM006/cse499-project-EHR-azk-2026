@@ -56,13 +56,17 @@ voice-medical-prescreener/
 │   │   │   ├── routes_dashboard.py # NEW: users list · submit (→auto-assess; S12: +M10C suggestion, best-effort) ·
 │   │   │   │                      #   dashboard queues · field-edit PATCH · assign; S12: PATCH profile/condition
 │   │   │   │                      #   (C1 staff edit, ADR-0036) + PATCH patients/{id}/vitals (ADR-0037)
-│   │   │   └── routes_report.py  # NEW: report (M12) · review (M14) · feedback (M15)
-│   │   ├── schemas/              # transcript, document (existing) + visit, patient, profile, followup, risk, dashboard
+│   │   │   ├── routes_report.py  # NEW: report (M12) · review (M14) · feedback (M15)
+│   │   │   └── routes_prescription.py # S13: GET .../prescription/context (letterhead prefill, DOCTOR-4/5, ADR-0038) +
+│   │   │                          #   POST .../prescription (DOCTOR-6 save row + render .docx, ADR-0039)
+│   │   ├── schemas/              # transcript, document (existing) + visit, patient, profile, followup, risk, dashboard,
+│   │   │                          #   prescription (S13: letterhead context + create/created — no diagnosis field, rule #2)
 │   │   ├── services/
 │   │   │   ├── correction/       # (existing) reused as M2
 │   │   │   ├── documents/        # (existing) DocxWriter + storage; S9 + visit_docx.py (visit-grain
 │   │   │   │                      #   transcript/summary_report writers) + generate_visit_document();
-│   │   │   │                      #   S12: summary_report renders the C1 block + regenerates FRESH (ADR-0037)
+│   │   │   │                      #   S12: summary_report renders the C1 block + regenerates FRESH (ADR-0037);
+│   │   │   │                      #   S13: render_prescription() + generate_prescription_document() (DOCTOR-6, ADR-0039)
 │   │   │   ├── llm_client.py     # NEW: call_module() — assigned bucket → fallback, logs module_events
 │   │   │   ├── intake.py         # NEW: M3 extract (10-field summary_fields; bilingual value_en/value_bn since S9,
 │   │   │   │                      #   ADR-0033) → M4 summary → M6 gaps
@@ -85,7 +89,8 @@ voice-medical-prescreener/
 │   │       │                      #   Patient/Visit + CaseProfile/ModuleEvent/FollowupQuestion/RiskAssessment/XaiExplanation/
 │   │       │                      #   Report/DoctorReview/Feedback/AuditLog + Prescription (0010, ADR-0032)
 │   │       ├── repository.py     # (existing) utterance/document session-grain writers (NO raw mutator)
-│   │       └── repository_visits.py # NEW: normalize_phone, get/create patient+visit, add_utterance, set_visit_status
+│   │       ├── repository_visits.py # NEW: normalize_phone, get/create patient+visit, add_utterance, set_visit_status
+│   │       └── seed.py           # S13: seed_demo_letterhead() — idempotent, fills NULL letterhead columns at startup
 │   └── tests/                    # 6 existing suites + test_migration_0003 · test_routes_visits · test_intake ·
 │                                  #   test_followup_loop · test_risk · test_staff_routes · test_report_review ·
 │                                  #   test_routes_static (entry points + legacy isolation) ·
@@ -95,7 +100,9 @@ voice-medical-prescreener/
 │                                  #   test_resume_loop (KIOSK-7 scope=fields, S11) ·
 │                                  #   test_risk_override (MEDIC-3 human row + red-flag guard, S11) ·
 │                                  #   test_suggested_condition (C1 M10C + edit path + disclaimer, S12) ·
-│                                  #   test_medic_summary (vitals PATCH + docx freshness, S12)  (139 total)
+│                                  #   test_medic_summary (vitals PATCH + docx freshness, S12) ·
+│                                  #   test_prescription_context (DOCTOR-4/5 letterhead prefill + seed, S13) ·
+│                                  #   test_prescription_docx (DOCTOR-6 save row + .docx + Diagnosis-never-AI, S13)  (150 total)
 ├── frontend/                     # patient side (served at /)
 │   ├── index.html                # NEW (S9): landing page linking the 4 entry points (ADR-0031)
 │   ├── kiosk.html · kiosk.js     # patient kiosk (at /kiosk.html): phone→OTP (auto-advance/Backspace/paste, S10

@@ -13,12 +13,13 @@ import uuid
 from sqlalchemy.orm import Session
 
 from backend.app.db import repository as repo
-from backend.app.db.models import Document, Patient, Utterance, Visit
+from backend.app.db.models import Document, Patient, Prescription, Utterance, Visit
 from backend.app.services.documents.base import DocumentKind, DocumentWriter
 from backend.app.services.documents.docx_writer import DocxWriter
 from backend.app.services.documents.storage import DocumentStorage, build_storage
 from backend.app.services.documents.visit_docx import (
     VISIT_DOCUMENT_KINDS,
+    render_prescription,
     render_visit_summary_report,
     render_visit_transcript,
 )
@@ -29,6 +30,7 @@ __all__ = [
     "DocxWriter",
     "VISIT_DOCUMENT_KINDS",
     "build_writer",
+    "generate_prescription_document",
     "generate_session_document",
     "generate_visit_document",
 ]
@@ -141,3 +143,45 @@ def generate_visit_document(
         doc_format="docx",
         doc_id=doc_id,
     )
+
+
+def generate_prescription_document(
+    db: Session,
+    visit: Visit,
+    *,
+    doctor_id: int,
+    payload: dict,
+    storage: DocumentStorage | None = None,
+) -> Prescription:
+    """DOCTOR-6: render the doctor's prescription ``payload`` to a .docx, store it,
+    and persist a ``prescriptions`` row linked to that document.
+
+    Self-contained + LOCAL — no API call, and the Diagnosis is whatever the doctor
+    typed (never AI-filled; rule #2). A new prescription + document is created per
+    Submit (documents are append-only). The caller commits/audits.
+    """
+    data = render_prescription(payload)
+
+    storage = storage or build_storage()
+    doc_id = str(uuid.uuid4())
+    rel_path = f"{doc_id}.docx"
+    storage.save_bytes(rel_path, data)
+
+    stamp = visit.started_at.strftime("%Y%m%d") if visit.started_at else "visit"
+    document = repo.create_document(
+        db,
+        utterance_id=None,
+        visit_id=visit.id,
+        filename=f"prescription-visit-{visit.uuid[:8]}-{stamp}.docx",
+        rel_path=rel_path,
+        kind="prescription",
+        doc_format="docx",
+        doc_id=doc_id,
+    )
+
+    prescription = Prescription(
+        visit_id=visit.id, doctor_id=doctor_id, payload=payload, document_id=document.id
+    )
+    db.add(prescription)
+    db.flush()  # assign prescription.id; the route commits
+    return prescription

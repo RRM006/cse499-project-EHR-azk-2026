@@ -6,9 +6,9 @@
 
 **Status keys:** ⬜ Not started · 🟨 In progress · 🟦 Blocked · ✅ Done · ⛔ Retired
 
-**Last updated:** 2026-07-06 (Session 12 — fix/feature build, steps 14–16 done)
+**Last updated:** 2026-07-06 (Session 13 — fix/feature build, steps 17–19 done)
 **Current phase:** Fix/feature build from the human's Part-2 live test — 20-step approved plan
-(spec: `context_fixed_problem.md`), one step per "go". **Steps 1–16 DONE:** S9 = legacy
+(spec: `context_fixed_problem.md`), one step per "go". **Steps 1–19 DONE:** S9 = legacy
 isolation ADR-0031 · Alembic 0010 ADR-0032 · visit-grain docx seam · `fieldValue()` +
 `TIER_BANDS` · bilingual values ADR-0033. S10 = kiosk OTP KIOSK-1 · per-message 🔊 +
 no-bn-voice hint KIOSK-2/3. S11 = kiosk summary complete KIOSK-4/5/6/7 (resume loop ADR-0034) ·
@@ -16,9 +16,15 @@ medic bilingual/polish MEDIC-1/2/5 · risk override MEDIC-3 (ADR-0035). S12 = **
 condition MEDIC-4 (ADR-0036:** separate M10C call, embedded disclaimer, staff-only, never the
 doctor's Diagnosis**)** · **post-referral summary + fresh .docx MEDIC-6/7 (ADR-0037:** vitals
 PATCH, patient embedded in visit detail, report regenerated at download**)** · doctor
-bilingual/polish/↻-removal DOCTOR-1/2 (+DOCTOR-7 base). **139 tests pass.**
-**Module in focus:** doctor portal (M14); next = step 17 (DOCTOR-3 patient-details card —
-short plan, then "go").
+bilingual/polish/↻-removal DOCTOR-1/2 (+DOCTOR-7 base). S13 = **DOCTOR-3 patient-details card**
+(frontend-only: identity + editable weight/BP via the existing `PATCH /patients/{id}/vitals`,
+mounted `#condition-card` for the shared C1 suggestion, C2 band in the safety panel — no backend
+change) + **DOCTOR-4/5 prescription form** (step 18, ADR-0038) + **DOCTOR-6 prescription .docx +
+save** (step 19, ADR-0039: `POST …/prescription` saves a `prescriptions` row + a linked
+`documents` row and renders the LOCAL .docx; new prescription per Submit; Diagnosis
+structurally un-AI-fillable). **150 tests pass.**
+**Module in focus:** doctor portal (M14); next = step 20 (final test sweep + doc sweep +
+`context_fixed_problem` status flips — the last step of the build).
 **Progress:** Session 8 built the reconciled system end to end (see `changelog.md` S8 +
 `reconciliation.md`). **DB:** all 15 architecture.md tables applied (Alembic head `0009_audit_log`).
 **Backend:** kiosk phone + stub OTP → visit; intake (M3/M4/M6); follow-up loop (M7/M8/M9);
@@ -71,6 +77,23 @@ always show). Doctor portal: **DOCTOR-1** ↻ Queue removed, **DOCTOR-2** fully 
 **139 tests pass** (new: test_suggested_condition 5, test_medic_summary 5). Statuses still 🟨 —
 gate unchanged (human live-voice re-run); M12's export path and M14's medic side are
 built-and-offline-tested.
+**Session 13:** steps 17–18 landed. **Step 17 — DOCTOR-3** (frontend-only,
+`frontend_doctor/index.html`): patient-details card in the doctor case view (Name · Phone · Age ·
+Gender · Weight · BP from the patient embedded in `GET /visits/{uuid}`) with inline weight+BP edit
+reusing the existing `PATCH /patients/{id}/vitals`; a mounted `#condition-card` so the shared
+`renderConditionCard()` surfaces the C1 suggestion + disclaimer; and the **C2 band** (`tierBand()`)
+beside the risk tier. **Step 18 — DOCTOR-4/5 prescription form (ADR-0038):** a read-only prefill
+endpoint `GET /visits/{uuid}/prescription/context` (letterhead only), an idempotent
+`seed_demo_letterhead()` (fills NULL letterhead columns at startup), and a full-screen bilingual
+prescription form — editable letterhead + auto-filled patient/symptoms + add/remove medicine rows +
+**empty doctor-authored Diagnosis (never AI, rule #2)**. **Step 19 — DOCTOR-6 prescription .docx +
+save (ADR-0039):** `POST /api/visits/{uuid}/prescription` renders the LOCAL .docx
+(`render_prescription`) + persists a `prescriptions` row linked to a `documents` row (kind
+`prescription`); the form's Submit POSTs → auto-downloads → "✅ Saved & Downloaded". New
+prescription per Submit; the .docx reads only the payload so Diagnosis can't be AI-filled
+(regression-tested). New `test_prescription_context.py` (6) + `test_prescription_docx.py` (5).
+**150 tests pass.** Statuses gate on the human live-voice re-run; the doctor portal's
+DOCTOR-1..7 targets are now all built (final `context_fixed_problem` flips happen in step 20).
 
 ---
 

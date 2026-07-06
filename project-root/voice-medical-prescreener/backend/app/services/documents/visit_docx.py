@@ -204,3 +204,91 @@ def render_visit_summary_report(
     disclaimer = doc.add_paragraph()
     disclaimer.add_run(str(sections.get("disclaimer") or "")).italic = True
     return _to_bytes(doc)
+
+
+def _rx(payload: dict, key: str) -> str:
+    """One prescription payload field as a trimmed string ('' if missing)."""
+    return str(payload.get(key) or "").strip()
+
+
+def render_prescription(payload: dict) -> bytes:
+    """DOCTOR-6: a doctor-authored prescription rendered from the form ``payload``.
+
+    LOCAL and self-contained — the payload IS the whole document. The Diagnosis is
+    printed exactly as the doctor typed it (``payload['diagnosis']``); this writer
+    never reads the AI suggested condition, so a diagnosis can never be AI-filled
+    (constitution rule #2). Raw utterances are not touched (rule #1).
+    """
+    doc = _new_doc()
+
+    clinic = payload.get("clinic") or {}
+    doctor = payload.get("doctor") or {}
+    patient = payload.get("patient") or {}
+
+    # --- Letterhead ---
+    doc.add_heading(str(clinic.get("name") or "Clinic"), level=1)
+    if clinic.get("address"):
+        doc.add_paragraph(str(clinic["address"]))
+    doc_line = " · ".join(
+        part for part in [
+            str(doctor.get("name") or ""),
+            str(doctor.get("qualification") or ""),
+            str(doctor.get("specialization") or ""),
+            (f"Reg: {doctor['registration_no']}" if doctor.get("registration_no") else ""),
+        ] if part
+    )
+    if doc_line:
+        head = doc.add_paragraph()
+        head.add_run(doc_line).bold = True
+    doc.add_paragraph(f"Date: {_rx(payload, 'date') or '—'}")
+
+    # --- Patient ---
+    patient_bits = " · ".join(
+        part for part in [
+            str(patient.get("name") or ""),
+            str(patient.get("phone") or ""),
+            (f"Age {patient['age']}" if patient.get("age") else ""),
+            str(patient.get("sex") or ""),
+            (f"{patient['weight_kg']} kg" if patient.get("weight_kg") else ""),
+            (f"BP {patient['bp']}" if patient.get("bp") else ""),
+        ] if part
+    )
+    _meta_table(doc, [("Patient", patient_bits or "—")])
+
+    if _rx(payload, "symptoms"):
+        doc.add_heading("Symptoms / Chief Complaints", level=2)
+        doc.add_paragraph(_rx(payload, "symptoms"))
+
+    # Diagnosis — printed verbatim from the payload; NEVER AI-filled (rule #2).
+    doc.add_heading("Diagnosis", level=2)
+    doc.add_paragraph(_rx(payload, "diagnosis") or "—")
+
+    medicines = [m for m in (payload.get("medicines") or []) if str(m.get("name") or "").strip()]
+    if medicines:
+        doc.add_heading("Rx — Medicines", level=2)
+        table = doc.add_table(rows=1, cols=5)
+        table.style = "Light List Accent 1"
+        header = table.rows[0].cells
+        for i, label in enumerate(("Name", "Strength", "Dosage", "Timing", "Duration")):
+            header[i].text = label
+        for m in medicines:
+            cells = table.add_row().cells
+            cells[0].text = str(m.get("name") or "")
+            cells[1].text = str(m.get("strength") or "")
+            cells[2].text = str(m.get("dosage") or "")
+            cells[3].text = str(m.get("timing") or "")
+            cells[4].text = str(m.get("duration") or "")
+
+    if _rx(payload, "advice"):
+        doc.add_heading("Advice / Lifestyle", level=2)
+        doc.add_paragraph(_rx(payload, "advice"))
+    if _rx(payload, "tests"):
+        doc.add_heading("Required Tests", level=2)
+        doc.add_paragraph(_rx(payload, "tests"))
+    if _rx(payload, "followup_date"):
+        doc.add_paragraph(f"Follow-up: {_rx(payload, 'followup_date')}")
+
+    doc.add_paragraph("")
+    sig = doc.add_paragraph()
+    sig.add_run(f"{doctor.get('name') or ''}\nSignature & Stamp").italic = True
+    return _to_bytes(doc)
