@@ -6,9 +6,11 @@
 
 **Status keys:** ⬜ Not started · 🟨 In progress · 🟦 Blocked · ✅ Done · ⛔ Retired
 
-**Last updated:** 2026-07-06 (Session 13 — fix/feature build, steps 17–19 done)
-**Current phase:** Fix/feature build from the human's Part-2 live test — 20-step approved plan
-(spec: `context_fixed_problem.md`), one step per "go". **Steps 1–19 DONE:** S9 = legacy
+**Last updated:** 2026-07-07 (Session 14 — 20-step fix/feature build COMPLETE)
+**Current phase:** ✅ **Build complete.** The 20-step plan (spec: `context_fixed_problem.md`) is
+fully implemented — **every numbered spec item (STRUCT/KIOSK/MEDIC/DOCTOR) is ✅** and 150 tests
+pass. What remains for the project is NOT build work: the **human live real-mic run**
+(TC-V2/V3/F2/R1/A1, real keys already in `.env`) + a Bangla TTS voice on Windows. **Steps 1–20 DONE:** S9 = legacy
 isolation ADR-0031 · Alembic 0010 ADR-0032 · visit-grain docx seam · `fieldValue()` +
 `TIER_BANDS` · bilingual values ADR-0033. S10 = kiosk OTP KIOSK-1 · per-message 🔊 +
 no-bn-voice hint KIOSK-2/3. S11 = kiosk summary complete KIOSK-4/5/6/7 (resume loop ADR-0034) ·
@@ -22,9 +24,13 @@ mounted `#condition-card` for the shared C1 suggestion, C2 band in the safety pa
 change) + **DOCTOR-4/5 prescription form** (step 18, ADR-0038) + **DOCTOR-6 prescription .docx +
 save** (step 19, ADR-0039: `POST …/prescription` saves a `prescriptions` row + a linked
 `documents` row and renders the LOCAL .docx; new prescription per Submit; Diagnosis
-structurally un-AI-fillable). **150 tests pass.**
-**Module in focus:** doctor portal (M14); next = step 20 (final test sweep + doc sweep +
-`context_fixed_problem` status flips — the last step of the build).
+structurally un-AI-fillable). **S14 = step 20 (final):** 150-test gate re-confirmed; all
+`context_fixed_problem` markers flipped to ✅ (KIOSK-4/5/6/7 + MEDIC-1/2/3/5 from S11,
+DOCTOR-3/4/5/6/7 from S13); doc sweep. **150 tests pass.**
+**Module in focus:** none — the fix/feature build is closed. The **15-module table below stays
+🟨**: those modules gate on the HUMAN live-voice run (TC-V2/V3/F2/R1/A1 with real numbers), NOT on
+build completion — that gate is unchanged. Next real work = the human live run
+(step-by-step: `agent_docs/human_live_run_guide.md`).
 **Progress:** Session 8 built the reconciled system end to end (see `changelog.md` S8 +
 `reconciliation.md`). **DB:** all 15 architecture.md tables applied (Alembic head `0009_audit_log`).
 **Backend:** kiosk phone + stub OTP → visit; intake (M3/M4/M6); follow-up loop (M7/M8/M9);

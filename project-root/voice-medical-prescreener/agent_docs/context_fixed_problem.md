@@ -7,9 +7,14 @@
 
 **Status keys:** ⬜ Not started · 🟨 In progress · 🟦 Blocked (needs a decision) · ✅ Done
 
-**Last updated:** 2026-07-05
+> ✅ **BUILD COMPLETE (Session 14, 2026-07-07):** every numbered item below is Done. The
+> 20-step plan is fully implemented (Sessions 9–13); 150 tests pass. What remains is NOT
+> build work — it is the **human live real-mic run** (TC-V2/V3/F2/R1/A1 with the real keys
+> in `.env`) and installing a Bangla TTS voice on Windows (the ⚠ HUMAN notes below).
+
+**Last updated:** 2026-07-07
 **Related docs:** `constitution.md` (rules #1–#4), `architecture.md`, `codebase_map.md`,
-`decisions.md` (ADR-0024/0025/0026/0027/0028/0029), `milestone_log.md`, `current_task.md`.
+`decisions.md` (ADR-0024–0029 + ADR-0031–0039), `milestone_log.md`, `current_task.md`.
 
 ---
 
@@ -73,15 +78,18 @@ question via TTS; patient icon reads back EXACTLY the words captured at bubble c
 (raw, unchanged — rule #1). The Repeat-Question button was kept alongside (separate spec
 item + big accessible target). Browser-verified via a `speak()` spy.
 
-### KIOSK-4 · Download raw transcript (`.docx`) · ⬜
+### KIOSK-4 · Download raw transcript (`.docx`) · ✅ (Session 11, step 8)
 Add a **Download (.docx)** option so the patient can download the raw voice transcript exactly as
 transcribed, **before** any AI summarization. Example —
 **আপনার কথা:** `"আমি মোহাম্মদ কামাল হোসেন... বর্তমানে আমি গ্যাস্ট্রিকের ওষুধ, নাপা এবং নাপা এক্সটেন্ড খাচ্ছি।"`
 - **Expected:** the downloaded document preserves the original transcript with no modifications.
+**Done:** bilingual "Download Raw Transcript (.docx)" button on the kiosk summary screen (before
+Confirm & Submit), wired to the existing visit-grain `transcript` export via a temporary anchor;
+the .docx reproduces every raw turn byte-exact (rule #1). No backend change.
 
 ### Pre-Screening Summary
 
-### KIOSK-5 · Improve summary card UI · ⬜
+### KIOSK-5 · Improve summary card UI · ✅ (Session 11, step 9)
 After voice input, the **"Please Review Your Pre-Screening Summary"** section shows the extracted
 info, but the current layout looks plain and unprofessional.
 - **Expected improvements:**
@@ -95,8 +103,12 @@ info, but the current layout looks plain and unprofessional.
   - Should feel like a professional medical report while staying easy to review before submitting.
   - **Must stay inside the locked clinical-blue design system** (ADR-0029 / `shared.css`) — extend
     it, don't fork it. Never show module codes in patient-facing UI.
+**Done:** each of the 10 fields is its own card (18px radius, backdrop blur, soft shadow, an icon
+chip per section, bold primary-blue titles); the clinically key fields get a left accent border +
+value badge; empty fields show muted-italic "Not mentioned / উল্লেখ করা হয়নি"; clinical-blue
+tokens only (extends `shared.css`, no fork).
 
-### KIOSK-6 · Language toggle bug · ⬜
+### KIOSK-6 · Language toggle bug · ✅ (Session 11, step 10)
 Switching **English ↔ বাংলা** changes the labels correctly, but the extracted patient responses
 stay in **English**.
 - **Expected:**
@@ -105,8 +117,11 @@ stay in **English**.
   - The entire summary follows the selected language consistently.
   - (Translation applies to the extracted/normalized summary fields only — the raw verbatim
     transcript is never altered.)
+**Done:** the summary follows the toggle end-to-end — `renderSummary()` reads values via
+`fieldValue()`, the profile is kept as `state.lastProfile`, and `onLanguageChange()` re-renders;
+legacy `{value}` rows display as-is. Labels + extracted values both switch; raw is never altered.
 
-### KIOSK-7 · Automatic follow-up questions for missing information · ⬜
+### KIOSK-7 · Automatic follow-up questions for missing information · ✅ (Session 11, step 11 — ADR-0034)
 After the summary is generated, the system should detect missing/incomplete fields **before**
 allowing submit.
 - **Current issue:** if fields like **Medical History, Current Medications, Allergies, Recent
@@ -126,6 +141,12 @@ allowing submit.
   - Only then show **Confirm & Submit**; the patient reviews the completed summary and submits.
 - **Reuse the existing M7 → M8 → M9 loop** (`followup.py` / `profile_update.py` / `completion.py`),
   voice-only per ADR-0027/0028. Do not rebuild it.
+**Done (ADR-0034):** a resume loop on the summary screen — `?scope=fields` on
+`followup/next` + `followup/answer` asks only still-empty summary-field keys, one per turn
+(no 0.7-threshold gate; `target_gap` forced to a real field so "নেই / জানি না" is never
+re-asked); progress chip ("৮/১০ তথ্য সম্পন্ন"), Confirm & Submit hidden while a question is
+open, summary regenerated after every answer, shared per-visit question cap, **fail-open**
+(cap/API-error → submit returns). New `test_resume_loop.py` (5).
 
 ---
 
@@ -146,56 +167,85 @@ chrome, and the 10 field cards switch via the shared `staffLanguageRefresh()` (v
 `fieldValue()`); placeholders switch via `updatePlaceholders()`. Raw verbatim text is re-rendered
 but never translated (rule #1).
 
-### DOCTOR-3 · Patient details · ⬜
+### DOCTOR-3 · Patient details · ✅ (Session 13, step 17)
 Display a clean patient summary: Name · Phone Number · Age · Gender · Weight · BP ·
 AI Risk Score (0–100%) · AI Suggested Condition · AI Reasoning · complete 10-question pre-screening
 summary.
+**Done:** a Patient Details card after the safety panel (Name · Phone · Age-from-`birth_year` ·
+Gender · Weight · BP, from the patient embedded in `GET /visits/{uuid}`), with inline weight + BP
+edit reusing `PATCH /patients/{id}/vitals`; a mounted `#condition-card` so the shared
+`renderConditionCard()` surfaces the AI suggested condition + reasoning + disclaimer; the risk
+"score" is the C2 display band (`tierBand()`) beside the tier badge; the 10-question summary + XAI
+were already present. Bilingual; raw + patient name never translated (rule #1).
 
-### DOCTOR-4 · Prescription module · ⬜
+### DOCTOR-4 · Prescription module · ✅ (Session 13, step 18 — ADR-0038)
 Add a **Prescription** button that opens a professional prescription form with:
 Clinic/Hospital Name & Logo · Doctor Name · Qualification · Specialization · Registration Number ·
 Date · Patient Information · Symptoms / Chief Complaints · Diagnosis · Medicines (Name, Strength,
 Dosage, Timing, Duration) · Advice / Lifestyle · Required Tests · Follow-up Date ·
 Doctor Signature & Stamp.
+**Done:** "📝 Write Prescription" in the review bar opens a full-screen bilingual form with every
+listed field; letterhead prefilled from a read-only `GET .../prescription/context` (clinic +
+doctor, seeded via `seed_demo_letterhead()`); **Diagnosis defaults EMPTY and is doctor-authored,
+never AI-filled (rule #2)**. New `test_prescription_context.py` (6).
 
-### DOCTOR-5 · Smart features · ⬜
+### DOCTOR-5 · Smart features · ✅ (Session 13, step 18)
 - Add/remove medicine rows.
 - Auto-fill patient details from the referral.
 - Auto-fill symptoms from the pre-screening summary.
 - Support Bangla and English prescription formats.
+**Done:** medicine rows add/remove (`rxDraft` state survives the EN↔বাংলা toggle); patient details
+auto-fill from the loaded case; symptoms auto-fill from the 10 `summary_fields` via `fieldValue()`;
+the whole form is bilingual.
 
-### DOCTOR-6 · Download & save · ⬜
+### DOCTOR-6 · Download & save · ✅ (Session 13, step 19 — ADR-0039)
 After clicking **Submit**:
 - Automatically generate a professionally formatted **`.docx`** prescription.
 - Automatically download it.
 - Save it in the system so both the doctor and the patient can access it later.
+**Done:** `POST /api/visits/{uuid}/prescription` (`{doctor_id, payload}`) renders the LOCAL .docx
+(`render_prescription`), stores it, and persists a `prescriptions` row linked to a `documents` row
+(kind `prescription`); the form Submit POSTs → auto-downloads → "✅ Saved & Downloaded" with a
+re-download link; retrievable later via `GET /documents/{id}/download`. A new prescription per
+Submit (append). The writer reads only the payload, so Diagnosis can't be AI-filled (rule #2,
+regression-tested). New `test_prescription_docx.py` (5).
 
-### DOCTOR-7 · UI/UX · 🟨 (Session 12, step 16 — base polish done)
+### DOCTOR-7 · UI/UX · ✅ (Session 13, steps 17–19)
 Modern medical dashboard: clean cards, icons, spacing, typography. Make Risk, AI Suggestion,
 Diagnosis, and Prescription Status easy to identify. Layout responsive and print-friendly.
-**Done so far:** icon on the nav title, flex-wrap on nav/review bar (responsive), `@media print`
-block (case content prints; header/nav/sidebar/review chrome don't), safety panel unchanged as
-the glanceable risk story. **Remaining:** the AI-Suggestion mount (step 17), Diagnosis +
-Prescription Status identification (steps 18–19) — this item closes with those steps.
+**Done:** base polish landed in S12 step 16 (nav icon, responsive flex-wrap, `@media print` block,
+glanceable safety panel); S13 completed the four "easy to identify" targets — **Risk** (safety
+panel + C2 band), **AI Suggestion** (mounted condition card), **Diagnosis** (the prescription
+form's own field), and **Prescription Status** (the Write-Prescription action + the Saved &
+Downloaded confirmation). Bilingual throughout.
 
 ---
 
 ## 3. Medic Dashboard — `http://localhost:8001/medic/`
 
-### MEDIC-1 · Bangla / English toggle · ⬜
+### MEDIC-1 · Bangla / English toggle · ✅ (Session 11, step 12)
 The Medic Dashboard is English-only. Add a Bangla/English toggle. All UI elements, labels, buttons,
 tables, forms, and AI-generated content switch with the selection; the Bangla version follows the
 same professional UI/UX as the English one.
+**Done:** `staff.js` fully bilingual (labels + icons, badges, verbatim chrome via `t()`; extracted
+values via `fieldValue()`; `staffLanguageRefresh()` on toggle); the medic portal gained the
+EN/বাংলা header toggle + data-en/bn on all static text. Raw verbatim never translated (rule #1).
 
-### MEDIC-2 · Improve UI/UX · ⬜
+### MEDIC-2 · Improve UI/UX · ✅ (Session 11, step 12)
 Redesign with a cleaner, modern medical interface: better spacing, typography, icons, cards, status
 badges, color hierarchy. Highlight important patient info (risk, chief complaint, referral status).
 Make it professional and easy to scan.
+**Done:** field-card icon chips + queue hover states in `shared.css`, status/risk badges via the
+shared `tierBadge()`, clinical-blue hierarchy throughout (extends `shared.css`, no fork).
 
-### MEDIC-3 · Editable AI risk assessment · ⬜
+### MEDIC-3 · Editable AI risk assessment · ✅ (Session 11, step 13 — ADR-0035)
 AI auto-generates a **Risk Score (0–100%)**, displayed as **Low / Medium / High** with color
 coding. The medic can edit/override the AI-assigned risk level before referral. (Wire codes stay
 `low/medium/high/critical`; labels come from `shared.js` `TIER_LABELS`; log overrides to `audit_log`.)
+**Done:** a risk panel shows the tier + C2 band (display-only score) + red flags + XAI; the medic
+overrides via `POST /visits/{uuid}/risk/override`, which **appends** a `model_provider='human'`
+assessment row (the AI row is untouched) and audit-logs from→to. Staff **cannot downgrade a
+red-flag Critical** (409). New `test_risk_override.py` (3).
 
 ### MEDIC-4 · AI suggested condition · ✅ (Session 12, step 14 — ADR-0036)
 Add a section showing **Possible Condition(s)** suggested by AI plus **Reasoning** explaining why,
@@ -210,9 +260,13 @@ condition + reasoning at kiosk submit (best-effort — never blocks); stored at
 never shows it and the doctor's Diagnosis field is never pre-filled (step 18 enforces EMPTY).
 Tests: `test_suggested_condition.py` (5).
 
-### MEDIC-5 · `↻ Queue` button · ⬜
+### MEDIC-5 · `↻ Queue` button · ✅ (Session 11, step 12)
 The purpose of the **↻ Queue** button/menu is unclear. If it has a functional purpose, make it clear
 in the UI; if not, remove it to reduce clutter.
+**Done:** kept with its purpose made explicit — relabelled "↻ Refresh Queue / তালিকা রিফ্রেশ" with a
+tooltip; its one clear job is to reload the full queue and clear the phone-search filter
+(`refreshQueue()`). (The doctor's identical-looking button had no distinct job and was removed —
+DOCTOR-1.)
 
 ### MEDIC-6 · Patient summary after referral · ✅ (Session 12, step 15)
 After referring a patient to a doctor, generate a structured summary: Patient Name · Phone Number ·

@@ -16,6 +16,29 @@
 
 ---
 
+## Session 14 — 2026-07-07 — Step 20 of 20 (FINAL): test gate + status flips + doc sweep — BUILD COMPLETE
+- Did: closed the 20-step fix/feature build. Re-ran the gate — `pytest backend/tests/` = **150
+  passed**. Flipped all stale markers in `context_fixed_problem.md` to ✅ (its "Last updated" was
+  2026-07-05, predating S11/S13): **KIOSK-4/5/6/7** (S11 steps 8–11; KIOSK-7 = ADR-0034),
+  **MEDIC-1/2/5** (S11 step 12) + **MEDIC-3** (S11 step 13, ADR-0035), **DOCTOR-3** (S13 step 17),
+  **DOCTOR-4/5** (S13 step 18, ADR-0038), **DOCTOR-6** (S13 step 19, ADR-0039), and **DOCTOR-7**
+  🟨→✅ (S13 steps 17–19) — each with a one-line "Done" note; added a "BUILD COMPLETE" banner +
+  refreshed the header date/ADR list. Every numbered spec item is now ✅ (no ⬜/🟨 left except the
+  legend). Marked the 20-step build complete in `milestone_log.md` while **deliberately keeping the
+  15-module status table 🟨** (those gate on the human live-voice run, not build completion).
+  `test_log.md` got a one-line S14 gate entry. Also (same session): wrote a plain-language
+  **`agent_docs/human_live_run_guide.md`** for the human — start-the-app, install a Bangla TTS
+  voice on Windows, the live-test walkthrough (each step mapped to TC-V1/V2/V3/F2/R1), and
+  key rotation (which key → which `.env` line → where to get a fresh one). Refreshed the stale
+  **`CLAUDE.md`** status line (was "Session 8 / Alembic 0009 / 104 tests" → now Session 14 /
+  Alembic 0010 / 150 tests / build complete, pointing at the new guide).
+- Decided: nothing new — step 20 is a sweep, no ADR (ADR-0031–0039 already cover the build).
+- Broke / problem: none. Docs-only; no application code, DB, or patient data touched.
+- Deferred: NOT build work — the **human live real-mic run** (TC-V2/V3/F2/R1/A1, real keys already
+  in `.env`) and installing a Bangla TTS voice on the Windows box (kiosk audio). Any polish the
+  live run surfaces.
+- Next: hand off to the human live run; there is no further coded step in the 20-step plan.
+
 ## Session 13 — 2026-07-06 — Steps 17–19 of 20: DOCTOR-3 patient-details · DOCTOR-4/5 prescription form · DOCTOR-6 prescription .docx + save
 - Did (step 19, DOCTOR-6, ADR-0039): the prescription **Submit** now saves + downloads.
   New `render_prescription(payload)` in `services/documents/visit_docx.py` (LOCAL .docx:

@@ -25,7 +25,8 @@ voice-medical-prescreener/
 ├── .gitignore                    # ignores .env, .venv/, *.db, *.db.*.bak, *.bak, data/, audio/, models/
 ├── .claude/launch.json           # preview dev-server configs (uvicorn; PORT 8001): Windows + backend-linux
 ├── agent_docs/                   # the project's shared brain (living docs) — now incl. architecture.md,
-│   │                              #   reconciliation.md, mockups-redesign.html, update_system_flowchart.md
+│   │                              #   reconciliation.md, mockups-redesign.html, update_system_flowchart.md,
+│   │                              #   context_fixed_problem.md (20-step spec, all ✅), human_live_run_guide.md (S14: human handoff)
 │   └── ... (constitution, milestone_log, current_task, changelog, test_log, decisions, codebase_map, session_protocol)
 ├── backend/
 │   ├── .env / .env.example       # + DEV_OTP (stub OTP), per-bucket model names (ADR-0026)
@@ -136,7 +137,7 @@ REMOVED in Session 4 (browser-only): `services/stt/**`, `api/routes_stt.py`, the
 requirements files, the STT config/.env block. (Still gone.)
 
 Run from the project root. App: `python -m uvicorn backend.app.main:app --reload --port 8001`
-(use the venv's Python). Tests: `pytest backend/tests/` (**139 passing**). Schema is Alembic-managed
+(use the venv's Python). Tests: `pytest backend/tests/` (**150 passing**). Schema is Alembic-managed
 and migrates at startup — never delete the DB. Entry points: `/` (landing), `/kiosk.html`,
 `/medic/`, `/doctor/`, `/legacy/`.
 

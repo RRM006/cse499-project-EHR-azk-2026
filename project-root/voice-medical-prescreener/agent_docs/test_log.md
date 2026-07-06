@@ -72,6 +72,16 @@ transcribed by hand (the "ground truth"). Record the model + machine each time.
 
 ## Test entries (newest first)
 
+## 2026-07-07 — Session 14 — Step 20 (final): 150-test gate re-confirmed; docs-only sweep
+- Setup: Windows dev box, venv Python 3.14, `pytest backend/tests/`. No code changed this session
+  — step 20 flips stale ✅ markers in `context_fixed_problem.md` + doc sweep only.
+- Metric(s): pytest pass count (regression gate).
+- Result: **150/150 pass** (~7.7 s), unchanged from S13 — confirms the closing sweep touched no
+  application code. No new tests (the S13 entry details the current suites).
+- Notes: the 20-step build is complete. Still pending (HUMAN, not build): the live real-mic run
+  (TC-V1/V2/V3/F2/R1/A1) + installing a Bangla TTS voice on Windows. The 15-module status board
+  stays 🟨 until those live numbers are recorded.
+
 ## 2026-07-06 — Session 13 — Steps 17–19: suite 139 → 150, all offline; doctor patient-card + prescription form/.docx browser- and live-verified
 - Setup: Windows dev box, venv Python 3.14, `pytest backend/tests/` after each step. In-memory
   SQLite (StaticPool) + tmp-dir document storage; zero live LLM calls (rule #4). Browser checks

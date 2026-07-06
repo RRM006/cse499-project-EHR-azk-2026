@@ -17,10 +17,12 @@ regional dialect — *before* they see the doctor. The system:
 
 This is a **15-module** system (Module 5 is retired in the current design — see below).
 We build it one module at a time.
-**Status (Session 8, 2026-07-03): the whole reconciled system is BUILT** — DB (Alembic head
-`0009`, all 15 tables), the M1–M12 backend pipeline + M13 store + M14/M15 doctor side, and all
-**three portals** (patient kiosk, medic, doctor). 104 tests pass. What's left is the **human
-live run** (real API keys + a real mic) and polish. See `agent_docs/current_task.md`.
+**Status (Session 14, 2026-07-07): the reconciled system is BUILT and the 20-step fix/feature
+build is COMPLETE** — DB (Alembic head `0010`, all 15 tables + prescriptions/letterhead), the
+M1–M12 backend pipeline + M13 store + M14/M15 doctor side, and all **three portals** (patient
+kiosk, medic, doctor) with the kiosk/medic/doctor spec items all ✅. **150 tests pass.** What's
+left is NOT build work: the **human live run** (real API keys + a real mic) + a Bangla TTS voice
+on Windows — see `agent_docs/human_live_run_guide.md` and `agent_docs/current_task.md`.
 
 ## NON-NEGOTIABLE RULES (never break these)
 
