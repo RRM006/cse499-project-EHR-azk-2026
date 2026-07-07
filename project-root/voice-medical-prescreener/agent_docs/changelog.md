@@ -16,6 +16,30 @@
 
 ---
 
+## Session 17 — 2026-07-07 — Quota audit + quota-aware free-provider switching (ADR-0041)
+- Did: (1) **API quota audit**: counted all LLM usage from `module_events` (33 lifetime events;
+  visit 7 = the clean 13-call Session-8c run; visit 8 on 07-06 = M4 failing) + one read-only
+  OpenRouter `GET /api/v1/key` (free tier confirmed, $0 usage). Found the "voice transcribes but
+  formatting fails" bug: **Gemini Flash 429s were invisible** (only the LAST provider in the chain
+  was logged) and the only fallback was OpenRouter `:free`, which itself 429'd **10× in ~9s** with
+  no backoff — while Groq (1,000 free req/day) was never tried. (2) **Fix built (ADR-0041)**:
+  `llm_client.py` now logs EVERY attempt to `module_events` (error rows incl. provider + message),
+  puts a provider on **cooldown after a 429/quota error** (60s RPM / 15min daily, fail-open when
+  all cool down), and `llm_providers.py` gained a universal `FALLBACK_ORDER` = assigned → Groq →
+  Cerebras → Mistral → OpenRouter (blank-key buckets auto-skipped; Gemini buckets deliberately not
+  cross-fallbacks). New optional free buckets in `config.py`/`.env.example`: **Cerebras**
+  (~1M tok/day) and **Mistral Experiment** (trains on inputs — rule #4 warning, off by default).
+  New `tests/conftest.py` (autouse cooldown reset) + `test_llm_client.py` (6 tests). **156 pass.**
+- Decided: ADR-0041 (quota-aware cooldown + extended free fallback chain). Web research logged:
+  Gemini Flash free ≈ 10 RPM / 1,500 RPD (resets midnight PT), Groq ≈ 1,000 RPD, OpenRouter
+  `:free` ≈ 50 RPD, Cerebras ≈ 1M tok/day, Mistral ≈ 1B tok/month but 2 RPM + trains on data.
+- Broke / problem: none; `test_intake.py::test_fallback_is_used_and_logged` updated for the new
+  per-attempt error rows. Root cause of WHY Gemini Flash 429'd on 07-06 still unconfirmed (the
+  old code didn't log it) — the new logging will show it on the next live run.
+- Deferred: optional Cerebras key signup (human); $10 OpenRouter top-up (optional); everything
+  from S16 (live real-mic run, Windows Bangla voice, key rotation, bug/feature list).
+- Next: unchanged from S16 — human's bug list + faculty features → numbered spec → plan step 1.
+
 ## Session 16 — 2026-07-07 — Arch Linux TTS: installed + VERIFIED working (🔊 + mic confirmed by human)
 - Did: finished the Session-15 Arch TTS fix. The human ran `sudo pacman -S speech-dispatcher
   espeak-ng`; I then verified the whole chain. System layer PASS: `espeak-ng --voices` lists `bn`

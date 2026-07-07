@@ -6,7 +6,7 @@
 
 **Status keys:** ⬜ Not started · 🟨 In progress · 🟦 Blocked · ✅ Done · ⛔ Retired
 
-**Last updated:** 2026-07-07 (Session 16 — Arch Linux TTS installed + VERIFIED working; build unchanged)
+**Last updated:** 2026-07-07 (Session 17 — quota-aware free-provider switching, ADR-0041; 156 tests)
 **Current phase:** ✅ **Build complete.** The 20-step plan (spec: `context_fixed_problem.md`) is
 fully implemented — **every numbered spec item (STRUCT/KIOSK/MEDIC/DOCTOR) is ✅** and 150 tests
 pass. What remains for the project is NOT build work: the **human live real-mic run**
@@ -36,6 +36,13 @@ system-setup gap (`speech-dispatcher`+`espeak-ng` not installed → empty Linux 
 `tts.js` degrades correctly per ADR-0028). Added guide **PART 1B** (Arch Bangla-voice install);
 no app code. Pending: human runs `sudo pacman -S speech-dispatcher espeak-ng`, then verify 🔊
 speaks (TC-V2 on Arch).
+**Session 17 (no module-status change):** diagnosed why "voice transcribes but formatting fails":
+Gemini Flash 429s were unlogged (only the last chain provider was recorded) and the sole fallback
+(OpenRouter `:free`, ~50 req/day) 429'd 10× in 9s with no backoff while Groq sat unused. Fix =
+**ADR-0041 quota-aware switching**: per-attempt `module_events` logging, 429/quota cooldown
+(60s/15min, fail-open), fallback chain assigned→Groq→Cerebras→Mistral→OpenRouter (optional new
+free buckets, blank-key skipped). +6 tests → **156 pass**. Module table unchanged (still gates on
+the human live run).
 **Session 16 (no module-status change):** Arch TTS **DONE + verified** — packages installed, the
 enabled `speech-dispatcher.socket` started, and after a full Chromium restart with
 `--enable-speech-dispatcher` the kiosk 🔊 speaks + mic works (**TC-V2 audio PASS on Arch**,

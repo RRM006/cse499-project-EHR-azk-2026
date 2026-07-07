@@ -41,6 +41,17 @@ class Settings(BaseSettings):
     groq_api_key: str = ""
     openrouter_api_key: str = ""
 
+    # --- extra free fallback buckets (optional; blank key = bucket skipped) ---
+    # Cerebras: free tier ~1M tokens/day, OpenAI-compatible, very fast.
+    # Mistral "Experiment" tier: ~1B tokens/month BUT trains on inputs — rule #4:
+    # synthetic/consented data ONLY; leave blank unless you accept that.
+    cerebras_api_key: str = ""
+    cerebras_base_url: str = "https://api.cerebras.ai/v1"
+    cerebras_model: str = "llama-3.3-70b"
+    mistral_api_key: str = ""
+    mistral_base_url: str = "https://api.mistral.ai/v1"
+    mistral_model: str = "mistral-small-latest"
+
     # --- per-bucket model names (ADR-0026: three independent free quota buckets) ---
     gemini_flash_model: str = "gemini-flash-latest"
     gemini_flash_lite_model: str = "gemini-flash-lite-latest"

@@ -650,6 +650,29 @@
   `agent_docs/human_live_run_guide.md` (Windows PART 1, Arch PART 1B).
 - Status: Accepted
 
+## ADR-0041 — 2026-07-07 — Quota-aware provider cooldown + extended free fallback chain
+- Decision: (1) `llm_client.call_module` logs EVERY provider attempt to `module_events`
+  (status `error` rows carry provider + truncated message + latency), not just the final outcome.
+  (2) A provider that returns a 429/rate-limit/quota error goes on an in-process **cooldown**
+  (60 s for a per-minute limit; 15 min when the message looks daily/quota) and is skipped by
+  subsequent calls; **fail-open** — if every provider is cooling down, the full chain is tried
+  anyway. (3) The fallback chain is now data in `llm_providers.FALLBACK_ORDER`:
+  assigned bucket → **Groq → Cerebras → Mistral → OpenRouter**, blank-key buckets auto-skipped.
+  The two Gemini buckets are deliberately NOT cross-fallbacks (they hold the ADR-0026 quality-task
+  quota); OpenRouter stays LAST (smallest free allowance, ~50 req/day). New optional `.env` keys:
+  `CEREBRAS_API_KEY` (free ~1M tok/day, OpenAI-compatible) and `MISTRAL_API_KEY` (free ~1B
+  tok/month **but trains on inputs** — rule #4: leave blank unless data is synthetic/consented).
+- Why: the 2026-07-06 live run showed M4 (summary formatting) failing invisibly: Gemini Flash's
+  free tier is only ~10 RPM / 1,500 RPD, its failure was never logged, and the only fallback
+  (OpenRouter `:free`) 429'd 10× in ~9 s — while Groq's ~1,000 req/day sat unused. Cooldown +
+  a wider all-free chain keeps the pipeline serving patients at zero cost and makes every failure
+  visible in `module_events`.
+- Rejected: paid tiers (project rule: free-first); persisting cooldowns in the DB (over-engineering
+  for a single-process uvicorn app; in-memory resets on restart, which is also the recovery hatch);
+  retry-with-backoff inside one call (adds patient-facing latency — switching buckets is faster);
+  Gemini buckets as universal fallbacks (would cannibalize the quality-task quota).
+- Status: Accepted
+
 ## ADR-0008 — 2026-06-18 — Default Whisper model is small/base; upgrade to a Bangla fine-tune later
 - Decision: Start with Whisper `small` (or `base` if we need a snappier live feel)
   for streaming on CPU. Upgrade to a Bangla-fine-tuned model (e.g.

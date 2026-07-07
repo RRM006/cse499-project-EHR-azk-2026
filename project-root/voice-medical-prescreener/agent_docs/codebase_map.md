@@ -45,7 +45,8 @@ voice-medical-prescreener/
 │   │   │                          #   /doctor /legacy + landing/kiosk at / (ADR-0031)
 │   │   ├── core/
 │   │   │   ├── config.py         # + dev_otp, followup_max_questions, completeness_threshold, per-bucket models
-│   │   │   └── llm_providers.py  # NEW: provider registry + MODULE_PROVIDERS map (ADR-0026) + fallback chain
+│   │   │   └── llm_providers.py  # provider registry + MODULE_PROVIDERS map (ADR-0026); S17: FALLBACK_ORDER
+│   │   │                          #   assigned→Groq→Cerebras→Mistral→OpenRouter + optional Cerebras/Mistral buckets (ADR-0041)
 │   │   ├── api/
 │   │   │   ├── routes_transcripts.py · routes_documents.py   # (existing, untouched)
 │   │   │   ├── routes_visits.py  # NEW: patients/lookup + verify-otp; visits CRUD + utterances; intake; profile
@@ -68,7 +69,8 @@ voice-medical-prescreener/
 │   │   │   │                      #   transcript/summary_report writers) + generate_visit_document();
 │   │   │   │                      #   S12: summary_report renders the C1 block + regenerates FRESH (ADR-0037);
 │   │   │   │                      #   S13: render_prescription() + generate_prescription_document() (DOCTOR-6, ADR-0039)
-│   │   │   ├── llm_client.py     # NEW: call_module() — assigned bucket → fallback, logs module_events
+│   │   │   ├── llm_client.py     # call_module() — assigned bucket → fallback; S17 (ADR-0041): logs EVERY
+│   │   │   │                      #   attempt, 429/quota cooldown (60s/15min, fail-open), reset_cooldowns()
 │   │   │   ├── intake.py         # NEW: M3 extract (10-field summary_fields; bilingual value_en/value_bn since S9,
 │   │   │   │                      #   ADR-0033) → M4 summary → M6 gaps
 │   │   │   ├── followup.py       # NEW: M7 question gen (Groq; no repeats; stored + spoken); S11:
@@ -103,7 +105,9 @@ voice-medical-prescreener/
 │                                  #   test_suggested_condition (C1 M10C + edit path + disclaimer, S12) ·
 │                                  #   test_medic_summary (vitals PATCH + docx freshness, S12) ·
 │                                  #   test_prescription_context (DOCTOR-4/5 letterhead prefill + seed, S13) ·
-│                                  #   test_prescription_docx (DOCTOR-6 save row + .docx + Diagnosis-never-AI, S13)  (150 total)
+│                                  #   test_prescription_docx (DOCTOR-6 save row + .docx + Diagnosis-never-AI, S13) ·
+│                                  #   conftest.py (S17: autouse LLM-cooldown reset) ·
+│                                  #   test_llm_client (S17: per-attempt logging + cooldown switching, ADR-0041)  (156 total)
 ├── frontend/                     # patient side (served at /)
 │   ├── index.html                # NEW (S9): landing page linking the 4 entry points (ADR-0031)
 │   ├── kiosk.html · kiosk.js     # patient kiosk (at /kiosk.html): phone→OTP (auto-advance/Backspace/paste, S10
@@ -137,7 +141,7 @@ REMOVED in Session 4 (browser-only): `services/stt/**`, `api/routes_stt.py`, the
 requirements files, the STT config/.env block. (Still gone.)
 
 Run from the project root. App: `python -m uvicorn backend.app.main:app --reload --port 8001`
-(use the venv's Python). Tests: `pytest backend/tests/` (**150 passing**). Schema is Alembic-managed
+(use the venv's Python). Tests: `pytest backend/tests/` (**156 passing**). Schema is Alembic-managed
 and migrates at startup — never delete the DB. Entry points: `/` (landing), `/kiosk.html`,
 `/medic/`, `/doctor/`, `/legacy/`.
 

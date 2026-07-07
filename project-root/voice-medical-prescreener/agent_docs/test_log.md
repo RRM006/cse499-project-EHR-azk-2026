@@ -72,6 +72,24 @@ transcribed by hand (the "ground truth"). Record the model + machine each time.
 
 ## Test entries (newest first)
 
+## 2026-07-07 — Session 17 — LLM quota audit + quota-aware switching (ADR-0041) test gate
+- Setup: Windows desktop; read-only SQL on `backend/prescreener.db` `module_events`; one read-only
+  `GET https://openrouter.ai/api/v1/key`; then the new switching code + pytest.
+- Metric(s): usage counts; provider error evidence; test pass/fail.
+- Result: lifetime API usage = **33 events / 2 visits** (gemini_flash 4 ok · flash-lite 14 ok ·
+  groq 4 ok · openrouter **10 error, 0 ok** · local 1). Visit 7 = the clean Session-8c run
+  (13/13 ok — matches the S8c log ✅). Visit 8 (2026-07-06 15:18 UTC) = **M4 429-failed 10× in
+  ~9 s on OpenRouter** (`meta-llama/llama-3.3-70b-instruct:free` RPM limit) with the Gemini Flash
+  attempt unlogged — the "transcribes but doesn't format" bug. OpenRouter key check: free tier,
+  $0 usage, no custom limit. After the ADR-0041 fix: `pytest backend/tests/` = **156 passed**
+  (150 prior + 6 new in `test_llm_client.py`: per-attempt logging, 429 cooldown + skip,
+  no-cooldown on non-quota errors, fail-open, all-failed logging, chain order/key gating).
+- Notes: free limits researched (2026): Gemini Flash ≈10 RPM/1,500 RPD (reset midnight PT),
+  Flash-Lite higher RPM, Groq ≈1,000 RPD (midnight UTC), OpenRouter `:free` ≈50 RPD,
+  Cerebras ≈1M tok/day, Mistral ≈1B tok/month (2 RPM, trains on inputs). One full visit ≈13 API
+  calls (~5 flash / ~5 flash-lite / ~4 groq) → ≈250–300 free visits/day. Root cause of the
+  visit-8 Gemini 429 will be visible on the next live run thanks to per-attempt logging.
+
 ## 2026-07-07 — Session 16 — Module 7 (TTS) — Arch Linux 🔊 + mic: browser-level PASS (TC-V2 audio)
 - Setup: **Arch Linux laptop**, Chromium 149.0.7827.200 (Wayland), `speech-dispatcher 0.12.1` +
   `espeak-ng 1.52.0` installed. Started the daemon + `systemctl --user start

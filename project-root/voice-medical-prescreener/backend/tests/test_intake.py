@@ -145,6 +145,14 @@ def test_fallback_is_used_and_logged(client_and_session, monkeypatch):
 
     assert client.post(f"/api/visits/{uuid}/intake").status_code == 200
     db = TestSession()
-    statuses = {e.module_code: e for e in db.query(ModuleEvent).all()}
+    events = db.query(ModuleEvent).order_by(ModuleEvent.id).all()
     db.close()
-    assert all(e.status == "fallback" and e.provider == "openrouter" for e in statuses.values())
+    # Each module now logs the failed first attempt AND the serving fallback.
+    by_module: dict[str, list[ModuleEvent]] = {}
+    for e in events:
+        by_module.setdefault(e.module_code, []).append(e)
+    for module_events in by_module.values():
+        assert module_events[0].status == "error"
+        assert "simulated 429" in module_events[0].error
+        assert module_events[-1].status == "fallback"
+        assert module_events[-1].provider == "openrouter"
