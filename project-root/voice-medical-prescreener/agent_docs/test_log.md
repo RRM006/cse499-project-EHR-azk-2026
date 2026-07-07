@@ -72,6 +72,21 @@ transcribed by hand (the "ground truth"). Record the model + machine each time.
 
 ## Test entries (newest first)
 
+## 2026-07-07 — Session 15 — Module 7 (TTS) — Arch Linux Bangla voice: system-level PASS
+- Setup: **Arch Linux laptop**, Chromium (no Google Chrome). Installed `speech-dispatcher 0.12.1-3`
+  + `espeak-ng 1.52.0-1` via `sudo pacman` (the human ran the install; the rest run headless).
+- Metric(s): Bangla (`bn`) voice present in the synth · Bengali text renders real audio · the
+  speech-dispatcher daemon (what Chromium reads voices from) is reachable.
+- Result: **system layer PASS.** `espeak-ng --voices` lists `bn` (Bengali, `inc/bn`); `espeak-ng`
+  is a registered speech-dispatcher output module; rendering `আমার মাথা ব্যথা করছে` produced a
+  valid **81,202-byte WAV** (RIFF PCM, 16-bit mono, 22050 Hz); `spd-say` exits 0 (daemon reachable).
+- Notes: this is the root-cause fix for the silent kiosk 🔊 on Arch (packages were simply missing;
+  `tts.js` was degrading correctly per ADR-0028). **Browser layer still human-pending** (needs a
+  full Chromium *restart* + real audio hardware I can't drive from the shell): confirm
+  `speechSynthesis.getVoices().filter(v=>v.lang.startsWith('bn'))` is non-empty, the kiosk
+  `#voice-hint` banner disappears, and 🔊 speaks aloud → that completes **TC-V2 on Arch**. Voice is
+  espeak-ng-robotic (expected; on-screen text stays primary). No application code changed.
+
 ## 2026-07-07 — Session 14 — Step 20 (final): 150-test gate re-confirmed; docs-only sweep
 - Setup: Windows dev box, venv Python 3.14, `pytest backend/tests/`. No code changed this session
   — step 20 flips stale ✅ markers in `context_fixed_problem.md` + doc sweep only.
