@@ -72,6 +72,22 @@ transcribed by hand (the "ground truth"). Record the model + machine each time.
 
 ## Test entries (newest first)
 
+## 2026-07-07 — Session 16 — Module 7 (TTS) — Arch Linux 🔊 + mic: browser-level PASS (TC-V2 audio)
+- Setup: **Arch Linux laptop**, Chromium 149.0.7827.200 (Wayland), `speech-dispatcher 0.12.1` +
+  `espeak-ng 1.52.0` installed. Started the daemon + `systemctl --user start
+  speech-dispatcher.socket` (was enabled, not active); full Chromium restart (`pkill chromium`)
+  relaunched with `--enable-speech-dispatcher`.
+- Metric(s): `speechSynthesis.getVoices()` non-empty in Chromium · kiosk 🔊 speaks · mic works.
+- Result: **PASS (human-confirmed).** Before restart `getVoices()` was `[]` (0 voices) — Chromium
+  had cached an empty list from a pre-install process start + no running daemon. After the socket
+  activation + full restart, `getVoices()` returns voices (incl. `bn`), 🔊 audio plays, and the mic
+  works → **TC-V2 audio PASS on Arch**.
+- Notes: root cause of the empty list = (1) stale Chromium process predating the package install
+  (voices read only at process start), (2) daemon not running + Chromium sandbox can't spawn it →
+  fixed by the enabled `speech-dispatcher.socket` (see ADR-0040). Still pending (HUMAN, full live
+  run, not this test): TC-V1 (WER/latency), TC-V3 (voice-only loop), TC-F2, TC-R1, TC-A1. No app
+  code changed.
+
 ## 2026-07-07 — Session 15 — Module 7 (TTS) — Arch Linux Bangla voice: system-level PASS
 - Setup: **Arch Linux laptop**, Chromium (no Google Chrome). Installed `speech-dispatcher 0.12.1-3`
   + `espeak-ng 1.52.0-1` via `sudo pacman` (the human ran the install; the rest run headless).

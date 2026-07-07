@@ -627,6 +627,29 @@
   server-side keeps one rendering path and the file server-stored for later retrieval).
 - Status: Accepted
 
+## ADR-0040 — 2026-07-07 — Linux (Arch) browser TTS = speech-dispatcher + espeak-ng, stay on Chromium
+- Decision: On Linux, the kiosk's browser `speechSynthesis` (M7 audio) is provided by the system
+  **speech-dispatcher** daemon with **espeak-ng** as its output module (both from `pacman`).
+  We **stay on Chromium** (do NOT require Google Chrome) since the human's mic/STT already works
+  there. The daemon must be reachable when Chromium starts: keep the shipped, `enabled`
+  **`speech-dispatcher.socket`** started (`systemctl --user start speech-dispatcher.socket`) so
+  socket-activation spins up the daemon on connect (Chromium's sandbox can't spawn it itself), and
+  launch Chromium once with **`--enable-speech-dispatcher`** after a **full process restart**
+  (`pkill chromium` — a reload/new-window is not enough on Wayland; the voice list is read only at
+  process start). No application code change — `frontend_shared/tts.js` already picks any `bn*`
+  voice and degrades to on-screen text when none exists (ADR-0028).
+- Why: On a fresh Arch box neither package is installed, so `speechSynthesis.getVoices()` is empty
+  and 🔊 is silent. This is a host-setup gap, not a code bug. Verified end to end on the Arch laptop
+  (espeak-ng renders a valid Bengali WAV; after the restart `getVoices()` is non-empty and 🔊 speaks)
+  — **TC-V2 audio PASS on Arch**. The espeak-ng Bengali voice is robotic; acceptable because the
+  on-screen text is always the primary channel (ADR-0028).
+- Rejected: Switching to Google Chrome (AUR) just for voices (unnecessary — Chromium works once the
+  daemon is present; also complicates the human's setup); a server-side TTS service (adds a runtime
+  dep + a network hop, against the "no server, no key" TTS choice in ADR-0027/0028). Windows path is
+  unchanged (Settings → Speech → add a Bengali voice; guide PART 1). Both documented in
+  `agent_docs/human_live_run_guide.md` (Windows PART 1, Arch PART 1B).
+- Status: Accepted
+
 ## ADR-0008 — 2026-06-18 — Default Whisper model is small/base; upgrade to a Bangla fine-tune later
 - Decision: Start with Whisper `small` (or `base` if we need a snappier live feel)
   for streaming on CPU. Upgrade to a Bangla-fine-tuned model (e.g.

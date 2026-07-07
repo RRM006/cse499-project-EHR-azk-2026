@@ -16,6 +16,31 @@
 
 ---
 
+## Session 16 — 2026-07-07 — Arch Linux TTS: installed + VERIFIED working (🔊 + mic confirmed by human)
+- Did: finished the Session-15 Arch TTS fix. The human ran `sudo pacman -S speech-dispatcher
+  espeak-ng`; I then verified the whole chain. System layer PASS: `espeak-ng --voices` lists `bn`
+  (Bengali, `inc/bn`), rendered `আমার মাথা ব্যথা করছে` → valid **81,202-byte WAV** (RIFF PCM 16-bit
+  mono 22050 Hz), `spd-say` exit 0. Then debugged why Chromium's `speechSynthesis.getVoices()` was
+  **empty `[]`** despite the working synth: (a) the running Chromium (PID 10193) had started
+  **before** the packages existed and caches the voice list at process start; (b) the speech-
+  dispatcher daemon wasn't up and Chromium's sandbox can't spawn it. Fix: started the daemon and
+  **`systemctl --user start speech-dispatcher.socket`** (it was `enabled` but not active) so Chromium
+  triggers the daemon via socket activation; then the human **fully quit Chromium** (`pkill chromium`,
+  not just a reload — Wayland keeps the process alive) and relaunched with `chromium
+  --enable-speech-dispatcher`. Result: **getVoices() non-empty, 🔊 speaks, and the mic works** on
+  Arch → **TC-V2 audio PASS on Arch** (human-confirmed). No application code changed.
+- Decided: **ADR-0040** — Linux TTS/STT dev setup: `speech-dispatcher` + `espeak-ng`, stay on
+  Chromium (do NOT require Google Chrome), rely on the enabled `speech-dispatcher.socket` +
+  `--enable-speech-dispatcher`, and a FULL Chromium restart after install.
+- Broke / problem: none now. (Prior blocker — empty `getVoices()` — was a stale pre-install
+  Chromium process + no running daemon; both resolved.) Voice is espeak-ng-robotic (expected).
+- Deferred: the full human **live real-mic run** (TC-V1 WER/latency, TC-V3 voice-only loop, TC-F2,
+  TC-R1, TC-A1) + Windows Bangla voice + key rotation — all still pending. **The human also flagged
+  (a) some bugs to fix next and (b) possible new features per faculty requirements** — NOT yet
+  enumerated; next session must collect that list first and plan it one step per "go".
+- Next: get the human's bug list + faculty requirements, turn them into a numbered spec (like
+  `context_fixed_problem.md`), and plan step 1.
+
 ## Session 15 — 2026-07-07 — Arch Linux TTS fix: diagnosed + documented (PART 1B)
 - Did: chased down why the kiosk 🔊 button is **silent on the Arch laptop**. Read-only
   diagnostics confirmed it is **system-level, not a code bug**: `speech-dispatcher` and
