@@ -16,6 +16,29 @@
 
 ---
 
+## Session 15 — 2026-07-07 — Arch Linux TTS fix: diagnosed + documented (PART 1B)
+- Did: chased down why the kiosk 🔊 button is **silent on the Arch laptop**. Read-only
+  diagnostics confirmed it is **system-level, not a code bug**: `speech-dispatcher` and
+  `espeak-ng` are **not installed** and the speechd service is inactive, so Linux Chromium's
+  `speechSynthesis.getVoices()` is empty and `frontend_shared/tts.js` correctly degrades to
+  text-only (ADR-0028). The existing `human_live_run_guide.md` only covered the **Windows**
+  Bangla-voice install. Added a new **"🐧 PART 1B — Enable a Bangla voice on Arch Linux"**
+  section right after the Windows PART 1: `sudo pacman -S speech-dispatcher espeak-ng`,
+  `espeak-ng --voices | grep bn` + `spd-say` verification, "fully restart Chromium", the same
+  `getVoices().filter(bn)` console check + "hint banner gone = ✅" success test, and a note that
+  the espeak-ng Bengali voice is robotic (expected; text stays primary) and STT is unaffected.
+  **No application code changed** — `_pickBanglaVoice()`/`banglaVoiceAvailable()` already match
+  any `bn*` voice, so they start working once the packages exist.
+- Decided: nothing at ADR level — this is a docs/system-setup step, not an architecture choice.
+  Confirmed scope with the human: **TTS only** (their mic/STT works), and **stay on Chromium**
+  (do NOT switch to Google Chrome).
+- Broke / problem: the `pacman` install needs `sudo` and could not be run from the non-interactive
+  agent shell, so the fix is **documented but NOT yet installed/verified** on the Arch box.
+- Deferred: the human runs the one `pacman` line, then verify (espeak-ng bn voice + `spd-say`
+  audible → Chromium `getVoices` non-empty → kiosk `#voice-hint` gone + 🔊 speaks = TC-V2 on Arch).
+  Everything from S14 still pending too (the full live real-mic run + Windows Bangla voice + key rotation).
+- Next: human installs `speech-dispatcher`+`espeak-ng`, then I verify the three checks above.
+
 ## Session 14 — 2026-07-07 — Step 20 of 20 (FINAL): test gate + status flips + doc sweep — BUILD COMPLETE
 - Did: closed the 20-step fix/feature build. Re-ran the gate — `pytest backend/tests/` = **150
   passed**. Flipped all stale markers in `context_fixed_problem.md` to ✅ (its "Last updated" was

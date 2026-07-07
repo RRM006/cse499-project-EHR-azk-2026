@@ -54,6 +54,46 @@ the audio for the demo.
 
 ---
 
+## 🐧 PART 1B — Enable a Bangla voice on Arch Linux (5 min)
+
+On Linux the browser doesn't ship its own voices — it reads them from the system's
+**speech-dispatcher** service, which in turn uses **espeak-ng** as the synthesizer.
+On a fresh Arch box neither is installed, so the kiosk's 🔊 button is **silent** (it
+still shows the question as text — the safety fallback — but plays no audio). This is a
+system setup step, not a code fix.
+
+> Note: this only affects the **spoken audio (TTS)**. The **microphone / speech-to-text**
+> is unaffected by these packages.
+
+**Steps:**
+1. Install the two packages (one time):
+   ```
+   sudo pacman -S speech-dispatcher espeak-ng
+   ```
+   `espeak-ng` is the actual voice and **ships a Bengali (`bn`) voice**; `speech-dispatcher`
+   is the bridge Chromium reads from (espeak-ng is already its default output module, so no
+   config editing is needed).
+2. Check the system can speak **before** touching the browser:
+   ```
+   espeak-ng --voices | grep -i 'bn\|beng'   # a Bengali line should appear
+   spd-say "hello"                            # you should HEAR this
+   ```
+   (If `spd-say` is silent, start the service once with
+   `systemctl --user start speech-dispatcher` and retry — normally it auto-starts on demand.)
+3. **Fully quit Chromium and reopen it** (voices are only read on a fresh start).
+
+**How to know it worked** (same check as Windows):
+- Open the kiosk and start a consultation. The yellow **"no Bangla voice"** hint banner at
+  the top **disappears**, and you now **hear** the questions spoken. ✅ = banner gone + audio.
+- Quick check without the kiosk: Chromium → F12 → Console, paste
+  `speechSynthesis.getVoices().filter(v=>v.lang.startsWith('bn'))` and press Enter — a
+  **non-empty** result means the Bengali voice is visible to the browser.
+
+> ⚠ The espeak-ng Bengali voice sounds **robotic** — that's expected on Linux and is fine
+> for a demo. The on-screen text stays the primary channel (ADR-0028), so audio is a bonus.
+
+---
+
 ## 🎤 PART 2 — The live real-mic test (the main task, ~20 min)
 
 Do the whole patient journey once with your **real microphone**. Along the way you'll

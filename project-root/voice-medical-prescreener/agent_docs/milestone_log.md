@@ -6,7 +6,7 @@
 
 **Status keys:** ⬜ Not started · 🟨 In progress · 🟦 Blocked · ✅ Done · ⛔ Retired
 
-**Last updated:** 2026-07-07 (Session 14 — 20-step fix/feature build COMPLETE)
+**Last updated:** 2026-07-07 (Session 15 — Arch Linux TTS diagnosed + documented; build unchanged)
 **Current phase:** ✅ **Build complete.** The 20-step plan (spec: `context_fixed_problem.md`) is
 fully implemented — **every numbered spec item (STRUCT/KIOSK/MEDIC/DOCTOR) is ✅** and 150 tests
 pass. What remains for the project is NOT build work: the **human live real-mic run**
@@ -31,6 +31,11 @@ DOCTOR-3/4/5/6/7 from S13); doc sweep. **150 tests pass.**
 🟨**: those modules gate on the HUMAN live-voice run (TC-V2/V3/F2/R1/A1 with real numbers), NOT on
 build completion — that gate is unchanged. Next real work = the human live run
 (step-by-step: `agent_docs/human_live_run_guide.md`).
+**Session 15 (no status change):** diagnosed the silent kiosk 🔊 on the Arch laptop as a
+system-setup gap (`speech-dispatcher`+`espeak-ng` not installed → empty Linux `speechSynthesis`;
+`tts.js` degrades correctly per ADR-0028). Added guide **PART 1B** (Arch Bangla-voice install);
+no app code. Pending: human runs `sudo pacman -S speech-dispatcher espeak-ng`, then verify 🔊
+speaks (TC-V2 on Arch).
 **Progress:** Session 8 built the reconciled system end to end (see `changelog.md` S8 +
 `reconciliation.md`). **DB:** all 15 architecture.md tables applied (Alembic head `0009_audit_log`).
 **Backend:** kiosk phone + stub OTP → visit; intake (M3/M4/M6); follow-up loop (M7/M8/M9);

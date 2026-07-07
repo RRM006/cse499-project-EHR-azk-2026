@@ -6,24 +6,34 @@
 
 ---
 
-**Date:** 2026-07-07 (Session 14 end)
-**Phase:** ✅ **The 20-step fix/feature build is COMPLETE.** There is no next *coded* step in
-this plan. The remaining work is the HUMAN live run + any polish it surfaces.
+**Date:** 2026-07-07 (Session 15 end)
+**Phase:** ✅ **The 20-step build is COMPLETE.** No coded step remains. Remaining work = the
+HUMAN live run + a small **pending Arch TTS install/verify** started in Session 15.
 
 ## Where we are right now
 - **All 20 steps DONE.** Every numbered item in `context_fixed_problem.md`
   (STRUCT / KIOSK-1..7 / MEDIC-1..7 / DOCTOR-1..7) is ✅. **150 tests pass**
   (`pytest backend/tests/`). Alembic head **0010**. Three portals + landing + `/legacy/`.
-- Session 14 (step 20) was a docs-only sweep: re-ran the 150-test gate, flipped the stale
-  `context_fixed_problem.md` markers to ✅ (KIOSK-4/5/6/7 + MEDIC-1/2/3/5 from S11,
-  DOCTOR-3/4/5/6/7 from S13), and marked the build complete in `milestone_log.md`.
+- **Session 15 (Arch TTS):** diagnosed the silent 🔊 button on the Arch laptop —
+  `speech-dispatcher` + `espeak-ng` are NOT installed, so Linux Chromium has no
+  `speechSynthesis` voice and `tts.js` correctly degrades to text-only (ADR-0028). Added a
+  new **"🐧 PART 1B — Enable a Bangla voice on Arch Linux"** section to
+  `agent_docs/human_live_run_guide.md` (Windows PART 1 untouched). **No app code changed.**
+  The `sudo pacman` install could not run from the agent shell, so the fix is **documented but
+  NOT yet installed/verified** — this is the concrete next step below.
 - The **15-module status table** in `milestone_log.md` stays 🟨 on purpose — those modules
   gate on the HUMAN live-voice run recording real numbers, not on build completion.
 
 ## The one thing we are doing next
-**Hand off to the HUMAN live run — no coded step remains in the 20-step plan.**
-👉 The human has a click-by-click checklist in **`agent_docs/human_live_run_guide.md`**
-(start the app · install a Bangla TTS voice · the live-test walkthrough · rotate keys).
+**Finish the Arch TTS fix, then hand off to the HUMAN live run.**
+👉 STEP 0 (Arch box, one command by the human — needs sudo):
+   `sudo pacman -S speech-dispatcher espeak-ng`
+   Then verify (Claude can run these once installed): `espeak-ng --voices | grep -i bn` shows a
+   Bengali voice · `spd-say "hello"` is audible · after a **full Chromium restart**,
+   `speechSynthesis.getVoices().filter(v=>v.lang.startsWith('bn'))` is non-empty · the kiosk
+   `#voice-hint` banner disappears and 🔊 speaks (= **TC-V2 on Arch**).
+👉 Then the human live-run checklist in **`agent_docs/human_live_run_guide.md`**
+(start the app · install a Bangla TTS voice [Win PART 1 / Arch PART 1B] · walkthrough · rotate keys).
 The human's tasks (unchanged, all still pending):
 1. **Live real-mic run** on Chrome: TC-V1 (STT verbatim + WER/latency), **TC-V2** (Bangla TTS
    audio actually plays), **TC-V3** (voice-only reply loop), **TC-F2** (resume loop on real
