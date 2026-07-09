@@ -4,9 +4,10 @@
 > re-exploring the whole project each session. Update it whenever you add or move
 > a folder/file. Keep each note to one line.
 
-**Last updated:** 2026-07-05 (Session 9 — legacy demo isolated at `/legacy/` (ADR-0031);
-`/` is now a landing page linking the four entry points; fix/feature build per
-`context_fixed_problem.md` in progress)
+**Last updated:** 2026-07-09 (Session 18 — no files added/moved yet; new work spec
+`context fixed problem 2.0.md` opened + planned, STRUCT-1 rename done. Structure below still
+current; the 2.0 build will add `Visit.submitted_at`+Alembic 0011, an OTP table, and a
+`routes_assistant.py` chatbot route — update this map when those land.)
 
 ---
 
@@ -26,7 +27,8 @@ voice-medical-prescreener/
 ├── .claude/launch.json           # preview dev-server configs (uvicorn; PORT 8001): Windows + backend-linux
 ├── agent_docs/                   # the project's shared brain (living docs) — now incl. architecture.md,
 │   │                              #   reconciliation.md, mockups-redesign.html, update_system_flowchart.md,
-│   │                              #   context_fixed_problem.md (20-step spec, all ✅), human_live_run_guide.md (S14: human handoff)
+│   │                              #   context_fixed_problem.md (20-step spec, all ✅), human_live_run_guide.md (S14: human handoff),
+│   │                              #   context fixed problem 2.0.md (S18: UI/UX + fixes + OTP + doctor chatbot — now a checkable BUILD TRACKER; STRUCT-1 ✅)
 │   └── ... (constitution, milestone_log, current_task, changelog, test_log, decisions, codebase_map, session_protocol)
 ├── backend/
 │   ├── .env / .env.example       # + DEV_OTP (stub OTP), per-bucket model names (ADR-0026)

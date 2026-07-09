@@ -6,7 +6,8 @@
 
 **Status keys:** ⬜ Not started · 🟨 In progress · 🟦 Blocked · ✅ Done · ⛔ Retired
 
-**Last updated:** 2026-07-07 (Session 17 — quota-aware free-provider switching, ADR-0041; 156 tests)
+**Last updated:** 2026-07-09 (Session 18 — new "Context Fixed Problem 2.0" spec captured + planned;
+STRUCT-1 rename done; ADR-0042)
 **Current phase:** ✅ **Build complete.** The 20-step plan (spec: `context_fixed_problem.md`) is
 fully implemented — **every numbered spec item (STRUCT/KIOSK/MEDIC/DOCTOR) is ✅** and 150 tests
 pass. What remains for the project is NOT build work: the **human live real-mic run**
@@ -36,6 +37,14 @@ system-setup gap (`speech-dispatcher`+`espeak-ng` not installed → empty Linux 
 `tts.js` degrades correctly per ADR-0028). Added guide **PART 1B** (Arch Bangla-voice install);
 no app code. Pending: human runs `sudo pacman -S speech-dispatcher espeak-ng`, then verify 🔊
 speaks (TC-V2 on Arch).
+**Session 18 (no module-status change):** the human opened a NEW feature/fix cycle with the spec
+`agent_docs/context fixed problem 2.0.md` (UI/UX evolve-the-theme redesign + functional fixes on
+all three portals + real OTP + a doctor-side AI drug-info chatbot). Explored the code and approved
+a priority-sequenced, checkable plan (mirrored in `current_task.md`); executing ONE item per "go",
+functional fixes before polish. **STRUCT-1 done** (rename "Patient Kiosk" → "Patient Portal",
+strings only). **ADR-0042** locks: UI = evolve the theme (keep layouts), Submit = assess in
+background; faculty quantized-model "Future Features" are OUT of scope. Module table unchanged —
+still gates on the human live-voice run; the 2.0 spec is UX/functional polish, not module state.
 **Session 17 (no module-status change):** diagnosed why "voice transcribes but formatting fails":
 Gemini Flash 429s were unlogged (only the last chain provider was recorded) and the sole fallback
 (OpenRouter `:free`, ~50 req/day) 429'd 10× in 9s with no backoff while Groq sat unused. Fix =

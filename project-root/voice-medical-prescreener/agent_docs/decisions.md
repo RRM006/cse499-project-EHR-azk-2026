@@ -673,6 +673,44 @@
   Gemini buckets as universal fallbacks (would cannibalize the quality-task quota).
 - Status: Accepted
 
+## ADR-0042 — 2026-07-09 — "Context Fixed Problem 2.0" build approach (UI evolve-theme + background submit)
+- Decision: For the new work spec `agent_docs/context fixed problem 2.0.md`:
+  (1) **UI/UX = *evolve the theme*, not rebuild.** Shift the shared `:root` design tokens in
+  `frontend_shared/shared.css` toward the teal/modern look of the human's reference screenshots
+  (add a teal secondary, softer surfaces, refined shadows/radius) + light per-portal polish, while
+  **keeping every existing page layout and wired feature intact**. No 1:1 copy of the screenshots.
+  (2) **Confirm & Submit = *assess in background*.** Move the 3 blocking LLM calls in
+  `submit_visit` (M10 risk + M11 XAI + M10C suggestion) into a FastAPI `BackgroundTasks` job so the
+  endpoint returns instantly; status→`awaiting_review` + audit stay synchronous, so the case still
+  enters the queue immediately and the risk badge fills in on the staff portals' 15 s auto-refresh.
+  (3) **Force 4–5 follow-ups:** the M7 loop must ask a *minimum* (~4, cap 5) of clinically useful,
+  history-based questions even when the 10 summary fields are already filled — a new
+  `followup_min_questions` gate + a broadened M7 prompt.
+  (4) **Dhaka time is formatted browser-side** (`Intl` `timeZone:'Asia/Dhaka'`) to stay
+  cross-platform (avoids the Windows Python `tzdata` gap); storage stays tz-aware UTC.
+  (5) **Real OTP = a persisted, expiring code + a pluggable sender seam, with `000000` kept as a
+  universal dev/demo bypass** (see Rejected for the channel reality).
+  (6) **Doctor drug-info chatbot** = free web search (a no-key dep, e.g. DuckDuckGo/`ddgs`) →
+  existing `call_module()` → structured answer, always shown with the disclaimer "AI-generated
+  information. Please verify before prescribing."
+  Execution is priority-by-priority (P1 patient → P2 medic → P3 doctor → P4 OTP), functional fixes
+  before polish, ONE reviewable item per human "go".
+- Why: the reference look is achievable purely through tokens because all portals already consume
+  the shared design system — lowest risk, consistent, no re-wiring. Background assessment removes
+  the only real submit-latency source without changing behaviour the staff sees. Browser-side Dhaka
+  formatting keeps Windows + Arch identical with zero new deps.
+- Rejected: a per-portal layout rebuild to mirror the screenshots 1:1 (high effort + high risk of
+  breaking wired functionality). Keeping submit synchronous-but-parallel (still makes the patient
+  wait; background is faster and the staff refresh masks the delay). Backend `ZoneInfo` for Dhaka
+  (needs the `tzdata` package on Windows — an avoidable cross-platform trap). A *free, reliable*
+  OTP-to-any-phone channel — it does not exist: WhatsApp Business API + BD SMS gateways cost
+  money/approval, and a Telegram bot cannot cold-message a phone number (it needs a `chat_id` from
+  a prior `/start`); hence the pluggable seam + `000000` bypass, with the concrete free channel
+  (email-OTP or Telegram-for-opted-in) confirmed with the human before it is built. The faculty
+  "Future Features" (quantized Moshi summary model; quantized on-device STT/TTS) are explicitly
+  **out of scope** for this spec (future research track).
+- Status: Accepted
+
 ## ADR-0008 — 2026-06-18 — Default Whisper model is small/base; upgrade to a Bangla fine-tune later
 - Decision: Start with Whisper `small` (or `base` if we need a snappier live feel)
   for streaming on CPU. Upgrade to a Bangla-fine-tuned model (e.g.

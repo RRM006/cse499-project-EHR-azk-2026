@@ -16,6 +16,33 @@
 
 ---
 
+## Session 18 — 2026-07-09 — "Context Fixed Problem 2.0" spec captured + planned; STRUCT-1 done
+- Did: (1) Oriented from the session files. (2) The human delivered a NEW work spec —
+  `agent_docs/context fixed problem 2.0.md` (UI/UX redesign + functional fixes across all three
+  portals, real OTP, and a doctor-side AI drug-info chatbot) plus 3 healthcare reference
+  screenshots and a stated priority order. (3) Explored the codebase (frontend portals, backend
+  pipeline, OTP/auth) and turned the spec into a priority-sequenced, checkable plan (saved to the
+  Claude plan file; the priority checklist is now mirrored in `current_task.md`). Plan APPROVED.
+  (3b) Converted `agent_docs/context fixed problem 2.0.md` into a living, checkable **BUILD TRACKER**
+  (plan IDs + status + the files each item touches, original requirements kept verbatim below it) so
+  any future session sees exactly what's done/left — STRUCT-1 ✅, STRUCT-2 👉 next.
+  (4) Implemented **STRUCT-1**: renamed the 4 user-facing "Patient Kiosk" strings → "Patient Portal"
+  (EN + Bangla "রোগী পোর্টাল") in `frontend/index.html:41` + `frontend/kiosk.html:6,81,200`;
+  file names/URLs (`/kiosk.html`, `/kiosk.js`) kept so routes don't break. No backend touched.
+- Decided: **ADR-0042** — approach for the 2.0 build: (a) UI = *evolve the theme* (shift shared
+  `:root` tokens toward the teal/modern reference look + polish; KEEP all existing layouts &
+  wired features — no 1:1 screenshot copy, no layout rebuild); (b) Confirm & Submit = *assess in
+  background* (M10/M11/M10C move to a FastAPI BackgroundTasks job so submit returns instantly);
+  (c) execute priority-by-priority, functional fixes before polish, ONE item per "go". The faculty
+  "Future Features" (quantized Moshi / quantized STT-TTS) are OUT of scope for this spec.
+- Broke / problem: none (STRUCT-1 was a string-only change; not a code path, so no tests run).
+- Deferred: everything from STRUCT-2 onward — logout buttons, theme tokens, and all of P1–P4.
+  Two items still need a human choice at build time: the exact **OTP delivery channel** (P4 —
+  free reliable OTP-to-any-phone is not feasible; recommend persisted-OTP seam + `000000` bypass +
+  one free reference channel) and a **look at the teal palette** before it's applied broadly.
+- Next: **STRUCT-2** — add a Logout button to the medic + doctor headers that returns to the
+  Portal Directory (`/`), plus an optional shared `logout()` in `frontend_shared/shared.js`.
+
 ## Session 17 — 2026-07-07 — Quota audit + quota-aware free-provider switching (ADR-0041)
 - Did: (1) **API quota audit**: counted all LLM usage from `module_events` (33 lifetime events;
   visit 7 = the clean 13-call Session-8c run; visit 8 on 07-06 = M4 failing) + one read-only
