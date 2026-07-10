@@ -16,6 +16,41 @@
 
 ---
 
+## Session 19 — 2026-07-10 — 2.0 build: STRUCT-2/3 + P1-1/P1-2 (logout, teal theme, auto-stop, full i18n)
+- Did: executed four tracker items, one per "go", each preview-verified with a stubbed `api`
+  (no backend/LLM calls — rule #4):
+  - **STRUCT-2 (logout):** shared `logout()` in `frontend_shared/shared.js` + a bilingual Logout
+    button in ALL THREE portal headers (medic + doctor + kiosk) → returns to the Portal Directory
+    `/`. Verified: button renders, "লগআউট" in Bangla, click lands on `/`, no console errors.
+  - **STRUCT-3 (theme):** shared palette evolved to **"Teal Medical"** (ADR-0043) — `:root` tokens
+    (primary `#0F766E`, secondary `#0D9488`, bg `#F0FBF8`, radius 10px, teal shadows) + retinted
+    the ~10 hardcoded blue tints in `shared.css`; semantic risk-badge colors untouched; CLAUDE.md
+    FRONTEND section updated. Human chose Option A (teal) over Option B (ocean blue) from LIVE
+    in-browser previews of both on the real medic portal. Verified teal on `/`, kiosk, medic, doctor.
+  - **P1-1 (Summary auto-stops mic):** `kiosk.js` — new `submitFinalTurn()` + reworked
+    `finishConversation()`: clicking "Done — see summary" now stops the mic, flushes the captured
+    words as the final turn (answer path posts `followup/answer` and IGNORES the next question;
+    opening path posts the utterance + re-runs intake so the words are extracted), then summarizes.
+    `state.finishing` reentry guard. Verified: both flush paths + empty-buffer + triple-click.
+  - **P1-2 (full language toggle):** `kiosk.js`/`shared.js`/`kiosk.html` — bubble labels + bilingual
+    bodies carry `data-en/bn` so shared `applyLanguage()` re-translates them; new `setBilingualText()`
+    keeps JS-written text (OTP subtitle, mic hints) toggle-safe; live transcript mirrored into both
+    language slots so a mid-recording toggle can't wipe it; 🔊 tooltips refresh in `onLanguageChange`;
+    shared `applyLanguage()` gained `data-en/bn-placeholder` support (+ the 2 fallback inputs).
+    **Patient bubbles carry NO dataset — verbatim forever (rule #1)**; server questions (EN+BN in one
+    string) left as captured. Verified the exact spec bug ("সহকারী / আপনার সমস্যাটি…" → EN and back)
+    plus OTP subtitle, hints, transcript, placeholders — full EN↔BN round-trip.
+- Decided: **ADR-0043** — shared palette = "Teal Medical" (Option A, chosen from live previews;
+  ADR-0029 structure + semantic risk colors kept).
+- Broke / problem: none functional. The preview **screenshot** capturer wedged during P1-2 (tooling
+  hiccup; page JS confirmed alive via eval) — used the accessibility snapshot as proof instead.
+  **No pytest run this session** (changes were frontend HTML/CSS/JS only); P1-3 will add tests.
+- Deferred: P1-3 → P4 (unchanged queue). Per-portal UI polish (P1-6/P2-3/P3-4) still pending on top
+  of the shared teal base.
+- Next: **P1-3** — force 4–5 intelligent, history-based follow-ups (backend: `followup_min_questions`
+  gate in `config.py`/`routes_followup.py` + deepening-question generation in `services/followup.py`
+  + a new test; keep the 156-test suite green).
+
 ## Session 18 — 2026-07-09 — "Context Fixed Problem 2.0" spec captured + planned; STRUCT-1 done
 - Did: (1) Oriented from the session files. (2) The human delivered a NEW work spec —
   `agent_docs/context fixed problem 2.0.md` (UI/UX redesign + functional fixes across all three

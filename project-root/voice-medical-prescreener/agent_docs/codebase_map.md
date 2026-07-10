@@ -4,10 +4,11 @@
 > re-exploring the whole project each session. Update it whenever you add or move
 > a folder/file. Keep each note to one line.
 
-**Last updated:** 2026-07-09 (Session 18 — no files added/moved yet; new work spec
-`context fixed problem 2.0.md` opened + planned, STRUCT-1 rename done. Structure below still
-current; the 2.0 build will add `Visit.submitted_at`+Alembic 0011, an OTP table, and a
-`routes_assistant.py` chatbot route — update this map when those land.)
+**Last updated:** 2026-07-10 (Session 19 — still no files added/moved; 2.0 build edited existing
+files only: `shared.css` (Teal Medical palette, ADR-0043), `shared.js` (`logout()`,
+`setBilingualText`-support, placeholder i18n), `kiosk.js`/`kiosk.html`, medic/doctor headers.
+Structure below still current; the 2.0 build will add `Visit.submitted_at`+Alembic 0011, an OTP
+table, and a `routes_assistant.py` chatbot route — update this map when those land.)
 
 ---
 

@@ -6,8 +6,8 @@
 
 **Status keys:** ⬜ Not started · 🟨 In progress · 🟦 Blocked · ✅ Done · ⛔ Retired
 
-**Last updated:** 2026-07-09 (Session 18 — new "Context Fixed Problem 2.0" spec captured + planned;
-STRUCT-1 rename done; ADR-0042)
+**Last updated:** 2026-07-10 (Session 19 — 2.0 build: STRUCT-2/3 + P1-1/P1-2 done; Teal Medical
+theme ADR-0043)
 **Current phase:** ✅ **Build complete.** The 20-step plan (spec: `context_fixed_problem.md`) is
 fully implemented — **every numbered spec item (STRUCT/KIOSK/MEDIC/DOCTOR) is ✅** and 150 tests
 pass. What remains for the project is NOT build work: the **human live real-mic run**
@@ -37,6 +37,13 @@ system-setup gap (`speech-dispatcher`+`espeak-ng` not installed → empty Linux 
 `tts.js` degrades correctly per ADR-0028). Added guide **PART 1B** (Arch Bangla-voice install);
 no app code. Pending: human runs `sudo pacman -S speech-dispatcher espeak-ng`, then verify 🔊
 speaks (TC-V2 on Arch).
+**Session 19 (no module-status change):** advanced the 2.0 cycle by 4 tracker items (one per "go"),
+all frontend/CSS, all preview-verified with a stubbed `api` (no LLM calls): **STRUCT-2** logout→`/`
+in all 3 headers; **STRUCT-3** shared "Teal Medical" palette (ADR-0043, human chose Option A from
+live previews); **P1-1** kiosk "Done" auto-stops the mic + flushes the final turn before summarizing;
+**P1-2** full EN↔BN toggle of the Patient Portal (bilingual bubbles + `setBilingualText()`, patient
+words verbatim — rule #1). No pytest run (no backend logic changed); the 15-module table is unchanged
+(still gates on the human live run). Next = **P1-3** (first backend change: force 4–5 follow-ups).
 **Session 18 (no module-status change):** the human opened a NEW feature/fix cycle with the spec
 `agent_docs/context fixed problem 2.0.md` (UI/UX evolve-the-theme redesign + functional fixes on
 all three portals + real OTP + a doctor-side AI drug-info chatbot). Explored the code and approved

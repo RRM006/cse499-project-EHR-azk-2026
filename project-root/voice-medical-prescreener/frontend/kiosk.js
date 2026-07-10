@@ -34,6 +34,7 @@ function resetState() {
     lastQuestionText: OPENING_QUESTION.bn,
     openingAnswered: false,
     busy: false,
+    finishing: false,       // P1-1: reentry guard for finishConversation
     lastProfile: null,      // KIOSK-6: kept so the summary re-renders on language toggle
     resumeQuestion: null,   // KIOSK-7: open resume-loop question on the summary screen
     resumeActive: false,
@@ -54,14 +55,20 @@ function showScreen(id) {
   document.querySelectorAll('.screen').forEach((s) => s.classList.toggle('active', s.id === id));
 }
 
-function addBubble(role, text, label) {
+/* P1-2: bubble labels (and assistant text that HAS a bilingual source) carry
+   data-en/data-bn so the shared applyLanguage() re-translates them on toggle.
+   Patient bodies get NO dataset — verbatim forever (rule #1). `label` is {en,bn};
+   `textPair` is an optional {en,bn} for the body (opening prompt only, today). */
+function addBubble(role, text, label, textPair = null) {
   const thread = document.getElementById('chat-thread');
   const div = document.createElement('div');
   div.className = `chat-turn ${role}`;
   const meta = document.createElement('div');
   meta.className = 'chat-meta';
   const labelSpan = document.createElement('span');
-  labelSpan.textContent = label;
+  labelSpan.dataset.en = label.en;
+  labelSpan.dataset.bn = label.bn;
+  labelSpan.textContent = t(label.en, label.bn);
   // KIOSK-3: every message gets a speaker icon. Assistant = replay the question;
   // patient = read back EXACTLY the captured words (rule #1 — the text captured at
   // bubble creation, never re-fetched or rewritten).
@@ -69,18 +76,36 @@ function addBubble(role, text, label) {
   speakBtn.className = 'bubble-speak';
   speakBtn.type = 'button';
   speakBtn.textContent = '🔊';
-  speakBtn.title = role === 'patient'
-    ? t('Hear your own words again', 'আপনার নিজের কথা আবার শুনুন')
-    : t('Hear this question again', 'এই প্রশ্নটি আবার শুনুন');
-  speakBtn.onclick = () => speak(text);
+  const titleEn = role === 'patient' ? 'Hear your own words again' : 'Hear this question again';
+  const titleBn = role === 'patient' ? 'আপনার নিজের কথা আবার শুনুন' : 'এই প্রশ্নটি আবার শুনুন';
+  speakBtn.dataset.titleEn = titleEn;
+  speakBtn.dataset.titleBn = titleBn;
+  speakBtn.title = t(titleEn, titleBn);
   meta.appendChild(labelSpan);
   meta.appendChild(speakBtn);
   const body = document.createElement('span');
-  body.textContent = text; // verbatim — never rewritten
+  if (textPair) {
+    body.dataset.en = textPair.en;   // bilingual assistant text follows the toggle
+    body.dataset.bn = textPair.bn;
+    body.textContent = t(textPair.en, textPair.bn);
+  } else {
+    body.textContent = text; // verbatim — never rewritten
+  }
+  speakBtn.onclick = () => speak(body.textContent); // replay what is displayed NOW
   div.appendChild(meta);
   div.appendChild(body);
   thread.appendChild(div);
   thread.scrollTop = thread.scrollHeight;
+}
+
+/* P1-2: JS-written UI text must survive the EN/BN toggle — writing through here keeps
+   the element's data-en/data-bn in sync so applyLanguage() re-renders it correctly. */
+function setBilingualText(id, en, bn) {
+  const el = document.getElementById(id);
+  if (!el) return;
+  el.dataset.en = en;
+  el.dataset.bn = bn;
+  el.textContent = t(en, bn);
 }
 
 /* KIOSK-2: the Repeat button was "doing nothing" when the OS has no Bangla TTS voice
@@ -102,10 +127,14 @@ if (window.speechSynthesis) {
 }
 updateVoiceHint();
 
-/* Show AND speak an assistant turn (ADR-0028), and record it server-side. */
-async function assistantSays(text, { record = true } = {}) {
+/* Show AND speak an assistant turn (ADR-0028), and record it server-side.
+   P1-2: accepts either a plain string (server questions already embed EN+BN in one
+   string — left as captured) or an {en,bn} pair (re-translates on toggle). */
+async function assistantSays(msg, { record = true } = {}) {
+  const pair = (msg && typeof msg === 'object') ? msg : null;
+  const text = pair ? t(pair.en, pair.bn) : msg;
   state.lastQuestionText = text;
-  addBubble('ai', text, t('Assistant', 'সহকারী'));
+  addBubble('ai', text, { en: 'Assistant', bn: 'সহকারী' }, pair);
   speak(text);
   if (record && state.visitUuid) {
     try {
@@ -154,8 +183,9 @@ async function sendOtp() {
   try {
     await api('POST', '/api/patients/lookup', { phone });
     state.phone = phone;
-    document.getElementById('otp-sub').textContent =
-      t(`A 6-digit code has been sent to +880 ${phone}`, `একটি ৬-সংখ্যার কোড +880 ${phone} নম্বরে পাঠানো হয়েছে`);
+    setBilingualText('otp-sub',
+      `A 6-digit code has been sent to +880 ${phone}`,
+      `একটি ৬-সংখ্যার কোড +880 ${phone} নম্বরে পাঠানো হয়েছে`);
     showScreen('screen-otp');
     document.querySelector('.otp-input').focus();
   } catch (e) { showError(e.message); }
@@ -167,7 +197,7 @@ async function verifyOtp() {
     const res = await api('POST', '/api/patients/verify-otp', { phone: state.phone, otp });
     state.visitUuid = res.visit.uuid;
     showScreen('screen-voice');
-    await assistantSays(t(OPENING_QUESTION.en, OPENING_QUESTION.bn));
+    await assistantSays(OPENING_QUESTION);   // P1-2: bilingual pair → follows the toggle
   } catch (e) { showError(e.message); }
 }
 
@@ -199,7 +229,13 @@ function initRecognition() {
       if (event.results[i].isFinal) finalBuffer += chunk;
       else interim += chunk;
     }
-    document.getElementById(activeDock().transcript).textContent = finalBuffer + interim;
+    // P1-2: mirror the live verbatim text into BOTH language slots so a language
+    // toggle mid-recording can never wipe/replace the patient's words (rule #1).
+    const el = document.getElementById(activeDock().transcript);
+    const live = finalBuffer + interim;
+    el.dataset.en = live;
+    el.dataset.bn = live;
+    el.textContent = live;
   };
   r.onend = () => { if (listening) r.start(); }; // brief pauses keep going
   r.onerror = (e) => {
@@ -223,7 +259,7 @@ function toggleListening() {
   finalBuffer = '';
   listening = true;
   document.getElementById(activeDock().mic).classList.add('listening');
-  document.getElementById(activeDock().hint).textContent = t('Listening... tap again when done', 'শুনছি... বলা শেষে আবার চাপুন');
+  setBilingualText(activeDock().hint, 'Listening... tap again when done', 'শুনছি... বলা শেষে আবার চাপুন');
   window.speechSynthesis && window.speechSynthesis.cancel();
   recognition.start();
 }
@@ -231,10 +267,10 @@ function toggleListening() {
 function stopListening(sendTurn) {
   listening = false;
   document.getElementById(activeDock().mic).classList.remove('listening');
-  document.getElementById(activeDock().hint).textContent = t('Tap the mic when you are ready to speak', 'বলতে প্রস্তুত হলে মাইকে চাপ দিন');
+  setBilingualText(activeDock().hint, 'Tap the mic when you are ready to speak', 'বলতে প্রস্তুত হলে মাইকে চাপ দিন');
   if (recognition) try { recognition.stop(); } catch (_) {}
   const text = finalBuffer.trim();
-  document.getElementById(activeDock().transcript).textContent = '';
+  setBilingualText(activeDock().transcript, '', '');   // P1-2: clear dataset too
   if (sendTurn && text) {
     if (state.resumeActive) submitResumeAnswer(text, 'mic');
     else submitPatientTurn(text, 'mic');
@@ -252,7 +288,7 @@ function sendTypedFallback() {
 async function submitPatientTurn(rawText, source) {
   if (state.busy) return;
   state.busy = true;
-  addBubble('patient', rawText, t('Your words', 'আপনার কথা'));
+  addBubble('patient', rawText, { en: 'Your words', bn: 'আপনার কথা' });
   try {
     if (state.activeQuestion) {
       // Answer to an M7 question -> M8 merge + M9 check + next question, one call.
@@ -284,8 +320,39 @@ async function submitPatientTurn(rawText, source) {
 
 /* --- screen 4: summary + submit --- */
 
+/* P1-1 helper: record the flushed last turn WITHOUT continuing the question loop —
+   the patient chose "Done", so no next question is spoken here; the summary-screen
+   resume loop (KIOSK-7) covers anything still missing. Verbatim (rule #1). */
+async function submitFinalTurn(rawText) {
+  addBubble('patient', rawText, { en: 'Your words', bn: 'আপনার কথা' });
+  if (state.activeQuestion) {
+    // Answer the open M7 question (stores the utterance + M8 merge); ignore next_question.
+    await api('POST', `/api/visits/${state.visitUuid}/followup/answer`, {
+      question_id: state.activeQuestion.id, raw_text: rawText,
+      source: 'mic', stt_provider: 'browser_webspeech',
+    });
+    state.activeQuestion = null;
+  } else {
+    await api('POST', `/api/visits/${state.visitUuid}/utterances`, {
+      raw_text: rawText, role: 'patient', source: 'mic', stt_provider: 'browser_webspeech',
+    });
+    state.intakeDone = false;   // re-run intake below so this turn is extracted too
+  }
+}
+
 async function finishConversation() {
+  if (state.finishing) return;  // P1-1: ignore double-clicks while finishing
+  state.finishing = true;
   try {
+    /* P1-1: clicking "Done — see summary" while the mic was live used to abandon the
+       in-progress speech and require a second mic tap. Now: stop the mic, submit the
+       already-captured words as the final turn, THEN build the summary. */
+    if (listening && !state.resumeActive) {
+      stopListening(false);            // mic off + UI reset; finalBuffer is kept
+      const text = finalBuffer.trim();
+      finalBuffer = '';
+      if (text) await submitFinalTurn(text);
+    }
     if (!state.intakeDone) {
       await api('POST', `/api/visits/${state.visitUuid}/intake`);
       state.intakeDone = true;
@@ -295,6 +362,7 @@ async function finishConversation() {
     showScreen('screen-summary');
     await refreshResumeLoop(profile);   // KIOSK-7: fill remaining fields before submit
   } catch (e) { showError(e.message); }
+  state.finishing = false;
 }
 
 /* KIOSK-5: per-field icon + which fields get the accent highlight (symptoms,
@@ -456,10 +524,15 @@ async function confirmSubmit() {
 
 /* KIOSK-6: static labels re-render via applyLanguage(); the summary grid and the
    KIOSK-7 progress chip are built in JS, so rebuild them from the kept profile so
-   labels AND extracted values follow the toggle together. */
+   labels AND extracted values follow the toggle together.
+   P1-2: chat-bubble labels/bilingual bodies re-render via applyLanguage (they carry
+   data-en/bn); only the 🔊 tooltips need a manual refresh here. */
 function onLanguageChange() {
   if (state && state.lastProfile) {
     renderSummary(state.lastProfile);
     renderProgress(state.lastProfile);
   }
+  document.querySelectorAll('.bubble-speak[data-title-en]').forEach((b) => {
+    b.title = t(b.dataset.titleEn, b.dataset.titleBn);
+  });
 }

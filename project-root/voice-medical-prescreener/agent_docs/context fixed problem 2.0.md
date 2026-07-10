@@ -11,8 +11,8 @@
 > **Legend:** ✅ done · ⏳ in progress · ⬜ not started · 👉 the next step
 
 ## Progress at a glance
-- **Cross-cutting (STRUCT):** ✅ STRUCT-1 · 👉⬜ STRUCT-2 · ⬜ STRUCT-3
-- **P1 Patient Portal (highest):** ⬜ P1-1 · ⬜ P1-2 · ⬜ P1-3 · ⬜ P1-4 · ⬜ P1-5 · ⬜ P1-6
+- **Cross-cutting (STRUCT):** ✅ STRUCT-1 · ✅ STRUCT-2 · ✅ STRUCT-3
+- **P1 Patient Portal (highest):** ✅ P1-1 · ✅ P1-2 · 👉⬜ P1-3 · ⬜ P1-4 · ⬜ P1-5 · ⬜ P1-6
 - **P2 Medic Portal:** ⬜ P2-1 · ⬜ P2-2 · ⬜ P2-3
 - **P3 Doctor Portal:** ⬜ P3-1 · ⬜ P3-2 · ⬜ P3-3 · ⬜ P3-4
 - **P4 OTP (last):** ⬜ P4-1
@@ -24,18 +24,32 @@
 ### Cross-cutting first (STRUCT — low risk)
 - [x] **STRUCT-1 — Rename "Patient Kiosk" → "Patient Portal"** (visible strings only; EN + "রোগী পোর্টাল").
   ✅ done S18 — `frontend/index.html:41`, `frontend/kiosk.html:6,81,200`. URLs/filenames kept.
-- [ ] **STRUCT-2 — Logout on every page → Portal Directory (`/`).** 👉 NEXT. Add a Logout button to the
-  medic + doctor `.portal-header`; optional shared `logout()` in `frontend_shared/shared.js`. Kiosk
-  already auto-logs-out. *(Requirement: "General UI/UX" → Logout on every page.)*
-- [ ] **STRUCT-3 — Theme evolution (shared).** Evolve `:root` tokens in `frontend_shared/shared.css`
-  toward the teal/modern reference look; KEEP layouts. *(Requirement: "General UI/UX" → redesign.)*
+- [x] **STRUCT-2 — Logout on every page → Portal Directory (`/`).** ✅ done S19 — shared `logout()`
+  in `frontend_shared/shared.js` + a bilingual Logout button in ALL THREE portal headers (medic +
+  doctor + kiosk — the kiosk's post-submit auto-logout stays; this is the manual exit). Verified in
+  preview: button renders, "লগআউট" in Bangla, click lands on `/`, no console errors.
+  *(Requirement: "General UI/UX" → Logout on every page.)*
+- [x] **STRUCT-3 — Theme evolution (shared).** ✅ done S19 (**ADR-0043**) — human chose "Teal Medical"
+  (Option A) from live previews: primary `#0F766E`, secondary `#0D9488`, bg `#F0FBF8`, radius 10px
+  + the hardcoded blue tints in `shared.css` retinted; semantic risk colors untouched; CLAUDE.md
+  FRONTEND section updated. Verified teal on `/`, kiosk, medic, doctor — no console errors.
+  *(Requirement: "General UI/UX" → redesign; per-portal polish still lands in P1-6/P2-3/P3-4.)*
 
 ### P1 — Patient Portal `/kiosk.html` (highest priority)
-- [ ] **P1-1 — "Summary" auto-stops recording + processes immediately.** `kiosk.js finishConversation`
-  (:287): if `listening`, stop + flush `finalBuffer` as a turn before intake/profile. *(→ "Voice Recording".)*
-- [ ] **P1-2 — Language toggle translates ALL UI both ways.** Assistant/opening bubbles carry
-  `data-en/bn`, re-applied in `onLanguageChange`; **patient raw words NEVER translated (rule #1)**.
-  *(→ "Language Toggle".)*
+- [x] **P1-1 — "Summary" auto-stops recording + processes immediately.** ✅ done S19 — new
+  `submitFinalTurn()` + reworked `finishConversation()` in `kiosk.js`: stops the mic, flushes the
+  captured words as the final turn (answer path = followup/answer with next-question IGNORED;
+  opening path = utterance + intake re-run so the words are extracted), then summary. Reentry
+  guard `state.finishing`. Verified in preview with a stubbed `api` (no LLM calls): both paths +
+  empty-buffer + double-click all correct. *(→ "Voice Recording".)*
+- [x] **P1-2 — Language toggle translates ALL UI both ways.** ✅ done S19 — bubbles carry
+  `data-en/bn` on labels (+ bilingual bodies like the opening prompt), so shared `applyLanguage()`
+  re-translates them; new `setBilingualText()` keeps JS-written text (OTP subtitle, mic hints)
+  toggle-safe; live transcript mirrored into both slots so a toggle can't wipe it; 🔊 tooltips
+  refresh in `onLanguageChange()`; bilingual `data-en/bn-placeholder` support added to shared
+  `applyLanguage()` + the 2 fallback inputs. **Patient bubbles have NO dataset — verbatim forever
+  (rule #1)**; server questions (EN+BN in one string) left as captured. Preview-verified both
+  directions incl. round-trip. *(→ "Language Toggle".)*
 - [ ] **P1-3 — Always ask 4–5 history-based follow-ups.** `followup_min_questions=4` in `config.py`;
   don't report `complete` before min in `routes_followup.py`; broaden `_QUESTION_SYSTEM` in
   `services/followup.py`. Add a test. *(→ "Follow-up Questions".)*

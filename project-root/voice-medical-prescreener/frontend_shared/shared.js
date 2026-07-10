@@ -61,6 +61,11 @@ function applyLanguage() {
     const text = el.dataset[currentLanguage];
     if (text !== undefined) el.textContent = text;
   });
+  // P1-2: bilingual input placeholders via data-en-placeholder / data-bn-placeholder.
+  document.querySelectorAll('[data-en-placeholder]').forEach((el) => {
+    const p = el.dataset[currentLanguage + 'Placeholder'];
+    if (p !== undefined) el.placeholder = p;
+  });
   document.querySelectorAll('.lang-btn').forEach((b) => {
     b.classList.toggle('active', b.dataset.lang === currentLanguage);
   });
@@ -74,6 +79,11 @@ function setLanguage(lang) {
 }
 
 function t(en, bn) { return currentLanguage === 'bn' ? bn : en; }
+
+/* STRUCT-2: every portal header offers Logout back to the Portal Directory at "/".
+   Auth is stubbed (no server session to clear), so logout = leave the page; each
+   portal's in-memory state is discarded by the navigation itself. */
+function logout() { window.location.href = '/'; }
 
 /* fetch wrapper: throws Error with the backend's detail message on failure. */
 async function api(method, path, body) {

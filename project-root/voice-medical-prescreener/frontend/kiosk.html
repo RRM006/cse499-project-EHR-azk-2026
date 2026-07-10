@@ -79,9 +79,16 @@
   <div class="portal-header">
     <div><span class="portal-title">Niramoy Pre-Screening</span>
       <span class="portal-subtitle" data-en="Patient Portal" data-bn="রোগী পোর্টাল">Patient Portal</span></div>
-    <div class="lang-toggle">
-      <button class="lang-btn" data-lang="en" onclick="setLanguage('en')">English</button>
-      <button class="lang-btn" data-lang="bn" onclick="setLanguage('bn')">বাংলা</button>
+    <div style="display:flex; align-items:center; gap:14px;">
+      <div class="lang-toggle">
+        <button class="lang-btn" data-lang="en" onclick="setLanguage('en')">English</button>
+        <button class="lang-btn" data-lang="bn" onclick="setLanguage('bn')">বাংলা</button>
+      </div>
+      <!-- STRUCT-2: back to the Portal Directory at "/" (the post-submit auto-logout
+           still resets the portal for the next patient; this is the manual exit) -->
+      <button class="btn btn-secondary" onclick="logout()" style="padding:6px 14px; font-size:.75rem;"
+              title="Return to the Portal Directory"
+              data-en="Logout" data-bn="লগআউট">Logout</button>
     </div>
   </div>
 
@@ -142,7 +149,8 @@
                   onclick="document.getElementById('fallback-row').style.display='flex'"
                   data-en="Microphone issue? Type instead" data-bn="মাইকের সমস্যা? টাইপ করুন">Microphone issue? Type instead</button>
           <div class="fallback-row" id="fallback-row" style="margin-top:8px;">
-            <input type="text" class="input-field" id="fallback-input" placeholder="Describe in Bangla or English...">
+            <input type="text" class="input-field" id="fallback-input" placeholder="Describe in Bangla or English..."
+                   data-en-placeholder="Describe in Bangla or English..." data-bn-placeholder="বাংলা বা ইংরেজিতে লিখুন...">
             <button class="btn btn-primary" onclick="sendTypedFallback()" data-en="Send" data-bn="পাঠান">Send</button>
           </div>
         </div>
@@ -177,7 +185,8 @@
           <button class="mic-btn" id="resume-mic-btn" onclick="toggleListening()">🎤</button>
         </div>
         <div class="fallback-row" id="resume-fallback-row" style="max-width:none;">
-          <input type="text" class="input-field" id="resume-fallback-input" placeholder="Describe in Bangla or English...">
+          <input type="text" class="input-field" id="resume-fallback-input" placeholder="Describe in Bangla or English..."
+                 data-en-placeholder="Describe in Bangla or English..." data-bn-placeholder="বাংলা বা ইংরেজিতে লিখুন...">
           <button class="btn btn-primary" onclick="sendResumeTyped()" data-en="Send" data-bn="পাঠান">Send</button>
         </div>
       </div>

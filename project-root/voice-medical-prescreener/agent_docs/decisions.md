@@ -84,6 +84,17 @@
 - Rejected: Separate dependency files per OS (drift and confusion).
 - Status: Accepted
 
+## ADR-0008 — 2026-06-18 — Default Whisper model is small/base; upgrade to a Bangla fine-tune later
+- Decision: Start with Whisper `small` (or `base` if we need a snappier live feel)
+  for streaming on CPU. Upgrade to a Bangla-fine-tuned model (e.g.
+  `tugstugi/whisper-medium` converted to CTranslate2) in Phase 2 if accuracy needs
+  it and latency stays usable.
+- Why: tiny/base/small run faster than real time on CPU; medium is near/below real
+  time on a 6-core CPU. Accuracy is the real constraint, so we upgrade deliberately.
+- Rejected: Starting with large-v3 (too slow on CPU, and poor on Bangla unless
+  fine-tuned).
+- Status: Accepted
+
 ## ADR-0009 — 2026-06-19 — Build the real backend/ + frontend/ foundation (no throwaway demo folder)
 - Decision: Instead of a disposable `phase0_webspeech_demo/` folder, build the
   Phase 0 demo as the first vertical slice of the real app structure:
@@ -711,13 +722,19 @@
   **out of scope** for this spec (future research track).
 - Status: Accepted
 
-## ADR-0008 — 2026-06-18 — Default Whisper model is small/base; upgrade to a Bangla fine-tune later
-- Decision: Start with Whisper `small` (or `base` if we need a snappier live feel)
-  for streaming on CPU. Upgrade to a Bangla-fine-tuned model (e.g.
-  `tugstugi/whisper-medium` converted to CTranslate2) in Phase 2 if accuracy needs
-  it and latency stays usable.
-- Why: tiny/base/small run faster than real time on CPU; medium is near/below real
-  time on a 6-core CPU. Accuracy is the real constraint, so we upgrade deliberately.
-- Rejected: Starting with large-v3 (too slow on CPU, and poor on Bangla unless
-  fine-tuned).
+## ADR-0043 — 2026-07-10 — Shared palette evolved to "Teal Medical" (STRUCT-3; supersedes ADR-0029's colors, keeps its structure)
+- Decision: The shared design tokens in `frontend_shared/shared.css` move from clinical blue to
+  **Teal Medical**: primary `#0F766E` (hover `#0B5751`), secondary `#0D9488`, accent stays
+  `#10B981`, bg `#F0FBF8`, border `#D9E7E4`, focus `#14B8A6`, radius 8→10px, teal-tinted shadows.
+  The few hardcoded blue tints in shared.css (lang-toggle, hovers, queue active, verbatim/field
+  headers, `.source-ai`, input focus ring) follow the teal scheme. **Everything else from ADR-0029
+  is unchanged**: component structure, layouts, Inter + Noto Sans Bengali, semantic risk-badge
+  colors (red/orange/amber/green), and the safety-panel reds. CLAUDE.md's FRONTEND section updated.
+- Why: the human's 2.0 reference screenshots use a modern teal/blue medical look. The human chose
+  Option A (teal-forward) over Option B (ocean blue + teal) from live in-browser previews of both
+  palettes on the real medic portal. Token-only change = every portal restyles consistently with
+  zero layout/JS risk. Primary-on-white ≈ 5.9:1 contrast (WCAG AA).
+- Rejected: Option B "Ocean Blue + Teal" (human preferred the decisive teal); a per-portal layout
+  rebuild to copy the screenshots 1:1 (ADR-0042 already rejected); recoloring the semantic risk
+  badges (risk colors must stay conventional red/amber/green).
 - Status: Accepted

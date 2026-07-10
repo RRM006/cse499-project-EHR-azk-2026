@@ -104,10 +104,11 @@ Spread load across **three independent daily buckets** so no single quota is the
 
 ## FRONTEND (follow this)
 
-- **Design system = the clinical-blue system in `frontend_shared/shared.css` (ADR-0029).**
-  It SUPERSEDES the old Mintlify rule: clinical blue `#0F4C81` primary, bright blue `#2A75D3`,
-  green accent `#10B981`, 8px radius, Inter for UI. `DESIGN-mintlify.md` is kept only as
-  historical reference (marked superseded at its top). The three portals share
+- **Design system = the shared token system in `frontend_shared/shared.css`** (structure per
+  ADR-0029; palette evolved to **"Teal Medical"** in the 2.0 build STRUCT-3, ADR-0043): deep teal
+  `#0F766E` primary, teal `#0D9488` secondary, green accent `#10B981`, teal-tinted bg `#F0FBF8`,
+  10px radius, Inter for UI. It SUPERSEDES the old Mintlify rule; `DESIGN-mintlify.md` is kept only
+  as historical reference (marked superseded at its top). The three portals share
   `frontend_shared/` (shared.css, shared.js with the ONE `TIER_LABELS` map, staff.js, tts.js).
 - **Bangla text always uses Noto Sans Bengali (NOT mono — mono breaks Bangla shaping).**
 - **Bilingual EN/BN** via `data-en` / `data-bn` attributes + the `setLanguage()` helper.
