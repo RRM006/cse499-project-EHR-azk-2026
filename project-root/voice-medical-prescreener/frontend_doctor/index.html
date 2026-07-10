@@ -11,9 +11,31 @@
     .top-nav { background: var(--bg-white); border-bottom: 1px solid var(--border-color); padding: 10px 24px; display: flex; justify-content: space-between; align-items: center; gap: 12px; flex-wrap: wrap; }
     /* DOCTOR-7: print-friendly — the case content prints, the chrome doesn't. */
     @media print {
-      .portal-header, .top-nav, .queue-sidebar, #review-bar, .lang-toggle { display: none !important; }
+      .portal-header, .top-nav, .queue-sidebar, #review-bar, .lang-toggle, #assistant-panel { display: none !important; }
       .detail-workspace, .staff-grid { overflow: visible !important; display: block !important; }
     }
+    /* P3-3: AI drug-info assistant — slide-in side panel (informational only, rule #2) */
+    #assistant-panel {
+      position: fixed; top: 0; right: 0; height: 100%; width: 420px; max-width: 92vw;
+      background: var(--bg-white); border-left: 1px solid var(--border-color);
+      box-shadow: var(--shadow-md); display: flex; flex-direction: column; z-index: 60;
+      transform: translateX(105%); transition: transform .25s ease;
+    }
+    #assistant-panel.open { transform: translateX(0); }
+    .assistant-header { padding: 14px 18px; background: #F4FAF8; border-bottom: 1px solid var(--border-color);
+      display: flex; justify-content: space-between; align-items: center; font-weight: 700; color: var(--primary-color); }
+    .assistant-disclaimer { padding: 10px 18px; background: #FFFBEB; border-bottom: 1px solid #FEF3C7;
+      color: var(--warning-color); font-size: .78rem; font-weight: 600; }
+    .assistant-body { flex: 1; overflow-y: auto; padding: 16px 18px; display: flex; flex-direction: column; gap: 12px; }
+    .assistant-q { align-self: flex-end; background: var(--primary-color); color: #fff;
+      padding: 8px 12px; border-radius: 10px 10px 2px 10px; font-size: .88rem; max-width: 85%; }
+    .assistant-a { align-self: flex-start; background: #F4FAF8; border: 1px solid var(--border-color);
+      padding: 10px 12px; border-radius: 10px 10px 10px 2px; font-size: .88rem; max-width: 92%; line-height: 1.55; }
+    .assistant-sources { font-size: .75rem; margin-top: 8px; padding-top: 8px; border-top: 1px dashed var(--border-color); }
+    .assistant-sources a { color: var(--secondary-color); display: block; overflow: hidden;
+      text-overflow: ellipsis; white-space: nowrap; }
+    .assistant-input-row { padding: 12px 18px; border-top: 1px solid var(--border-color);
+      display: flex; gap: 8px; background: var(--bg-white); }
   </style>
 </head>
 <body>
@@ -52,8 +74,14 @@
       <div style="font-weight:600; font-size:.9rem;">🧑‍⚕️ <span data-en="My Assigned Patients" data-bn="আমার নির্ধারিত রোগীরা">My Assigned Patients</span></div>
       <!-- DOCTOR-1: the ↻ Queue button is gone — the queue already auto-refreshes
            every 15s and re-loads after every review; the button had no distinct job. -->
-      <input class="input-field" id="phone-search" placeholder="Patient Mobile Lookup (+880...)" style="width:280px; padding:8px 12px; font-size:.85rem;"
-             onkeydown="if(event.key==='Enter') searchPhone()">
+      <div style="display:flex; gap:8px; align-items:center;">
+        <input class="input-field" id="phone-search" placeholder="Patient Mobile Lookup (+880...)" style="width:280px; padding:8px 12px; font-size:.85rem;"
+               onkeydown="if(event.key==='Enter') searchPhone()">
+        <!-- P3-3: informational drug lookup only — never a prescribing decision (rule #2) -->
+        <button class="btn btn-secondary" onclick="toggleAssistant()" style="padding:8px 14px; font-size:.85rem;"
+                title="AI drug information (verify before prescribing)"
+                data-en="💊 AI Drug Info" data-bn="💊 ওষুধের তথ্য">💊 AI Drug Info</button>
+      </div>
     </div>
     <div class="staff-grid">
       <div class="queue-sidebar">
@@ -109,6 +137,24 @@
              review bar. Diagnosis is doctor-authored (rule #2). Save + .docx = DOCTOR-6 (step 19). -->
         <div id="prescription-screen" style="display:none; flex-direction:column; gap:18px;"></div>
       </div>
+    </div>
+  </div>
+
+  <!-- P3-3: AI drug-info assistant panel. Answers render via textContent only
+       (LLM output is never innerHTML); the disclaimer bar is always visible. -->
+  <div id="assistant-panel">
+    <div class="assistant-header">
+      <span>💊 <span data-en="AI Drug Information" data-bn="এআই ওষুধের তথ্য">AI Drug Information</span></span>
+      <button class="btn btn-secondary" onclick="toggleAssistant()" style="padding:4px 12px; font-size:.8rem;">✕</button>
+    </div>
+    <div class="assistant-disclaimer">⚠️ <span data-en="AI-generated information. Please verify before prescribing." data-bn="এআই-উৎপাদিত তথ্য। প্রেসক্রাইব করার আগে অনুগ্রহ করে যাচাই করুন।">AI-generated information. Please verify before prescribing.</span></div>
+    <div class="assistant-body" id="assistant-body"></div>
+    <div class="assistant-input-row">
+      <input class="input-field" id="assistant-input" style="padding:9px 12px; font-size:.88rem;"
+             placeholder="Ask about a medicine…" maxlength="500"
+             onkeydown="if(event.key==='Enter') askAssistant()">
+      <button class="btn btn-primary" id="assistant-ask-btn" onclick="askAssistant()"
+              style="padding:9px 16px; font-size:.85rem;" data-en="Ask" data-bn="জিজ্ঞাসা">Ask</button>
     </div>
   </div>
 
@@ -191,6 +237,7 @@
         row(t('Gender', 'লিঙ্গ'), 'pd-gender') +
         row(t('Weight', 'ওজন'), 'pd-weight') +
         row(t('Blood Pressure', 'রক্তচাপ'), 'pd-bp') +
+        row(t('Submitted', 'জমার সময়'), 'pd-submitted') +
         `<div id="vitals-editor" style="display:none; gap:8px; align-items:center; flex-wrap:wrap; border-top:1px dashed var(--border-color); padding-top:10px; margin-top:4px;">
            <input class="input-field" id="vitals-weight" type="number" min="1" max="499" step="0.1" style="width:130px; padding:6px 10px;" placeholder="${t('Weight (kg)', 'ওজন (কেজি)')}">
            <input class="input-field" id="vitals-bp" type="text" style="width:150px; padding:6px 10px;" placeholder="${t('BP e.g. 120/80', 'রক্তচাপ যেমন ১২০/৮০')}">
@@ -205,6 +252,11 @@
       document.getElementById('pd-gender').textContent = genderLabel(p.sex);
       document.getElementById('pd-weight').textContent = p.weight_kg != null ? `${p.weight_kg} kg` : '—';
       document.getElementById('pd-bp').textContent = p.bp || '—';
+      // P3-1: when the patient hit Confirm & Submit, rendered in Asia/Dhaka
+      // (dhakaDateTime pins offset-less UTC strings — same P2-1 helper as the queue).
+      const d = currentCase.detail || {};
+      document.getElementById('pd-submitted').textContent =
+        dhakaDateTime(d.submitted_at || d.started_at);
 
       document.getElementById('vitals-edit-btn').onclick = () => {
         document.getElementById('vitals-weight').value = p.weight_kg != null ? p.weight_kg : '';
@@ -275,6 +327,109 @@
         t('Patient Mobile Lookup (+880...)', 'রোগীর মোবাইল খুঁজুন (+৮৮০...)');
       document.getElementById('review-notes').placeholder =
         t('Notes / annotation (optional)', 'নোট / মন্তব্য (ঐচ্ছিক)');
+      document.getElementById('assistant-input').placeholder =
+        t('Ask about a medicine…', 'কোনো ওষুধ সম্পর্কে জিজ্ঞাসা করুন…');
+    }
+
+    /* ---- P3-3: AI drug-info assistant (M16) — informational only (rule #2) ---- */
+    let assistantLog = [];     // [{q, res|null, error|null, pending}] — re-rendered on toggle
+    let assistantBusy = false;
+
+    function toggleAssistant() {
+      const panel = document.getElementById('assistant-panel');
+      panel.classList.toggle('open');
+      if (panel.classList.contains('open')) {
+        renderAssistantLog();
+        document.getElementById('assistant-input').focus();
+      }
+    }
+
+    async function askAssistant() {
+      const input = document.getElementById('assistant-input');
+      const q = input.value.trim();
+      if (!q || assistantBusy) return;
+      if (!currentCase) return showError(t('Select a case first.', 'আগে একটি কেস নির্বাচন করুন।'));
+      assistantBusy = true;
+      document.getElementById('assistant-ask-btn').disabled = true;
+      input.value = '';
+      const entry = { q, res: null, error: null, pending: true };
+      assistantLog.push(entry);
+      renderAssistantLog();
+      try {
+        entry.res = await api('POST',
+          `/api/visits/${currentCase.uuid}/assistant/drug-info`, { question: q });
+      } catch (e) {
+        entry.error = e.message;
+      }
+      entry.pending = false;
+      assistantBusy = false;
+      document.getElementById('assistant-ask-btn').disabled = false;
+      renderAssistantLog();
+    }
+
+    function renderAssistantLog() {
+      const box = document.getElementById('assistant-body');
+      box.innerHTML = '';
+      if (!assistantLog.length) {
+        const hint = document.createElement('div');
+        hint.style.cssText = 'font-size:.85rem; color:var(--text-muted); text-align:center; margin:auto;';
+        hint.textContent = t(
+          'Ask about a medicine — uses, dosage ranges, interactions, side effects. Information only; the prescription is always yours.',
+          'কোনো ওষুধ সম্পর্কে জিজ্ঞাসা করুন — ব্যবহার, মাত্রা, মিথস্ক্রিয়া, পার্শ্বপ্রতিক্রিয়া। শুধুই তথ্য; প্রেসক্রিপশন সবসময় আপনার।');
+        box.appendChild(hint);
+        return;
+      }
+      assistantLog.forEach((entry) => {
+        const qDiv = document.createElement('div');
+        qDiv.className = 'assistant-q';
+        qDiv.textContent = entry.q;          // doctor text — textContent only
+        box.appendChild(qDiv);
+        const aDiv = document.createElement('div');
+        aDiv.className = 'assistant-a';
+        if (entry.pending) {
+          aDiv.textContent = t('Searching & thinking…', 'খোঁজা ও ভাবা হচ্ছে…');
+        } else if (entry.error) {
+          aDiv.style.color = 'var(--danger-color)';
+          aDiv.textContent = `⚠ ${entry.error}`;
+        } else {
+          const r = entry.res;
+          // LLM output — textContent only, never innerHTML. Bangla answer when
+          // toggled AND provided; the raw model text is shown as-is either way.
+          const text = document.createElement('div');
+          text.textContent = (currentLanguage === 'bn' && r.answer_bn)
+            ? r.answer_bn : (r.answer_en || r.answer_bn || '—');
+          aDiv.appendChild(text);
+          if (r.sources && r.sources.length) {
+            const src = document.createElement('div');
+            src.className = 'assistant-sources';
+            const head = document.createElement('div');
+            head.style.cssText = 'font-weight:700; color:var(--text-muted); margin-bottom:2px;';
+            head.textContent = t('Sources', 'উৎস');
+            src.appendChild(head);
+            r.sources.forEach((s) => {
+              const a = document.createElement('a');
+              a.href = s.url; a.target = '_blank'; a.rel = 'noopener noreferrer';
+              a.textContent = s.title || s.url;
+              src.appendChild(a);
+            });
+            aDiv.appendChild(src);
+          } else {
+            const none = document.createElement('div');
+            none.className = 'assistant-sources';
+            none.textContent = t('Web search unavailable — answered from general knowledge.',
+                                 'ওয়েব অনুসন্ধান পাওয়া যায়নি — সাধারণ জ্ঞান থেকে উত্তর।');
+            aDiv.appendChild(none);
+          }
+          // Rule #2: the per-answer disclaimer from the server, under every reply.
+          const disc = document.createElement('div');
+          disc.style.cssText = 'font-size:.74rem; font-weight:600; color:var(--warning-color); margin-top:6px;';
+          disc.textContent = '⚠️ ' + (currentLanguage === 'bn'
+            ? (r.disclaimer_bn || r.disclaimer) : r.disclaimer);
+          aDiv.appendChild(disc);
+        }
+        box.appendChild(aDiv);
+      });
+      box.scrollTop = box.scrollHeight;
     }
 
     /* DOCTOR-2: everything staff.js rendered rebuilds via the shared hook; the
@@ -284,6 +439,7 @@
       renderPatientDetails();
       renderSafety();
       updatePlaceholders();
+      renderAssistantLog();   // P3-3: answers/labels follow the toggle
       const rx = document.getElementById('prescription-screen');
       if (rxDraft && rx.style.display !== 'none') { collectDraftFromForm(); renderPrescriptionForm(); }
     }

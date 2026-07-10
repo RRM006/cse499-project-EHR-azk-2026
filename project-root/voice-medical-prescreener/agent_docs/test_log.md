@@ -72,6 +72,36 @@ transcribed by hand (the "ground truth"). Record the model + machine each time.
 
 ## Test entries (newest first)
 
+## 2026-07-10 — Session 23 — P3-1/P3-2/P3-3: suite 166 → 177, all offline; P2-3/P3-4 preview-verified
+- Setup: Windows desktop; `pytest backend/tests/` with `PYTHONIOENCODING=utf-8`; LLM + ddgs
+  boundaries faked (rule #4 — zero live API spend); migration gates on throwaway SQLite files;
+  UI checks in the browser preview with a stubbed `window.api`.
+- Metric(s): pass/fail; migration data preservation; the P3 behavioral guarantees.
+- Result: **177 passed, 0 failed, ~8 s** (was 166). New suites:
+  * `test_submitted_at.py` (3, P3-1): submit stamps `submitted_at` exactly once and returns it —
+    a second submit 409s and the stamp cannot move; the medic queue row AND the visit detail
+    carry the identical timestamp; assign→doctor-queue + review transitions never clobber it.
+  * `test_migration_0011.py` (2, house-style DB gates): fresh DB → head has nullable
+    `visits.submitted_at`; a 0010 DB with an existing visit upgrades in place (row survives,
+    `submitted_at` NULL — the frontend falls back to `started_at` for such rows). Real dev DB
+    migrated 0010→**0011** at server restart, data untouched. (Note re-confirmed: uvicorn
+    `--reload` does NOT re-run startup migrations — a real restart is needed.)
+  * `test_doctor_sees_medic_edits.py` (1, P3-2): end-to-end — medic field edit + C1 replacement +
+    risk override + POST-forward identity/vitals PATCH are ALL visible to the doctor (queue row:
+    human tier + new name/problem; detail: new vitals/identity; profile: `source=human` with the
+    C1 disclaimer surviving the edit; /risk: `model_provider=human`).
+  * `test_assistant.py` (5, P3-3/M16): happy path returns answer + sources + BOTH disclaimers and
+    logs an `ok` M16 `module_events` row; dead search degrades to a sourceless answer (prompt
+    says "search unavailable"); `_search` swallows ddgs exceptions → `[]`; a non-JSON model reply
+    is salvaged as the answer with the disclaimer still attached; dead provider chain → 502,
+    unknown visit → 404 (guard fires BEFORE any LLM call), short question → 422.
+- Notes: browser-preview verification (frontend items, no pytest surface): P2-3 medic full flow
+  (queue Dhaka time 04:30Z→10:30, verbatim speaker-label spacing fix, `.card` radius 10px);
+  P3-1 doctor "Submitted" row renders `10 Jul 2026, 20:00` for a 14:00Z instant ("১০ জুল, ২০২৬"
+  in Bangla) and a null-`submitted_at` queue row falls back to `started_at`; P3-3 panel (pending
+  state, Q/A bubbles, source links, disclaimers in bar + under every answer, EN↔BN); P3-4
+  safety-panel 10px + prescription form hex-free with Diagnosis empty. No console errors anywhere.
+
 ## 2026-07-10 — Session 22 — P2-2 patient demographics: suite 162 → 166, all offline
 - Setup: Windows desktop; `pytest backend/tests/` with `PYTHONIOENCODING=utf-8`; LLM boundary
   faked via the standard `_attempt` monkeypatch (rule #4 — zero live API spend).

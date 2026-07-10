@@ -28,6 +28,7 @@ class VisitOut(BaseModel):
     status: str
     language: str
     started_at: datetime
+    submitted_at: datetime | None = None
     completed_at: datetime | None
 
 

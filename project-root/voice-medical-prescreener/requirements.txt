@@ -10,6 +10,8 @@ SQLAlchemy==2.0.51        # SQLite persistence (foundation for future EHR); 2.0.
 alembic==1.14.0           # versioned DB schema migrations (pure Python; cross-platform)
 openai==1.59.6            # OpenAI-compatible client for Gemini correction
 python-docx==1.1.2        # generate .docx exports of completed sessions (pure Python, cross-platform)
+ddgs==9.14.4              # P3-3 free no-key DuckDuckGo web search for the M16 drug-info assistant
+                          # (dep 'primp' ships binary wheels for Windows x64 + manylinux — both dev boxes OK)
 
 # --- dev / test ---
 pytest==8.3.4             # raw-immutability guard + future tests

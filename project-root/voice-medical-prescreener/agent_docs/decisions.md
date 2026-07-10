@@ -738,3 +738,28 @@
   rebuild to copy the screenshots 1:1 (ADR-0042 already rejected); recoloring the semantic risk
   badges (risk colors must stay conventional red/amber/green).
 - Status: Accepted
+
+## ADR-0044 — 2026-07-10 — M16 doctor drug-info assistant: visit-scoped, Flash bucket, server-attached disclaimer, ddgs-only
+- Decision: P3-3's chatbot is module **M16** (`services/assistant.py` + `routes_assistant.py` +
+  `schemas/assistant.py`). Design points: (a) endpoint is **visit-scoped**
+  (`POST /api/visits/{uuid}/assistant/drug-info`) so every call logs a `module_events` row against
+  the case the doctor is reviewing (`visit_id` is NOT NULL there, and the audit linkage is wanted);
+  (b) M16 is assigned to the **Gemini Flash bucket** (quality/safety task per ADR-0026, with the
+  ADR-0041 fallback chain); (c) the mandatory disclaimer "AI-generated information. Please verify
+  before prescribing." (+ Bangla) is attached **server-side on every response** and the fields are
+  REQUIRED in the Pydantic response contract — never left to the model (rule #2); (d) web search =
+  `ddgs==9.14.4` ONLY (DuckDuckGo, free, no key; its `primp` dep ships Windows x64 + manylinux
+  wheels) — no separate httpx dep; (e) search is **best-effort**: failure degrades to a
+  sourceless general-knowledge answer (the UI says so), a non-JSON model reply is salvaged as the
+  answer, only a dead provider chain is an error (502); (f) the search request carries ONLY the
+  doctor's typed question, never patient data (rule #4), and the UI renders all model output via
+  `textContent` (never innerHTML).
+- Why: visit-scoping matches the doctor's actual workflow (asking from an open case) and reuses
+  the existing observability/audit spine with zero schema change; Flash fits a correctness-first
+  task; the server-attached disclaimer makes rule #2 structural instead of prompt-dependent;
+  fail-open search keeps the assistant useful on a flaky connection without spending extra quota.
+- Rejected: a global (visit-less) endpoint (needs a nullable `module_events.visit_id` migration
+  and loses case linkage); Groq bucket (speed matters less than quality here; Groq stays the
+  live-loop + fallback lane); adding `httpx` + hand-rolled search scraping (ddgs already covers
+  it); trusting the LLM to include the disclaimer (violates rule #2 by construction).
+- Status: Accepted

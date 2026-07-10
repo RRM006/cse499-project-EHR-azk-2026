@@ -50,7 +50,9 @@ function renderQueue(items) {
     div.className = 'queue-item' + (currentCase && currentCase.uuid === item.visit_uuid ? ' active' : '');
     // P2-1: always Bangladesh time (shared.js dhakaTime pins offset-less UTC
     // strings to UTC first — the old bare new Date() read them as local time).
-    const when = dhakaTime(item.started_at);
+    // P3-1: a queue row's time is the patient's SUBMISSION moment; started_at
+    // only remains as the fallback for pre-0011 rows that carry no submitted_at.
+    const when = dhakaTime(item.submitted_at || item.started_at);
     div.innerHTML =
       `<div class="queue-item-meta"><span>${when}</span>${tierBadge(item.tier)}</div>` +
       `<div class="queue-item-name"></div><div class="queue-item-problem"></div>`;

@@ -16,6 +16,58 @@
 
 ---
 
+## Session 23 — 2026-07-10 — 2.0 build: P2-3 + P3-1..P3-4 (P2 AND P3 CLOSED — Alembic 0011, M16 drug-info assistant); 177 tests
+- Did: five tracker items, one per "go":
+  - **P2-3 (closes P2):** the medic portal needed NO retint — `frontend_medic/index.html` is fully
+    token-based (its one hex `#F4FAF8` is an approved teal tint) and `staff.js` has zero hexes.
+    Two real polish fixes, both in `shared.css`: `.card` radius `12px` → `var(--radius)` (10px, the
+    ADR-0043 lock — all three portals inherit) and `.verbatim-speaker` made `display:block` + 4px
+    gap ("ASSISTANT ASKED" no longer runs into the Bangla question text). Full medic flow
+    preview-verified with a stubbed `api` (login → queue → case → Submit & Forward → post-referral
+    → EN↔BN), computed styles + screenshots, no console errors.
+  - **P3-1 (Alembic 0011):** new nullable `Visit.submitted_at` — stamped in
+    `repository_visits.set_visit_status()` on `in_progress → awaiting_review` (mirrors the
+    `completed_at` pattern, so `submit_visit` needed no change and the stamp stays synchronous —
+    unaffected by the P1-5 background job). Exposed via `VisitOut` (detail + submit response
+    inherit) and `DashboardItemOut`/`_to_item`. Frontend: queue rows render
+    `dhakaTime(submitted_at || started_at)` (fallback covers pre-0011 rows); the doctor
+    patient-details card gains a "Submitted / জমার সময়" row via `dhakaDateTime()`. Migration
+    0011 applied to the dev DB (head confirmed; data untouched). New `test_submitted_at.py` (3:
+    stamped once + a 2nd submit can't move it · queue+detail expose it · assign/review never
+    clobber) + `test_migration_0011.py` (2 DB gates, house style).
+  - **P3-2 (verification, NO product-code change):** traced that every doctor-side read is fresh
+    (`GET /visits/{uuid}` embeds the live Patient row; /profile + /risk re-query per open) →
+    doctor always sees medic edits, including post-referral identity/weight edits. Locked it in
+    with `test_doctor_sees_medic_edits.py` (1 end-to-end: field edit + C1 replacement + risk
+    override + post-forward vitals/identity PATCH → all visible in the doctor's queue row, visit
+    detail, profile [source=human, disclaimer survives], /risk [human tier]). Render side
+    preview-verified (মানব-সম্পাদিত badges etc.).
+  - **P3-3 (M16 drug-info assistant, ADR-0044):** new `services/assistant.py` (ddgs/DuckDuckGo
+    search, top-5 snippets capped at 400 chars → ONE `call_module("M16")` on the Flash bucket),
+    `routes_assistant.py` (`POST /api/visits/{uuid}/assistant/drug-info` — visit-scoped because
+    `module_events.visit_id` is NOT NULL + audit linkage), `schemas/assistant.py` (disclaimer
+    fields REQUIRED in the contract). Disclaimer "AI-generated information. Please verify before
+    prescribing." (+Bangla) attached SERVER-side on every answer — never left to the model (rule
+    #2); search gets only the doctor's typed question (rule #4). Search fail → sourceless answer;
+    non-JSON reply → salvaged; chain dead → 502. Doctor UI: "💊 AI Drug Info" top-nav button +
+    teal slide-in panel (always-visible disclaimer bar, Q/A bubbles via textContent ONLY, source
+    links, per-answer disclaimer, EN↔BN, hidden in print CSS). Dep: `ddgs==9.14.4` (its `primp`
+    ships Windows x64 + manylinux wheels; no separate httpx needed). New `test_assistant.py` (5).
+  - **P3-4 (closes P3):** doctor portal was already token-clean (semantic amber/red kept; the
+    JS-rendered prescription form has ZERO hex hardcodes — verified in the live DOM). One fix:
+    `.safety-panel` radius `12px` → `var(--radius)` in `shared.css` (deferred from P2-3) — the
+    LAST radius hardcode; every panel now derives from the ADR-0043 token. Preview-verified incl.
+    prescription form (Diagnosis still empty on open — rule #2).
+- Decided: **ADR-0044** (M16 assistant design: visit-scoped endpoint, Flash bucket, server-attached
+  disclaimer, ddgs-only dep, best-effort search). Everything else implements already-locked ADRs.
+- Broke / problem: none. Two preview quirks (not app bugs): the stub must match the prescription
+  context path WITH its `?doctor_id=` query; `preview_eval` can mis-read a just-toggled class.
+- Deferred: **P4-1 (real OTP) — the ONLY item left**, and it needs the human's CHANNEL decision
+  before the sender is built (recommend: dev/log sender + `000000` bypass behind a pluggable seam,
+  optionally ONE free reference channel: email-OTP or Telegram-for-opted-in).
+- Next: **P4-1** — get the human's OTP channel choice, then build: `OtpCode` table (Alembic 0012),
+  expiring code, `000000` universal bypass, pluggable sender seam.
+
 ## Session 22 — 2026-07-10 — 2.0 build: P1-6 (kiosk polish, P1 CLOSED) + P2-1 (Dhaka time fixed) + P2-2 (patient demographics); 166 tests
 - Did: three tracker items, one per "go":
   - **P1-6 (frontend, closes P1):** retinted the 6 leftover clinical-blue hardcodes in

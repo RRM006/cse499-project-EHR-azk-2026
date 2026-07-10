@@ -130,8 +130,11 @@ def add_utterance(
 
 
 def set_visit_status(db: Session, *, visit: Visit, status: str) -> Visit:
-    """Transition a visit's workflow status; stamps completed_at on reviewed/closed."""
+    """Transition a visit's workflow status; stamps submitted_at on awaiting_review
+    (P3-1 — the patient's "Confirm & Submit" moment) and completed_at on reviewed/closed."""
     visit.status = status
+    if status == "awaiting_review" and visit.submitted_at is None:
+        visit.submitted_at = datetime.now(timezone.utc)
     if status in ("reviewed", "closed") and visit.completed_at is None:
         visit.completed_at = datetime.now(timezone.utc)
     db.commit()

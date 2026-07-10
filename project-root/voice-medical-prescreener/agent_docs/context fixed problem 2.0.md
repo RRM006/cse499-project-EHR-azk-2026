@@ -13,9 +13,9 @@
 ## Progress at a glance
 - **Cross-cutting (STRUCT):** ✅ STRUCT-1 · ✅ STRUCT-2 · ✅ STRUCT-3
 - **P1 Patient Portal (highest):** ✅ P1-1 · ✅ P1-2 · ✅ P1-3 · ✅ P1-4 · ✅ P1-5 · ✅ P1-6 — **P1 CLOSED**
-- **P2 Medic Portal:** ✅ P2-1 · ✅ P2-2 · 👉⬜ P2-3
-- **P3 Doctor Portal:** ⬜ P3-1 · ⬜ P3-2 · ⬜ P3-3 · ⬜ P3-4
-- **P4 OTP (last):** ⬜ P4-1
+- **P2 Medic Portal:** ✅ P2-1 · ✅ P2-2 · ✅ P2-3 — **P2 CLOSED**
+- **P3 Doctor Portal:** ✅ P3-1 · ✅ P3-2 · ✅ P3-3 · ✅ P3-4 — **P3 CLOSED**
+- **P4 OTP (last):** 👉⬜ P4-1 — ⚠ blocked on the HUMAN's sender-channel choice (ask first)
 - **Out of scope (future research):** the "Faculty Requirement – Future Features" below
   (quantized Moshi summary model; quantized on-device STT/TTS) — NOT part of this cycle.
 
@@ -97,17 +97,46 @@
   `test_patient_demographics.py` (4 tests: autofill · never-overwrite · malformed-ignored ·
   staff-PATCH-final + validation). **166 tests pass.** UI preview-verified incl. Bangla labels.
   *(→ "Patient Details".)*
-- [ ] **P2-3 — Medic Portal UI polish.** *(→ "UI/UX".)*
+- [x] **P2-3 — Medic Portal UI polish.** ✅ done S23 — the portal was already token-clean (its one
+  hex is an approved teal tint; `staff.js` hex-free). Real fixes in `shared.css`: `.card` radius
+  `12px` → `var(--radius)` (the ADR-0043 10px lock — all portals inherit) + `.verbatim-speaker`
+  `display:block; margin-bottom:4px` (speaker labels no longer run into the raw text). Full medic
+  flow preview-verified with a stubbed `api` (login → queue → case → forward → post-referral →
+  EN↔BN); computed styles + screenshots; no console errors. **P2 CLOSED.** *(→ "UI/UX".)*
 
 ### P3 — Doctor Portal `/doctor/`
-- [ ] **P3-1 — Correct patient submission Dhaka date/time.** Add `Visit.submitted_at` (**Alembic 0011**),
-  set in submit, expose in dashboard/detail, render with `dhakaDateTime()`. *(→ "Patient Time".)*
-- [ ] **P3-2 — Show latest patient details incl. medic edits** (mostly verification). *(→ "Patient Details".)*
-- [ ] **P3-3 — AI Medical Assistant (drug info): web search + LLM, side panel.** New `routes_assistant.py`
-  → free web search (add `ddgs`/DuckDuckGo + `httpx`) → `call_module()` (new code e.g. M16) → structured
-  answer + MANDATORY disclaimer "AI-generated information. Please verify before prescribing." (rule #2).
+- [x] **P3-1 — Correct patient submission Dhaka date/time.** ✅ done S23 — nullable
+  `Visit.submitted_at` (**Alembic 0011**, applied; head 0010→0011), stamped in
+  `repository_visits.set_visit_status()` on `in_progress → awaiting_review` (mirrors the
+  `completed_at` pattern; synchronous with submit, unaffected by the P1-5 background job).
+  Exposed in `VisitOut` (detail + submit response) and `DashboardItemOut`; queues render
+  `dhakaTime(submitted_at || started_at)` (fallback for pre-0011 rows); doctor patient-details
+  card gains a "Submitted / জমার সময়" row via `dhakaDateTime()`. New `test_submitted_at.py` (3) +
+  `test_migration_0011.py` (2). **171 tests pass.** Preview: 14:00Z renders 20:00 / "১০ জুল, ২০২৬".
+  *(→ "Patient Time".)*
+- [x] **P3-2 — Show latest patient details incl. medic edits.** ✅ done S23 — verification
+  confirmed NO product change needed: every doctor-side read is fresh (`GET /visits/{uuid}` embeds
+  the live Patient row; /profile + /risk re-query on each case open), so medic edits — including
+  POST-forward identity/weight edits from the post-referral card — always show. Locked in with
+  `test_doctor_sees_medic_edits.py` (1 end-to-end: field edit + C1 replacement + risk override +
+  post-assign vitals/identity PATCH all visible; `source=human`; C1 disclaimer survives).
+  **172 tests pass.** Render side preview-verified (মানব-সম্পাদিত badges). *(→ "Patient Details".)*
+- [x] **P3-3 — AI Medical Assistant (drug info): web search + LLM, side panel.** ✅ done S23
+  (**ADR-0044**) — new module **M16** on the Flash bucket: `services/assistant.py` (ddgs search,
+  top-5 snippets capped 400 chars → one `call_module`), `routes_assistant.py`
+  (`POST /api/visits/{uuid}/assistant/drug-info` — visit-scoped: module_events audit linkage),
+  `schemas/assistant.py` (disclaimer fields REQUIRED). Disclaimer attached SERVER-side on every
+  answer (rule #2); search gets only the doctor's typed question (rule #4); search fail →
+  sourceless answer; non-JSON reply salvaged; dead chain → 502. Doctor UI: 💊 top-nav button +
+  teal slide-in panel (disclaimer bar always visible, textContent-only rendering, source links,
+  EN↔BN, hidden in print). Dep: `ddgs==9.14.4` only (its `primp` has Win+Linux wheels; no
+  separate httpx needed). New `test_assistant.py` (5). **177 tests pass.**
   *(→ "AI Medical Assistant".)*
-- [ ] **P3-4 — Doctor Portal UI polish.** *(→ "UI/UX".)*
+- [x] **P3-4 — Doctor Portal UI polish.** ✅ done S23 — already token-clean (semantic amber/red
+  kept; the JS-rendered prescription form has ZERO hex hardcodes — verified in the live DOM). One
+  fix: `.safety-panel` radius `12px` → `var(--radius)` in `shared.css` (deferred from P2-3) — the
+  LAST radius hardcode. Preview-verified incl. prescription form (Diagnosis empty — rule #2).
+  **P3 CLOSED.** *(→ "UI/UX".)*
 
 ### P4 — OTP verification (LAST)
 - [ ] **P4-1 — Real OTP + `000000` universal bypass.** Persisted, expiring code (new `OtpCode` table +

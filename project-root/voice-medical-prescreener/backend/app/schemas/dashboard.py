@@ -15,6 +15,9 @@ class DashboardItemOut(BaseModel):
     visit_uuid: str
     visit_status: str
     started_at: datetime
+    submitted_at: datetime | None = Field(
+        None, description="When the patient hit Confirm & Submit; null pre-0011/unsubmitted."
+    )
     patient_id: int | None
     patient_name: str | None
     patient_phone: str | None

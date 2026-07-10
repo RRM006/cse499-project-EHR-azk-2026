@@ -72,7 +72,7 @@ body {
 
 .card {
   background: var(--bg-white); border: 1px solid var(--border-color);
-  border-radius: 12px; padding: 24px; box-shadow: var(--shadow-sm);
+  border-radius: var(--radius); padding: 24px; box-shadow: var(--shadow-sm);
 }
 
 /* --- risk badges (schema codes; labels via TIER_LABELS) --- */
@@ -103,7 +103,7 @@ body {
 .verbatim-badge { font-size: .6rem; font-weight: 700; text-transform: uppercase; padding: 3px 8px; border-radius: 4px; background: #ECF5F3; color: var(--text-muted); border: 1px solid var(--border-color); margin-left: 8px; }
 .verbatim-body { padding: 16px 18px; display: flex; flex-direction: column; gap: 12px; }
 .verbatim-panel.collapsed .verbatim-body { display: none; }
-.verbatim-speaker { font-size: .68rem; font-weight: 700; text-transform: uppercase; }
+.verbatim-speaker { display: block; margin-bottom: 4px; font-size: .68rem; font-weight: 700; text-transform: uppercase; }
 .verbatim-turn.ask .verbatim-speaker { color: var(--secondary-color); }
 .verbatim-turn.said .verbatim-speaker { color: var(--primary-color); }
 .verbatim-turn.said .verbatim-text { background: #F4FAF8; border-radius: 6px; padding: 8px 12px; border-left: 2px solid var(--border-color); display: block; }
@@ -121,7 +121,7 @@ body {
 .source-human { background: #F0FDF4; color: var(--accent-color); border: 1px solid #DCFCE7; }
 
 /* --- safety panel (doctor) --- */
-.safety-panel { background: #FFF5F5; border: 1.5px solid #FEB2B2; border-radius: 12px; padding: 18px; display: flex; gap: 18px; }
+.safety-panel { background: #FFF5F5; border: 1.5px solid #FEB2B2; border-radius: var(--radius); padding: 18px; display: flex; gap: 18px; }
 .safety-panel.tier-low, .safety-panel.tier-medium { background: #FFFDF5; border-color: #FDE68A; }
 .safety-tier { font-size: 1.2rem; font-weight: 700; }
 .red-flag-item { font-size: .9rem; color: #7F1D1D; font-weight: 600; }

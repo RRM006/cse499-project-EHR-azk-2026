@@ -118,6 +118,9 @@ class Visit(Base):
         String(8), nullable=False, default="bn-BD", server_default="bn-BD"
     )
     started_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=_utcnow)
+    # P3-1: when the patient hit "Confirm & Submit" (in_progress -> awaiting_review).
+    # Nullable — visits from before migration 0011 (and unsubmitted ones) have none.
+    submitted_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
     completed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
 
 

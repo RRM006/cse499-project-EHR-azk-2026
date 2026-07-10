@@ -29,6 +29,7 @@ MODULE_PROVIDERS: dict[str, str] = {
     "M10C": GEMINI_FLASH,  # C1 suggested condition — separate call, never mixed into M10
     "M11": GEMINI_FLASH,
     "M12": GEMINI_FLASH,
+    "M16": GEMINI_FLASH,  # P3-3 doctor drug-info assistant — quality/safety task
 }
 FALLBACK_PROVIDER = OPENROUTER
 

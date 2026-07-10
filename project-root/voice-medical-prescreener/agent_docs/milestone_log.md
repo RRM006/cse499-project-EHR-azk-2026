@@ -6,8 +6,9 @@
 
 **Status keys:** ⬜ Not started · 🟨 In progress · 🟦 Blocked · ✅ Done · ⛔ Retired
 
-**Last updated:** 2026-07-10 (Session 22 — 2.0 build: P1 CLOSED + P2-1 Dhaka time + P2-2 patient
-demographics; **166 tests**)
+**Last updated:** 2026-07-10 (Session 23 — 2.0 build: P2 AND P3 CLOSED (Alembic 0011, M16
+drug-info assistant ADR-0044); only P4-1 OTP left, blocked on the human's channel choice;
+**177 tests**)
 **Current phase:** ✅ **Build complete.** The 20-step plan (spec: `context_fixed_problem.md`) is
 fully implemented — **every numbered spec item (STRUCT/KIOSK/MEDIC/DOCTOR) is ✅** and 150 tests
 pass. What remains for the project is NOT build work: the **human live real-mic run**
@@ -37,6 +38,20 @@ system-setup gap (`speech-dispatcher`+`espeak-ng` not installed → empty Linux 
 `tts.js` degrades correctly per ADR-0028). Added guide **PART 1B** (Arch Bangla-voice install);
 no app code. Pending: human runs `sudo pacman -S speech-dispatcher espeak-ng`, then verify 🔊
 speaks (TC-V2 on Arch).
+**Session 23 (no module-status change):** five 2.0 cycle items — **P2 and P3 are both CLOSED**.
+**P2-3** medic polish: portal already token-clean; real fixes in `shared.css` (`.card` radius →
+`var(--radius)`, verbatim speaker labels on their own line). **P3-1**: `Visit.submitted_at` via
+**Alembic 0011** (applied; head bumped 0010→0011), stamped on `awaiting_review` in
+`set_visit_status()`; staff queues show the SUBMISSION moment in Dhaka time (started_at fallback
+for pre-0011 rows); doctor details card gains a Submitted row. **P3-2**: verified the doctor
+always reads the latest medic edits (all doctor-side reads are fresh) and locked it with an
+end-to-end test. **P3-3 (ADR-0044)**: new module **M16** — doctor drug-info assistant:
+ddgs/DuckDuckGo search → one Flash-bucket `call_module()`, visit-scoped endpoint, disclaimer
+"AI-generated information. Please verify before prescribing." attached SERVER-side on every
+answer (rule #2), teal slide-in panel with textContent-only rendering; dep `ddgs==9.14.4`.
+**P3-4**: last radius hardcode (`.safety-panel`) → token; prescription form verified hex-free,
+Diagnosis empty. +11 tests → **177 pass** (was 166). Module table unchanged (still gates on the
+human live run). Remaining cycle work: **P4-1 only** (needs the human's OTP-channel decision).
 **Session 22 (no module-status change):** three 2.0 cycle items. **P1-6** retinted the last
 clinical-blue leftovers in the kiosk to Teal Medical — **Priority 1 (Patient Portal) is now fully
 CLOSED**. **P2-1** found and fixed the real cause of "random" queue times: SQLite serializes

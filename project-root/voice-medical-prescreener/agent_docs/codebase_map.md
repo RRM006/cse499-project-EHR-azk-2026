@@ -4,21 +4,21 @@
 > re-exploring the whole project each session. Update it whenever you add or move
 > a folder/file. Keep each note to one line.
 
-**Last updated:** 2026-07-10 (Session 22 — new test files so far this cycle:
-`backend/tests/test_followup_min_questions.py` (S20, P1-3),
-`backend/tests/test_submit_background.py` (S21, P1-5), and
-`backend/tests/test_patient_demographics.py` (S22, P2-2) → suite **166**. Otherwise edits to
-existing files only: S19 = `shared.css` (Teal Medical, ADR-0043), `shared.js` (`logout()`,
-placeholder i18n), `kiosk.js`/`kiosk.html`, medic/doctor headers; S20 = `config.py`
-(+`followup_min_questions`), `routes_followup.py` (floor gate), `services/followup.py` (deepening
-M7 prompt), kiosk missing-field highlight; S21 = `routes_dashboard.py`
-(`_post_submit_assessment` BackgroundTasks job); S22 = `kiosk.html` (P1-6 teal retint),
-`shared.js`/`staff.js` (P2-1 `parseUtc`/`dhakaTime`/`dhakaDateTime`), `services/intake.py`
-(+`apply_demographics`, new `patient_demographics` extraction key),
-`services/profile_update.py` (calls the writer), `schemas/dashboard.py` +
-`routes_dashboard.py` (extended vitals PATCH), `frontend_medic/index.html` (Gender row +
-identity editor). Still coming: `Visit.submitted_at`+Alembic 0011, an OTP table,
-`routes_assistant.py` — update this map when those land.)
+**Last updated:** 2026-07-10 (Session 23 — **new backend files (P3-3, ADR-0044):**
+`backend/app/services/assistant.py` (M16 ddgs search + LLM answer + server disclaimer),
+`backend/app/api/routes_assistant.py` (`POST /api/visits/{uuid}/assistant/drug-info`),
+`backend/app/schemas/assistant.py`, and migration
+`backend/migrations/versions/0011_visit_submitted_at.py` (P3-1 — **Alembic head is now 0011**).
+New test files: `test_submitted_at.py` (3) · `test_migration_0011.py` (2) ·
+`test_doctor_sees_medic_edits.py` (1) · `test_assistant.py` (5) → suite **177**. New dep:
+`ddgs==9.14.4` in requirements.txt (Arch laptop: re-run `pip install -r requirements.txt`).
+Edits: `models.py`+`schemas/visit.py`+`schemas/dashboard.py`+`routes_dashboard.py` (submitted_at),
+`repository_visits.py` (stamp on awaiting_review), `llm_providers.py` (+M16→Flash), `main.py`
+(assistant router), `staff.js` (queue time = submitted_at||started_at), `frontend_doctor/
+index.html` (Submitted row + the 💊 assistant slide-in panel), `shared.css` (P2-3/P3-4: the last
+two hardcoded 12px radii → `var(--radius)`; verbatim speaker labels display:block).
+Cycle history: S19–S22 notes moved to changelog.md. Still coming: an `OtpCode` table +
+Alembic 0012 (P4-1) — update this map when it lands.)
 
 ---
 
@@ -34,6 +34,7 @@ voice-medical-prescreener/
 │     # CLAUDE.md frontend section points at the clinical-blue system (ADR-0029, done S8b);
 │     # DESIGN-mintlify.md carries a SUPERSEDED banner — design source of truth is frontend_shared/shared.css.
 ├── requirements.txt              # CORE deps (FastAPI, uvicorn, pydantic-settings, SQLAlchemy, alembic, openai, python-docx, pytest)
+│                                  #   + ddgs (S23, M16 web search — ADR-0044)
 ├── .gitignore                    # ignores .env, .venv/, *.db, *.db.*.bak, *.bak, data/, audio/, models/
 ├── .claude/launch.json           # preview dev-server configs (uvicorn; PORT 8001): Windows + backend-linux
 ├── agent_docs/                   # the project's shared brain (living docs) — now incl. architecture.md,
@@ -48,13 +49,15 @@ voice-medical-prescreener/
 │   │                              #   0003_aggregate_root (clinics/users/patients/visits + deltas + backfill + seeds) ·
 │   │                              #   0004_intake_profile (case_profiles, module_events) · 0005_followup_questions ·
 │   │                              #   0006_risk_xai · 0007_reports · 0008_doctor_reviews_feedback · 0009_audit_log ·
-│   │                              #   0010_prescriptions_letterhead (visit-grain docs, vitals, letterhead, prescriptions — ADR-0032)
-│   ├── prescreener.db            # SQLite (gitignored); 16 tables + alembic_version (head 0010)
+│   │                              #   0010_prescriptions_letterhead (visit-grain docs, vitals, letterhead, prescriptions — ADR-0032) ·
+│   │                              #   0011_visit_submitted_at (P3-1, S23)
+│   ├── prescreener.db            # SQLite (gitignored); 16 tables + alembic_version (head 0011)
 │   ├── prescreener.db.pre-000{3,4,5,6,7}.bak · .pre-0010.bak  # per-migration backups (gitignored)
 │   ├── data/documents/           # generated .docx (gitignored)
 │   ├── app/
 │   │   ├── main.py               # lifespan init_db + ENTRY_POINTS startup log; registers transcripts, documents,
-│   │   │                          #   visits, followup, risk, dashboard, report routers; mounts /shared /medic
+│   │   │                          #   visits, followup, risk, dashboard, report, prescription, assistant (S23)
+│   │   │                          #   routers; mounts /shared /medic
 │   │   │                          #   /doctor /legacy + landing/kiosk at / (ADR-0031)
 │   │   ├── core/
 │   │   │   ├── config.py         # + dev_otp, followup_max_questions, completeness_threshold, per-bucket models
@@ -72,10 +75,13 @@ voice-medical-prescreener/
 │   │   │   │                      #   dashboard queues · field-edit PATCH · assign; S12: PATCH profile/condition
 │   │   │   │                      #   (C1 staff edit, ADR-0036) + PATCH patients/{id}/vitals (ADR-0037)
 │   │   │   ├── routes_report.py  # NEW: report (M12) · review (M14) · feedback (M15)
-│   │   │   └── routes_prescription.py # S13: GET .../prescription/context (letterhead prefill, DOCTOR-4/5, ADR-0038) +
-│   │   │                          #   POST .../prescription (DOCTOR-6 save row + render .docx, ADR-0039)
-│   │   ├── schemas/              # transcript, document (existing) + visit, patient, profile, followup, risk, dashboard,
-│   │   │                          #   prescription (S13: letterhead context + create/created — no diagnosis field, rule #2)
+│   │   │   ├── routes_prescription.py # S13: GET .../prescription/context (letterhead prefill, DOCTOR-4/5, ADR-0038) +
+│   │   │   │                      #   POST .../prescription (DOCTOR-6 save row + render .docx, ADR-0039)
+│   │   │   └── routes_assistant.py # S23 (P3-3, ADR-0044): POST /api/visits/{uuid}/assistant/drug-info — M16,
+│   │   │                          #   visit-scoped, 404 guard before any LLM call, LLMCallError → 502
+│   │   ├── schemas/              # transcript, document (existing) + visit (S23: +submitted_at), patient, profile,
+│   │   │                          #   followup, risk, dashboard (S23: +submitted_at), prescription (S13: no diagnosis
+│   │   │                          #   field, rule #2), assistant (S23: disclaimer fields REQUIRED in the contract)
 │   │   ├── services/
 │   │   │   ├── correction/       # (existing) reused as M2
 │   │   │   ├── documents/        # (existing) DocxWriter + storage; S9 + visit_docx.py (visit-grain
@@ -95,6 +101,9 @@ voice-medical-prescreener/
 │   │   │   ├── suggestion.py     # S12: M10C — C1 "Possible Condition (AI Suggestion – Not a Diagnosis)"
 │   │   │   │                      #   (ADR-0036: separate call from M10; disclaimer CONSTANTS embedded in the
 │   │   │   │                      #   stored entities["suggested_condition"]; best-effort, never blocks submit)
+│   │   │   ├── assistant.py      # S23 (P3-3, ADR-0044): M16 — ddgs/DuckDuckGo search (top-5, capped snippets,
+│   │   │   │                      #   best-effort → []) + one Flash-bucket call_module; disclaimer attached
+│   │   │   │                      #   SERVER-side always (rule #2); search gets only the doctor's question (rule #4)
 │   │   │   ├── red_flags.py      # NEW: RED_FLAG_RULES (5 categories, bn/banglish/en) — LOCAL, no API
 │   │   │   ├── report.py         # NEW: M12 local report assembly (Red Flags + disclaimer); S12: sections gain
 │   │   │   │                      #   patient vitals + suggested_condition (ADR-0037)
@@ -106,6 +115,7 @@ voice-medical-prescreener/
 │   │       │                      #   Report/DoctorReview/Feedback/AuditLog + Prescription (0010, ADR-0032)
 │   │       ├── repository.py     # (existing) utterance/document session-grain writers (NO raw mutator)
 │   │       ├── repository_visits.py # NEW: normalize_phone, get/create patient+visit, add_utterance, set_visit_status
+│   │       │                      #   (S23: stamps submitted_at on awaiting_review — P3-1)
 │   │       └── seed.py           # S13: seed_demo_letterhead() — idempotent, fills NULL letterhead columns at startup
 │   └── tests/                    # 6 existing suites + test_migration_0003 · test_routes_visits · test_intake ·
 │                                  #   test_followup_loop · test_risk · test_staff_routes · test_report_review ·
@@ -120,7 +130,11 @@ voice-medical-prescreener/
 │                                  #   test_prescription_context (DOCTOR-4/5 letterhead prefill + seed, S13) ·
 │                                  #   test_prescription_docx (DOCTOR-6 save row + .docx + Diagnosis-never-AI, S13) ·
 │                                  #   conftest.py (S17: autouse LLM-cooldown reset) ·
-│                                  #   test_llm_client (S17: per-attempt logging + cooldown switching, ADR-0041)  (156 total)
+│                                  #   test_llm_client (S17: per-attempt logging + cooldown switching, ADR-0041) ·
+│                                  #   test_followup_min_questions (S20) · test_submit_background (S21) ·
+│                                  #   test_patient_demographics (S22) · test_submitted_at (S23, P3-1) ·
+│                                  #   test_migration_0011 (S23) · test_doctor_sees_medic_edits (S23, P3-2) ·
+│                                  #   test_assistant (S23, M16)  (177 total)
 ├── frontend/                     # patient side (served at /)
 │   ├── index.html                # NEW (S9): landing page linking the 4 entry points (ADR-0031)
 │   ├── kiosk.html · kiosk.js     # patient kiosk (at /kiosk.html): phone→OTP (auto-advance/Backspace/paste, S10
@@ -131,7 +145,8 @@ voice-medical-prescreener/
 ├── frontend_legacy/              # OLD Module-1 transcript app, isolated (served at /legacy/ — ADR-0031)
 │   ├── index.html · app.js · styles.css   # unchanged behavior; asset refs made relative
 ├── frontend_shared/              # NEW: shared portal assets (mounted at /shared)
-│   ├── shared.css                # clinical-blue design system (ADR-0029) + Noto Sans Bengali
+│   ├── shared.css                # "Teal Medical" design tokens (ADR-0043; structure per ADR-0029) + Noto Sans
+│   │                              #   Bengali; S23: last 12px radii → var(--radius), verbatim speaker display:block
 │   ├── shared.js                 # TIER_LABELS (only place codes→labels), TIER_BANDS/tierBand (C2, display-only),
 │   │                              #   fieldValue() (bilingual value_bn/value_en + {value} legacy), EN/BN helper, api()/showError()
 │   ├── staff.js                  # queue render, phone lookup, verbatim panel, 10 editable field cards; S11:
@@ -147,14 +162,17 @@ voice-medical-prescreener/
 │                                  #   summary_report .docx download (MEDIC-6/7)
 └── frontend_doctor/index.html    # NEW doctor portal (at /doctor/): login→queue→risk/red-flag/XAI panel→Override/Accept;
                                    #   S12: fully bilingual (renderSafety() from state), ↻ Queue removed (DOCTOR-1/2),
-                                   #   print CSS + responsive nav (DOCTOR-7 base)
+                                   #   print CSS + responsive nav (DOCTOR-7 base); S13: patient-details card +
+                                   #   prescription form/.docx (DOCTOR-3..6); S23: "Submitted" Dhaka-time row (P3-1) +
+                                   #   💊 M16 drug-info slide-in panel (P3-3 — textContent-only, disclaimer bar,
+                                   #   hidden in print)
 ```
 
 REMOVED in Session 4 (browser-only): `services/stt/**`, `api/routes_stt.py`, the per-provider
 requirements files, the STT config/.env block. (Still gone.)
 
 Run from the project root. App: `python -m uvicorn backend.app.main:app --reload --port 8001`
-(use the venv's Python). Tests: `pytest backend/tests/` (**156 passing**). Schema is Alembic-managed
+(use the venv's Python). Tests: `pytest backend/tests/` (**177 passing**). Schema is Alembic-managed
 and migrates at startup — never delete the DB. Entry points: `/` (landing), `/kiosk.html`,
 `/medic/`, `/doctor/`, `/legacy/`.
 

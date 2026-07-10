@@ -63,6 +63,7 @@ def _to_item(db: Session, visit: Visit) -> DashboardItemOut:
         visit_uuid=visit.uuid,
         visit_status=visit.status,
         started_at=visit.started_at,
+        submitted_at=visit.submitted_at,
         patient_id=patient.id if patient else None,
         patient_name=patient.display_name if patient else None,
         patient_phone=patient.external_ref if patient else None,
