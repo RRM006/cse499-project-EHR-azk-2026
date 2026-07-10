@@ -85,6 +85,33 @@ function t(en, bn) { return currentLanguage === 'bn' ? bn : en; }
    portal's in-memory state is discarded by the navigation itself. */
 function logout() { window.location.href = '/'; }
 
+/* P2-1: timestamps are stored/serialized as UTC, but SQLite rows come back
+   OFFSET-LESS (e.g. "2026-07-05T14:03:42.884654") — new Date() would read that as
+   LOCAL time, which is exactly the "random queue time" bug. parseUtc() pins
+   offset-less strings to UTC; the dhaka*() formatters then always display
+   Bangladesh time (Asia/Dhaka) regardless of the viewing PC's zone. */
+function parseUtc(value) {
+  if (value instanceof Date) return value;
+  const s = String(value || '').trim();
+  const hasZone = /([Zz]|[+-]\d{2}:?\d{2})$/.test(s);
+  return new Date(hasZone ? s : s + 'Z');
+}
+
+function dhakaTime(value) {
+  const d = parseUtc(value);
+  if (isNaN(d)) return '—';
+  return d.toLocaleTimeString(currentLanguage === 'bn' ? 'bn-BD' : 'en-GB',
+    { timeZone: 'Asia/Dhaka', hour: '2-digit', minute: '2-digit' });
+}
+
+function dhakaDateTime(value) {
+  const d = parseUtc(value);
+  if (isNaN(d)) return '—';
+  return d.toLocaleString(currentLanguage === 'bn' ? 'bn-BD' : 'en-GB',
+    { timeZone: 'Asia/Dhaka', day: '2-digit', month: 'short', year: 'numeric',
+      hour: '2-digit', minute: '2-digit' });
+}
+
 /* fetch wrapper: throws Error with the backend's detail message on failure. */
 async function api(method, path, body) {
   const opts = { method, headers: { 'Content-Type': 'application/json' } };

@@ -15,7 +15,7 @@ from datetime import datetime, timezone
 
 from sqlalchemy.orm import Session
 
-from backend.app.db.models import CaseProfile, Visit
+from backend.app.db.models import CaseProfile, Patient, Visit
 from backend.app.db.repository_visits import list_visit_utterances
 from backend.app.schemas.profile import SUMMARY_FIELD_KEYS, SummaryFields
 from backend.app.services.llm_client import call_module
@@ -35,6 +35,12 @@ _EXTRACT_SYSTEM = (
     "not mentioned, use {\"en\": \"\", \"bn\": \"\"}.\n"
     "symptom_details_structured is an object {location, character, worse, better, "
     "pain_severity_0_10} (strings, severity an integer 0-10 or null).\n"
+    "Also include a key \"patient_demographics\": an object {\"name\": \"...\", "
+    "\"age_years\": <integer or null>, \"sex\": \"male|female|other or empty\"} — the "
+    "patient's own name EXACTLY as they stated it (in the script they used), their "
+    "age in years, and their sex/gender, each ONLY if the patient explicitly stated "
+    "it about themselves in the conversation; otherwise use empty/null. Never guess "
+    "these from symptoms, voice, or context.\n"
     "Base every value ONLY on the conversation text."
 )
 
@@ -101,6 +107,42 @@ def _to_summary_fields(extracted: dict) -> SummaryFields:
     return SummaryFields.model_validate(payload)
 
 
+_SEX_VALUES = {"male", "female", "other"}
+
+
+def apply_demographics(db: Session, visit: Visit, extracted: dict) -> None:
+    """P2-2: harvest ``patient_demographics`` from an M3/M8 extraction onto the
+    patients row — FILL-ONLY-WHEN-EMPTY, so a staff-entered (or earlier) value is
+    NEVER overwritten by the AI (the staff PATCH is the correction path).
+    Best-effort: absent or malformed data is simply ignored."""
+    demo = extracted.get("patient_demographics")
+    if not isinstance(demo, dict) or visit.patient_id is None:
+        return
+    patient = db.get(Patient, visit.patient_id)
+    if patient is None:
+        return
+    changed = False
+    name = str(demo.get("name") or "").strip()
+    if name and not (patient.display_name or "").strip():
+        patient.display_name = name  # exactly as the patient stated it
+        changed = True
+    sex = str(demo.get("sex") or "").strip().lower()
+    if sex in _SEX_VALUES and not (patient.sex or "").strip():
+        patient.sex = sex
+        changed = True
+    age = demo.get("age_years")
+    if (
+        patient.birth_year is None
+        and isinstance(age, (int, float))
+        and not isinstance(age, bool)
+        and 0 < int(age) < 130
+    ):
+        patient.birth_year = datetime.now(timezone.utc).year - int(age)
+        changed = True
+    if changed:
+        db.commit()
+
+
 def run_intake(db: Session, visit: Visit) -> CaseProfile:
     """M3 -> M4 -> M6 over the visit's conversation; upserts the case_profile.
 
@@ -115,7 +157,9 @@ def run_intake(db: Session, visit: Visit) -> CaseProfile:
     extracted_raw = call_module(
         db, visit_id=visit.id, module_code="M3", system=_EXTRACT_SYSTEM, user=conversation
     )
-    summary_fields = _to_summary_fields(_parse_json(extracted_raw))
+    extracted = _parse_json(extracted_raw)
+    summary_fields = _to_summary_fields(extracted)
+    apply_demographics(db, visit, extracted)  # P2-2: name/age/sex -> patients row
 
     # M4 — chief-complaint summary (Flash bucket).
     summary = call_module(

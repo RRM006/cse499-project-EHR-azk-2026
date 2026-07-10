@@ -6,29 +6,31 @@
 
 ---
 
-**Date:** 2026-07-10 (Session 21 end)
+**Date:** 2026-07-10 (Session 22 end)
 **Phase:** Executing **"Context Fixed Problem 2.0"** (`agent_docs/context fixed problem 2.0.md`,
 the checkable BUILD TRACKER): UI/UX evolve-the-theme redesign + functional fixes on all three
 portals + real OTP + a doctor drug-info chatbot. **One item per "go"**, functional fixes before
-polish. **STRUCT ✅ · P1-1..P1-5 ✅. Next = P1-6 (closes P1).** Test suite: **162 pass**.
+polish. **STRUCT ✅ · P1 CLOSED · P2-1/P2-2 ✅. Next = P2-3 (closes P2).** Test suite: **166 pass**.
 
 ## Where we are right now
-- Done this cycle: STRUCT-1/2/3 (rename · logout→`/` · Teal Medical theme ADR-0043),
-  P1-1 (Summary auto-stops mic), P1-2 (full EN↔BN toggle), P1-3 (4–5 follow-up floor +
-  M7 deepening mode), P1-4 (amber "Needs info" highlight), **P1-5** (Confirm & Submit returns
-  instantly — M10/M11/M10C in a `BackgroundTasks` job via `_post_submit_assessment()` in
-  `routes_dashboard.py`, own session bound to `db.get_bind()`; red-flag rule verified effective
-  from the background — rule #3; +3 tests → **162 pass**).
-- Alembic head still **0010** (P3-1 will bump to 0011). Only P1-6 left in P1, then P2→P4.
+- **P1 (Patient Portal) is fully CLOSED** — P1-1 through P1-6 all ✅ (auto-stop mic, full EN↔BN
+  toggle, 4–5 follow-up floor, missing-field highlight, background-assessed submit, teal polish).
+- **P2 in progress:** P2-1 done (Dhaka time — root cause was offset-less UTC strings parsed as
+  local; fixed via shared `parseUtc()`/`dhakaTime()`/`dhakaDateTime()` in `shared.js`, used by
+  `staff.js` — both medic AND doctor queues benefit). P2-2 done (Gender + auto-fill Name/Age/Gender
+  from the conversation via extended M3/M8 extraction + `apply_demographics()` fill-only-when-empty
+  writer; extended vitals PATCH; medic identity editor). Only **P2-3** left in P2.
+- Alembic head still **0010** (P3-1 will bump to 0011). Test suite: **166 pass** (was 156 at cycle
+  start: +3 P1-3, +3 P1-5, +4 P2-2).
 
 ## The one thing we are doing next
-👉 **STEP: P1-6 — Patient Portal UI polish (closes P1).**
-   Frontend-only, on top of the shared teal base (ADR-0043): retint the leftover BLUE tints in
-   `frontend/kiosk.html` inline CSS (`#EFF6FF`/`#BFDBFE`/`#F1F5F9` → teal equivalents, e.g.
-   `#E6F7F3`/`#B8E5DC`/`#ECF5F3` — summary highlight pills, progress chip, summary icons) +
-   spacing/visual polish per the reference screenshots. KEEP the layout and all wired hooks
-   (`#summary-grid`, docks, modal). Verify in preview (fresh-fetch the assets first).
-   Small, reviewable, wait for "go".
+👉 **STEP: P2-3 — Medic Portal UI polish (closes P2).**
+   Frontend-only, on top of the shared teal base (ADR-0043), same pattern as P1-6: sweep
+   `frontend_medic/index.html` for leftover clinical-blue hardcodes (inline styles/hex tints) and
+   retint to the Teal Medical equivalents (`#E6F7F3`/`#B8E5DC`/`#ECF5F3`/`#F4FAF8`); light spacing/
+   visual polish per the reference screenshots. KEEP the layout and all wired hooks (queue,
+   field-cards, risk card, post-referral card, identity/weight editors). Verify in preview
+   (fresh-fetch assets; computed-style checks + screenshot). Small, reviewable, wait for "go".
 
 ## The approved plan — priority order (checkable; ONE item per "go")
 > Durable copies: THIS list **and** `agent_docs/context fixed problem 2.0.md` (the BUILD TRACKER,
@@ -47,15 +49,16 @@ polish. **STRUCT ✅ · P1-1..P1-5 ✅. Next = P1-6 (closes P1).** Test suite: *
 - [x] P1-5 Submit fast = background assessment (S21: `_post_submit_assessment()` BackgroundTasks
   job, own session via `db.get_bind()`; red-flag rule verified effective in background — rule #3.
   New `test_submit_background.py` — **162 pass**).
-- [ ] P1-6 Patient Portal UI polish (incl. retint leftover blue tints in kiosk.html inline CSS:
-  `#EFF6FF`/`#BFDBFE`/`#F1F5F9` → teal equivalents).
+- [x] P1-6 Patient Portal UI polish (S22: 6 blue tints in kiosk.html → teal; amber/green semantic
+  colors kept; verified via computed styles + screenshot). **P1 CLOSED.**
 
 **P2 Medic Portal:**
-- [ ] P2-1 Correct **Dhaka** date/time in the queue (shared `dhakaDateTime()` in `shared.js` using
-  `toLocaleString(..., {timeZone:'Asia/Dhaka'})` — browser-side, no backend tzdata; fix `staff.js:51`).
-- [ ] P2-2 Patient details: add **Gender**, auto-fill Name/Age/Gender from the conversation
-  (`Patient.sex`/`birth_year` exist but are never written — extend M3/M8 extraction + a writer),
-  make name/age/gender editable (extend the vitals PATCH or add a patient PATCH).
+- [x] P2-1 Correct **Dhaka** date/time in the queue (S22: root cause = offset-less UTC strings
+  parsed as local; new shared `parseUtc()`+`dhakaTime()`/`dhakaDateTime()` in `shared.js`,
+  `staff.js` uses `dhakaTime()`; verified with known instants; both staff portals inherit).
+- [x] P2-2 Gender + auto-fill Name/Age/Gender + editable (S22: `patient_demographics` in the
+  M3/M8 extraction + `apply_demographics()` fill-only-when-empty writer; vitals PATCH extended;
+  medic identity editor. `test_patient_demographics.py` — **166 pass**).
 - [ ] P2-3 Medic Portal UI polish.
 
 **P3 Doctor Portal:**
@@ -103,4 +106,4 @@ polish. **STRUCT ✅ · P1-1..P1-5 ✅. Next = P1-6 (closes P1).** Test suite: *
 - **Rule #4:** no auto-run of live LLM calls; synthetic/offline data only in dev.
 - Run (Windows): `.venv\Scripts\python.exe -m uvicorn backend.app.main:app --reload --port 8001`
 - Run (Arch):    `.venv/bin/python -m uvicorn backend.app.main:app --reload --port 8001`
-- Tests: `pytest backend/tests/` (**162 passing** as of S21).
+- Tests: `pytest backend/tests/` (**166 passing** as of S22).

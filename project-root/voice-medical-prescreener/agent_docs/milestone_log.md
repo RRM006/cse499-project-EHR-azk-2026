@@ -6,7 +6,8 @@
 
 **Status keys:** ⬜ Not started · 🟨 In progress · 🟦 Blocked · ✅ Done · ⛔ Retired
 
-**Last updated:** 2026-07-10 (Session 21 — 2.0 build: P1-5 background-assessed submit; **162 tests**)
+**Last updated:** 2026-07-10 (Session 22 — 2.0 build: P1 CLOSED + P2-1 Dhaka time + P2-2 patient
+demographics; **166 tests**)
 **Current phase:** ✅ **Build complete.** The 20-step plan (spec: `context_fixed_problem.md`) is
 fully implemented — **every numbered spec item (STRUCT/KIOSK/MEDIC/DOCTOR) is ✅** and 150 tests
 pass. What remains for the project is NOT build work: the **human live real-mic run**
@@ -36,6 +37,16 @@ system-setup gap (`speech-dispatcher`+`espeak-ng` not installed → empty Linux 
 `tts.js` degrades correctly per ADR-0028). Added guide **PART 1B** (Arch Bangla-voice install);
 no app code. Pending: human runs `sudo pacman -S speech-dispatcher espeak-ng`, then verify 🔊
 speaks (TC-V2 on Arch).
+**Session 22 (no module-status change):** three 2.0 cycle items. **P1-6** retinted the last
+clinical-blue leftovers in the kiosk to Teal Medical — **Priority 1 (Patient Portal) is now fully
+CLOSED**. **P2-1** found and fixed the real cause of "random" queue times: SQLite serializes
+timestamps offset-less, so bare `new Date()` read them as local time instead of UTC; new shared
+`parseUtc()`/`dhakaTime()`/`dhakaDateTime()` helpers fix BOTH the medic and doctor queues at once
+(shared file). **P2-2** wired `Patient.sex`/`birth_year` (existed, never written): the M3/M8
+extraction now also returns `patient_demographics`, and a new `apply_demographics()` writer fills
+Name/Age/Gender **only when empty** so staff edits are always final; the vitals PATCH and medic UI
+were extended to match; the doctor portal inherits the same Patient row. +4 tests →
+**166 pass** (was 162). Module table unchanged (still gates on the human live run).
 **Session 21 (no module-status change):** 2.0 cycle item **P1-5** (ADR-0042b): `submit_visit` now
 returns instantly — status+audit synchronous, the M10/M11/M10C LLM work moved to a FastAPI
 `BackgroundTasks` job (`_post_submit_assessment`, own session bound to the request's engine via

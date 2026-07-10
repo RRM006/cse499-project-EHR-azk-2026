@@ -4,15 +4,21 @@
 > re-exploring the whole project each session. Update it whenever you add or move
 > a folder/file. Keep each note to one line.
 
-**Last updated:** 2026-07-10 (Session 21 — new test files so far this cycle:
-`backend/tests/test_followup_min_questions.py` (S20, P1-3) and
-`backend/tests/test_submit_background.py` (S21, P1-5) → suite **162**. Otherwise edits to existing
-files only: S19 = `shared.css` (Teal Medical, ADR-0043), `shared.js` (`logout()`, placeholder
-i18n), `kiosk.js`/`kiosk.html`, medic/doctor headers; S20 = `config.py`
+**Last updated:** 2026-07-10 (Session 22 — new test files so far this cycle:
+`backend/tests/test_followup_min_questions.py` (S20, P1-3),
+`backend/tests/test_submit_background.py` (S21, P1-5), and
+`backend/tests/test_patient_demographics.py` (S22, P2-2) → suite **166**. Otherwise edits to
+existing files only: S19 = `shared.css` (Teal Medical, ADR-0043), `shared.js` (`logout()`,
+placeholder i18n), `kiosk.js`/`kiosk.html`, medic/doctor headers; S20 = `config.py`
 (+`followup_min_questions`), `routes_followup.py` (floor gate), `services/followup.py` (deepening
 M7 prompt), kiosk missing-field highlight; S21 = `routes_dashboard.py`
-(`_post_submit_assessment` BackgroundTasks job). Still coming: `Visit.submitted_at`+Alembic 0011,
-an OTP table, `routes_assistant.py` — update this map when those land.)
+(`_post_submit_assessment` BackgroundTasks job); S22 = `kiosk.html` (P1-6 teal retint),
+`shared.js`/`staff.js` (P2-1 `parseUtc`/`dhakaTime`/`dhakaDateTime`), `services/intake.py`
+(+`apply_demographics`, new `patient_demographics` extraction key),
+`services/profile_update.py` (calls the writer), `schemas/dashboard.py` +
+`routes_dashboard.py` (extended vitals PATCH), `frontend_medic/index.html` (Gender row +
+identity editor). Still coming: `Visit.submitted_at`+Alembic 0011, an OTP table,
+`routes_assistant.py` — update this map when those land.)
 
 ---
 

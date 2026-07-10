@@ -48,7 +48,9 @@ function renderQueue(items) {
   items.forEach((item) => {
     const div = document.createElement('div');
     div.className = 'queue-item' + (currentCase && currentCase.uuid === item.visit_uuid ? ' active' : '');
-    const when = new Date(item.started_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+    // P2-1: always Bangladesh time (shared.js dhakaTime pins offset-less UTC
+    // strings to UTC first — the old bare new Date() read them as local time).
+    const when = dhakaTime(item.started_at);
     div.innerHTML =
       `<div class="queue-item-meta"><span>${when}</span>${tierBadge(item.tier)}</div>` +
       `<div class="queue-item-name"></div><div class="queue-item-problem"></div>`;

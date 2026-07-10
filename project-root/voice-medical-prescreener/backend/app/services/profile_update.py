@@ -20,6 +20,7 @@ from backend.app.services.intake import (
     _conversation_text,
     _parse_json,
     _to_summary_fields,
+    apply_demographics,
 )
 from backend.app.services.llm_client import call_module
 
@@ -52,7 +53,9 @@ def process_answer(
         db, visit_id=visit.id, module_code="M8",
         system=_EXTRACT_SYSTEM, user=_conversation_text(db, visit),
     )
-    fresh = _to_summary_fields(_parse_json(reply)).model_dump(mode="json")
+    extracted = _parse_json(reply)
+    fresh = _to_summary_fields(extracted).model_dump(mode="json")
+    apply_demographics(db, visit, extracted)  # P2-2: fill-only-when-empty
     existing = (profile.entities or {}).get("summary_fields") or {}
     profile.entities = {"summary_fields": _merge_fields(existing, fresh)}
 

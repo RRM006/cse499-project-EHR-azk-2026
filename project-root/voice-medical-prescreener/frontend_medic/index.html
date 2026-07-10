@@ -256,6 +256,46 @@
       btn.disabled = false;
     }
 
+    /* P2-2: schema codes male|female|other -> display labels (mirrors the doctor
+       portal's map; codes on the wire only). */
+    function genderLabel(sex) {
+      const map = {
+        male:   { en: 'Male',   bn: 'পুরুষ' },
+        female: { en: 'Female', bn: 'মহিলা' },
+        other:  { en: 'Other',  bn: 'অন্যান্য' },
+      };
+      const key = (sex || '').toLowerCase();
+      return map[key] ? t(map[key].en, map[key].bn) : (sex || '—');
+    }
+
+    /* P2-2: medic edits Name/Age/Gender (auto-filled from the conversation when
+       the patient stated them; a staff edit here is final — AI never overwrites). */
+    async function saveIdentity() {
+      const p = (postrefSnap.case.detail || {}).patient;
+      if (!p) return;
+      const name = document.getElementById('ident-name').value.trim();
+      const ageRaw = document.getElementById('ident-age').value.trim();
+      const gender = document.getElementById('ident-gender').value;
+      const body = { editor_id: PORTAL.userId };
+      if (name) body.display_name = name;
+      if (ageRaw) {
+        const age = parseInt(ageRaw, 10);
+        if (!isFinite(age) || age <= 0 || age >= 130) {
+          return showError(t('Enter a valid age in years.', 'বছরে সঠিক বয়স লিখুন।'));
+        }
+        body.age_years = age;
+      }
+      if (gender) body.sex = gender;
+      if (!body.display_name && !body.age_years && !body.sex) {
+        return showError(t('Nothing to update.', 'পরিবর্তনের কিছু নেই।'));
+      }
+      try {
+        postrefSnap.case.detail.patient =
+          await api('PATCH', `/api/patients/${p.id}/vitals`, body);
+        renderPostReferral();
+      } catch (e) { showError(e.message); }
+    }
+
     async function saveWeight() {
       const p = (postrefSnap.case.detail || {}).patient;
       if (!p) return;
@@ -299,10 +339,26 @@
            </div>
          </div>
          <div class="card" style="display:flex; flex-direction:column; gap:8px;">
-           <h3 style="font-size:1rem; color:var(--primary-color); margin-bottom:4px;">👤 ${t('Patient Details', 'রোগীর তথ্য')}</h3>` +
+           <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:4px;">
+             <h3 style="font-size:1rem; color:var(--primary-color);">👤 ${t('Patient Details', 'রোগীর তথ্য')}</h3>
+             <button class="btn btn-secondary" id="identity-edit-btn" style="padding:5px 12px; font-size:.78rem;">✏️ ${t('Edit Details', 'তথ্য সম্পাদনা')}</button>
+           </div>` +
            row(t('Name', 'নাম'), 'pr-name') +
            row(t('Phone', 'ফোন'), 'pr-phone') +
            row(t('Age', 'বয়স'), 'pr-age') +
+           row(t('Gender', 'লিঙ্গ'), 'pr-gender') +
+          `<div id="identity-editor" style="display:none; gap:6px; align-items:center; flex-wrap:wrap; padding:8px; background:#F4FAF8; border-radius:8px;">
+             <input class="input-field" id="ident-name" style="width:190px; padding:6px 10px;" placeholder="${t('Name', 'নাম')}">
+             <input class="input-field" id="ident-age" type="number" min="1" max="129" style="width:95px; padding:6px 10px;" placeholder="${t('Age', 'বয়স')}">
+             <select class="input-field" id="ident-gender" style="width:140px; padding:6px 10px;">
+               <option value="">${t('Gender…', 'লিঙ্গ…')}</option>
+               <option value="male">${t('Male', 'পুরুষ')}</option>
+               <option value="female">${t('Female', 'মহিলা')}</option>
+               <option value="other">${t('Other', 'অন্যান্য')}</option>
+             </select>
+             <button class="btn btn-primary" style="padding:5px 12px; font-size:.78rem;" onclick="saveIdentity()">${t('Save', 'সংরক্ষণ')}</button>
+             <button class="btn btn-secondary" style="padding:5px 12px; font-size:.78rem;" onclick="document.getElementById('identity-editor').style.display='none'">${t('Cancel', 'বাতিল')}</button>
+           </div>` +
           `<div style="display:flex; gap:10px; font-size:.9rem; align-items:center;">
              <span style="min-width:140px; font-weight:600; color:var(--text-muted);">${t('Weight', 'ওজন')}</span>
              <span id="pr-weight"></span>
@@ -337,12 +393,21 @@
       document.getElementById('pr-name').textContent = p.display_name || '—';
       document.getElementById('pr-phone').textContent = p.external_ref || '—';
       document.getElementById('pr-age').textContent = age;
+      document.getElementById('pr-gender').textContent = genderLabel(p.sex);
       document.getElementById('pr-weight').textContent =
         p.weight_kg != null ? `${p.weight_kg} kg` : '—';
       document.getElementById('pr-bp').textContent = p.bp || '—';
       document.getElementById('weight-edit-btn').onclick = () => {
         document.getElementById('weight-input').value = p.weight_kg != null ? p.weight_kg : '';
         document.getElementById('weight-editor').style.display = 'inline-flex';
+      };
+      // P2-2: identity editor prefills with the current values.
+      document.getElementById('identity-edit-btn').onclick = () => {
+        document.getElementById('ident-name').value = p.display_name || '';
+        document.getElementById('ident-age').value =
+          p.birth_year ? String(new Date().getFullYear() - p.birth_year) : '';
+        document.getElementById('ident-gender').value = (p.sex || '').toLowerCase();
+        document.getElementById('identity-editor').style.display = 'inline-flex';
       };
 
       const riskBox = document.getElementById('pr-risk');

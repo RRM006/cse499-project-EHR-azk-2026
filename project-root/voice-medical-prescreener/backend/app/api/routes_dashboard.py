@@ -237,25 +237,42 @@ def edit_patient_vitals(
 ) -> PatientOut:
     """MEDIC-6: weight (and BP) are staff-recorded vitals, not something the AI
     infers — so this touches the patients row directly, audit-logged. The raw
-    transcript and derived profile are untouched."""
+    transcript and derived profile are untouched.
+    P2-2: Name/Age/Gender ride along (staff-editable identity; a staff value is
+    final — the AI auto-fill only ever writes EMPTY identity fields)."""
     editor = db.get(User, payload.editor_id)
     if editor is None or editor.role not in ("medic", "doctor", "admin"):
         raise HTTPException(status_code=403, detail="Editor must be a medic, doctor, or admin.")
     patient = db.get(Patient, patient_id)
     if patient is None:
         raise HTTPException(status_code=404, detail=f"Patient {patient_id} not found")
-    if payload.weight_kg is None and payload.bp is None:
-        raise HTTPException(status_code=400, detail="Nothing to update — send weight_kg or bp.")
+    updates = (payload.weight_kg, payload.bp, payload.display_name, payload.sex, payload.age_years)
+    if all(v is None for v in updates):
+        raise HTTPException(
+            status_code=400,
+            detail="Nothing to update — send weight_kg, bp, display_name, sex, or age_years.",
+        )
 
     if payload.weight_kg is not None:
         patient.weight_kg = payload.weight_kg
     if payload.bp is not None:
         patient.bp = payload.bp.strip()
+    if payload.display_name is not None:
+        patient.display_name = payload.display_name.strip()
+    if payload.sex is not None:
+        patient.sex = payload.sex
+    if payload.age_years is not None:
+        patient.birth_year = datetime.now(timezone.utc).year - payload.age_years
     db.commit()
     db.refresh(patient)
+    # Audit only what was actually edited (None = field not sent).
+    detail = {k: v for k, v in {
+        "weight_kg": payload.weight_kg, "bp": payload.bp,
+        "display_name": payload.display_name, "sex": payload.sex,
+        "age_years": payload.age_years,
+    }.items() if v is not None}
     audit(db, action="patient.vitals_edit", entity_type="patient", entity_id=patient.id,
-          actor_id=editor.id, clinic_id=patient.clinic_id,
-          detail={"weight_kg": payload.weight_kg, "bp": payload.bp})
+          actor_id=editor.id, clinic_id=patient.clinic_id, detail=detail)
     return patient
 
 

@@ -72,6 +72,28 @@ transcribed by hand (the "ground truth"). Record the model + machine each time.
 
 ## Test entries (newest first)
 
+## 2026-07-10 — Session 22 — P2-2 patient demographics: suite 162 → 166, all offline
+- Setup: Windows desktop; `pytest backend/tests/` with `PYTHONIOENCODING=utf-8`; LLM boundary
+  faked via the standard `_attempt` monkeypatch (rule #4 — zero live API spend).
+- Metric(s): pass/fail; the four P2-2 behavioral guarantees.
+- Result: **166 passed, 0 failed, 6.86 s** (was 162). New `test_patient_demographics.py` (4
+  tests): (1) `patient_demographics` in the M3 extraction ("আমার নাম রহিম উদ্দিন, বয়স ৪৫") writes
+  `display_name="রহিম উদ্দিন"`, `sex="male"`, `birth_year=current_year-45` on intake; (2) a LATER
+  extraction claiming different demographics does NOT overwrite the already-set values
+  (fill-only-when-empty); (3) an absent `patient_demographics` key OR malformed values (age 500,
+  sex "banana") are silently ignored — no crash, no garbage written; (4) a staff PATCH
+  (`display_name`/`sex`/`age_years`) sets the identity AND is final — a subsequent AI extraction
+  with different demographics cannot override it; PATCH validation confirmed (`sex` outside
+  male|female|other → 422; an edit with no fields → 400). One pre-existing test needed updating:
+  `test_medic_summary.py::test_vitals_patch_updates_and_audits` asserted strict equality on the
+  audit `detail` dict, which now also carries the 3 new (mostly-`None`) identity keys — fixed by
+  auditing only the fields actually sent, which also fixed the assertion.
+- Notes: P2-1 (Dhaka time fix) and P1-6 (kiosk teal retint) were verified live in the browser
+  preview the same session — frontend/formatting-only, no pytest surface. P2-1 unit-checked with
+  known UTC instants directly in the console: offset-less `2026-07-10T06:30:00` → **12:30** (the
+  exact bug reproduced and fixed — Dhaka is UTC+6), `18:00Z` → `00:00`, `+00:00` → `06:00`, Bangla
+  digits "১২:৩০ PM", invalid string → "—".
+
 ## 2026-07-10 — Session 21 — P1-5 background-assessed submit: suite 159 → 162, all offline
 - Setup: Windows desktop; `pytest backend/tests/` with `PYTHONIOENCODING=utf-8`; LLM boundary
   faked via the standard `_attempt` monkeypatch (rule #4 — zero live API spend).

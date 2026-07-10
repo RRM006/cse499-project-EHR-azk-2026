@@ -37,10 +37,19 @@ class FieldEditRequest(BaseModel):
 
 class VitalsEditRequest(BaseModel):
     """A staff edit of the patient's vitals (MEDIC-6: weight is medic-editable;
-    BP rides along for the DOCTOR-3 details card). At least one field required."""
+    BP rides along for the DOCTOR-3 details card). At least one field required.
+
+    P2-2: identity fields ride along too — Name/Age/Gender are staff-editable and,
+    once set (by staff OR the auto-fill), the AI never overwrites them."""
 
     weight_kg: float | None = Field(None, gt=0, lt=500, description="Weight in kilograms.")
     bp: str | None = Field(None, max_length=32, description="Free-form reading, e.g. '120/80'.")
+    display_name: str | None = Field(None, min_length=1, max_length=120,
+                                     description="Patient name as recorded by staff.")
+    sex: str | None = Field(None, pattern="^(male|female|other)$",
+                            description="Schema codes; display labels live in the frontend.")
+    age_years: int | None = Field(None, gt=0, lt=130,
+                                  description="Age in years; the server stores birth_year.")
     editor_id: int = Field(..., description="users.id of the staff editor (auth is stubbed).")
 
 

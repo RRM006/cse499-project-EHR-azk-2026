@@ -30,13 +30,13 @@
     /* KIOSK-2: visible hint when no Bangla TTS voice is installed */
     .voice-hint { display: none; font-size: .8rem; color: #92400E; background: #FEF3C7; border: 1px solid #FDE68A; border-radius: var(--radius); padding: 6px 12px; }
     .voice-dock { border-top: 1px solid var(--border-color); padding-top: 14px; display: flex; flex-direction: column; align-items: center; gap: 10px; }
-    .dock-transcript { width: 100%; min-height: 42px; background: #F8FAFC; border: 1px dashed var(--border-color); border-radius: var(--radius); padding: 9px 16px; font-style: italic; color: var(--text-muted); text-align: center; }
+    .dock-transcript { width: 100%; min-height: 42px; background: #F4FAF8; border: 1px dashed var(--border-color); border-radius: var(--radius); padding: 9px 16px; font-style: italic; color: var(--text-muted); text-align: center; }
     .dock-row { display: flex; align-items: center; gap: 18px; width: 100%; justify-content: space-between; }
     .mic-btn { width: 68px; height: 68px; border-radius: 50%; background: var(--secondary-color); border: none; color: #fff; font-size: 1.6rem; cursor: pointer; box-shadow: var(--shadow-md); }
     .mic-btn.listening { background: var(--danger-color); }
     .fallback-row { display: none; gap: 10px; width: 100%; max-width: 540px; }
 
-    /* summary (KIOSK-5: one card per field, clinical-blue tokens only) */
+    /* summary (KIOSK-5: one card per field; P1-6: Teal Medical tints, ADR-0043) */
     .summary-layout { flex: 1; padding: 24px 28px; display: flex; flex-direction: column; gap: 16px; max-width: 980px; margin: 0 auto; width: 100%; overflow-y: auto; }
     .summary-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 14px 16px; }
     .summary-item {
@@ -44,20 +44,20 @@
       -webkit-backdrop-filter: blur(8px); backdrop-filter: blur(8px);
       border: 1px solid var(--border-color); border-radius: 18px;
       padding: 16px 18px; display: flex; flex-direction: column; gap: 9px;
-      box-shadow: 0 4px 16px rgba(15,76,129,.06);
+      box-shadow: 0 4px 16px rgba(13,63,60,.07);
     }
     .summary-item.highlight { border-left: 4px solid var(--secondary-color); }
     .summary-item-head { display: flex; align-items: center; gap: 10px; }
     .summary-icon {
       width: 34px; height: 34px; border-radius: 10px; flex: none;
       display: flex; align-items: center; justify-content: center; font-size: 1.05rem;
-      background: #F1F5F9; border: 1px solid var(--border-color);
+      background: #ECF5F3; border: 1px solid var(--border-color);
     }
-    .summary-item.highlight .summary-icon { background: #EFF6FF; border-color: #BFDBFE; }
+    .summary-item.highlight .summary-icon { background: #E6F7F3; border-color: #B8E5DC; }
     .summary-label { font-size: .74rem; font-weight: 700; text-transform: uppercase; letter-spacing: .05em; color: var(--primary-color); }
     .summary-val { font-size: .95rem; line-height: 1.5; }
     .summary-item.highlight .summary-val:not(.empty) {
-      display: inline-block; align-self: flex-start; background: #EFF6FF;
+      display: inline-block; align-self: flex-start; background: #E6F7F3;
       color: var(--primary-color); font-weight: 600;
       border-radius: 8px; padding: 5px 12px;
     }
@@ -77,7 +77,7 @@
     /* KIOSK-7: completeness chip + resume-question voice dock */
     .progress-chip {
       display: none; margin-top: 10px; padding: 6px 16px; border-radius: 999px;
-      background: #EFF6FF; color: var(--primary-color); border: 1px solid #BFDBFE;
+      background: #E6F7F3; color: var(--primary-color); border: 1px solid #B8E5DC;
       font-weight: 600; font-size: .85rem;
     }
     .progress-chip.complete { background: #ECFDF5; color: var(--accent-color); border-color: #D1FAE5; }

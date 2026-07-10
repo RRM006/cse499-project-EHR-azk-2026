@@ -16,6 +16,47 @@
 
 ---
 
+## Session 22 — 2026-07-10 — 2.0 build: P1-6 (kiosk polish, P1 CLOSED) + P2-1 (Dhaka time fixed) + P2-2 (patient demographics); 166 tests
+- Did: three tracker items, one per "go":
+  - **P1-6 (frontend, closes P1):** retinted the 6 leftover clinical-blue hardcodes in
+    `frontend/kiosk.html` inline CSS to Teal Medical (dock transcript, summary icons, highlight
+    icon/pill, progress chip, card shadow); the P1-4 amber "needs info" + green complete-chip
+    (semantic colors) kept untouched. Verified via computed styles + screenshot — **Priority 1
+    (Patient Portal) is now fully CLOSED** (P1-1 through P1-6 all ✅).
+  - **P2-1 (frontend, opens P2):** found the ROOT CAUSE of the "random" medic/doctor queue times —
+    SQLite serializes timestamps **offset-less** (`2026-07-05T14:03:42.884654`, no `Z`), so the
+    browser's bare `new Date()` read them as LOCAL time instead of UTC. New shared helpers in
+    `frontend_shared/shared.js`: `parseUtc()` (pins offset-less strings to UTC) + `dhakaTime()` /
+    `dhakaDateTime()` (always render `Asia/Dhaka`, bn-BD/en-GB by language) — pure browser `Intl`,
+    no backend/tzdata dependency. `frontend_shared/staff.js` `renderQueue` now uses `dhakaTime()` —
+    both medic AND doctor queues fixed at once (shared file). Verified with known UTC instants
+    (offset-less 06:30→12:30, `18:00Z`→00:00, `+00:00`→06:00, Bangla digits, invalid→"—").
+  - **P2-2 (backend + frontend, MEDIC-details spec item):** `Patient.sex`/`birth_year` existed in
+    the model but were never written; `display_name` only came from phone-lookup. (a) Extended the
+    M3/M8 extraction prompt (human-approved wording) with a `patient_demographics` key — same LLM
+    call, zero extra quota. (b) New `apply_demographics()` in `services/intake.py` (called from
+    intake AND the M8 answer-merge in `services/profile_update.py`) writes
+    `display_name`/`sex`/`birth_year` **FILL-ONLY-WHEN-EMPTY** — a staff-entered value is never
+    overwritten by the AI, no schema migration needed. (c) Extended `PATCH /patients/{id}/vitals`
+    (`schemas/dashboard.py` + `routes_dashboard.py`) to accept `display_name`/`sex` (pattern-
+    validated)/`age_years`; audit now logs only the fields actually sent (fixed a pre-existing test
+    that asserted strict-equality on the audit detail dict). (d) Medic post-referral card gets a
+    **Gender** row + an "Edit Details" identity editor (name/age/gender, prefilled, same pattern as
+    the weight editor); the doctor portal reads the same `Patient` row so it benefits automatically.
+    New `test_patient_demographics.py` (4 tests: autofill · never-overwrite-existing ·
+    malformed/absent-ignored · staff-PATCH-is-final + 422/400 validation). **166 pass** (was 162).
+- Decided: no new ADR — P1-6/P2-1 implement the already-locked ADR-0042/0043; P2-2's
+  fill-only-when-empty pattern mirrors the existing `source=human` M8-merge guard, not a new rule.
+- Broke / problem: one pre-existing test (`test_medic_summary.py::test_vitals_patch_updates_and_audits`)
+  broke on the extended PATCH because the audit detail dict grew 3 always-present `None` keys —
+  fixed by auditing only sent fields (better behavior, not a workaround). One dev-server hiccup
+  mid-session: `preview_start` tried the Linux launch config (`.venv/bin/python ENOENT` on
+  Windows) — resolved by explicitly starting `"backend (FastAPI + uvicorn)"`.
+- Deferred: P2-3 (medic UI polish, closes P2), then P3 (doctor: submitted-at, patient-details
+  verification, AI chatbot) → P4 (OTP, channel choice still needs the human).
+- Next: **P2-3** — Medic Portal UI polish (closes P2): sweep `frontend_medic/index.html` for
+  leftover blue hardcodes → teal equivalents; layouts/hooks untouched.
+
 ## Session 21 — 2026-07-10 — 2.0 build: P1-5 (Confirm & Submit = instant, assessment in background); 162 tests
 - Did: **P1-5** (ADR-0042b, one "go"). `backend/app/api/routes_dashboard.py`:
   `submit_visit()` now keeps only the guards + `status→awaiting_review` + audit **synchronous**

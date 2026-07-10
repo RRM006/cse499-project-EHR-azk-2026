@@ -12,8 +12,8 @@
 
 ## Progress at a glance
 - **Cross-cutting (STRUCT):** ✅ STRUCT-1 · ✅ STRUCT-2 · ✅ STRUCT-3
-- **P1 Patient Portal (highest):** ✅ P1-1 · ✅ P1-2 · ✅ P1-3 · ✅ P1-4 · ✅ P1-5 · 👉⬜ P1-6
-- **P2 Medic Portal:** ⬜ P2-1 · ⬜ P2-2 · ⬜ P2-3
+- **P1 Patient Portal (highest):** ✅ P1-1 · ✅ P1-2 · ✅ P1-3 · ✅ P1-4 · ✅ P1-5 · ✅ P1-6 — **P1 CLOSED**
+- **P2 Medic Portal:** ✅ P2-1 · ✅ P2-2 · 👉⬜ P2-3
 - **P3 Doctor Portal:** ⬜ P3-1 · ⬜ P3-2 · ⬜ P3-3 · ⬜ P3-4
 - **P4 OTP (last):** ⬜ P4-1
 - **Out of scope (future research):** the "Faculty Requirement – Future Features" below
@@ -70,15 +70,33 @@
   (try/except + log). New `test_submit_background.py`: assessment+C1 land after submit · a
   background crash never blocks/undoes submission · red flag STILL forces Critical from the
   background with the model down (rule #3). **162 tests pass.** *(→ "Confirm and Submit".)*
-- [ ] **P1-6 — Patient Portal UI polish** on top of STRUCT-3. *(→ "UI/UX".)*
+- [x] **P1-6 — Patient Portal UI polish** on top of STRUCT-3. ✅ done S22 — retinted the 6 leftover
+  clinical-blue tints in `kiosk.html` inline CSS to Teal Medical (dock transcript `#F4FAF8`,
+  summary icons `#ECF5F3`, highlight icon/pill + progress chip `#E6F7F3`/`#B8E5DC`, card shadow
+  `rgba(13,63,60,.07)`); P1-4 amber warning treatment + green complete-chip kept (semantic).
+  Layouts/hooks untouched. Preview-verified via computed styles + screenshot; no console errors.
+  **P1 (Patient Portal) is fully CLOSED.** *(→ "UI/UX".)*
 
 ### P2 — Medic Portal `/medic/`
-- [ ] **P2-1 — Correct Dhaka date/time in the queue.** Shared `dhakaDateTime()` in `shared.js`
-  (`toLocaleString(..., {timeZone:'Asia/Dhaka'})`, browser-side); fix `staff.js:51`. *(→ "Queue Time".)*
-- [ ] **P2-2 — Patient details: add Gender + auto-fill Name/Age/Gender + editable.** Write
-  `Patient.sex`/`birth_year` (exist, never written) via extended M3/M8 extraction; make name/age/gender
-  editable (extend vitals PATCH or add a patient PATCH); add Gender row to `frontend_medic/index.html`
-  `renderPostReferral`. *(→ "Patient Details".)*
+- [x] **P2-1 — Correct Dhaka date/time in the queue.** ✅ done S22 — ROOT CAUSE found: SQLite rows
+  serialize **offset-less** UTC (`2026-07-05T14:03:42.884654`), which `new Date()` reads as LOCAL
+  time → "random" queue times. New shared helpers in `shared.js`: `parseUtc()` (pins offset-less
+  strings to UTC) + `dhakaTime()`/`dhakaDateTime()` (always render `Asia/Dhaka`, bn-BD/en-GB by
+  current language); `staff.js` `renderQueue` now uses `dhakaTime(item.started_at)` — BOTH staff
+  portals inherit. Verified with known instants: offset-less 06:30 UTC → **12:30**, 18:00Z → 00:00,
+  +00:00 → 06:00, Bangla "১২:৩০ PM", invalid → "—". Browser-side `Intl` = cross-platform (no
+  backend tzdata). *(→ "Queue Time"; P3-1 reuses `dhakaDateTime()` for submitted-at.)*
+- [x] **P2-2 — Patient details: add Gender + auto-fill Name/Age/Gender + editable.** ✅ done S22 —
+  (a) M3/M8 extraction (human-approved wording) now also returns `patient_demographics`
+  {name-exactly-as-stated, age_years, sex male|female|other}; new `apply_demographics()` in
+  `services/intake.py` (called from intake + M8 answer-merge) writes `Patient.display_name/sex/
+  birth_year` **fill-only-when-empty** → staff values are final, NO migration needed. (b) Vitals
+  PATCH extended (`display_name`/`sex` pattern-validated/`age_years`→birth_year; audits only sent
+  fields). (c) Medic post-referral card: Gender row + "Edit Details" identity editor (name/age/
+  gender, prefilled, weight-editor pattern); doctor portal displays the same Patient row. New
+  `test_patient_demographics.py` (4 tests: autofill · never-overwrite · malformed-ignored ·
+  staff-PATCH-final + validation). **166 tests pass.** UI preview-verified incl. Bangla labels.
+  *(→ "Patient Details".)*
 - [ ] **P2-3 — Medic Portal UI polish.** *(→ "UI/UX".)*
 
 ### P3 — Doctor Portal `/doctor/`
