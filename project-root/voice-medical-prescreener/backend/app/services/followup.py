@@ -28,13 +28,20 @@ _QUESTION_SYSTEM = (
     "You generate ONE follow-up question for a medical pre-screening conversation in "
     "Bangladesh. The patient answers by voice. You NEVER diagnose and NEVER alarm or "
     "falsely reassure the patient.\n"
-    "You are given the conversation, the list of missing data points, and the "
-    "questions already asked. Pick the single most clinically important missing item "
-    "that has NOT been asked about yet, and write one short, conversational question "
-    "in BANGLA (Bangla script), followed by the same question in English in "
-    "parentheses.\n"
-    "Return ONLY a JSON object: {\"target_gap\": \"<the missing item you chose>\", "
-    "\"priority\": <1 = most important>, "
+    "You are given the conversation, a list of missing data points (may be empty), "
+    "and the questions already asked.\n"
+    "If any missing data points remain, pick the single most clinically important one "
+    "that has NOT been asked about yet and ask about it.\n"
+    "If the list is empty, ask ONE short DEEPENING question grounded in what the "
+    "patient already said — the clinical detail a doctor would want next (for "
+    "example: severity on a 1-10 scale, exact location or spread, what triggers or "
+    "relieves it, how it has changed since it started, effect on sleep/eating/daily "
+    "activities, similar past episodes, or family history of the same problem). "
+    "Never repeat or rephrase an already-asked question.\n"
+    "Write the question in BANGLA (Bangla script), followed by the same question in "
+    "English in parentheses.\n"
+    "Return ONLY a JSON object: {\"target_gap\": \"<the missing item, or a 2-4 word "
+    "label for the new detail>\", \"priority\": <1 = most important>, "
     "\"question\": \"<Bangla question> (<English question>)\"}"
 )
 
@@ -69,8 +76,10 @@ def generate_next_question(
     db: Session, visit: Visit, profile: CaseProfile, *, missing: list[str] | None = None
 ) -> FollowupQuestion | None:
     """Ask M7 for the next question, or return None when the loop should stop
-    (max turns reached, or nothing left to ask). Re-serves an open unanswered
-    question instead of generating a duplicate.
+    (max turns reached; or — in the fields scope only — nothing left to ask).
+    In the MAIN loop an exhausted gap list switches M7 to DEEPENING questions
+    (P1-3) instead of stopping. Re-serves an open unanswered question instead
+    of generating a duplicate.
 
     ``missing`` overrides the M6 gap list (KIOSK-7 resume scope passes the empty
     summary-field keys). The per-visit question cap is SHARED across both scopes,
@@ -93,8 +102,11 @@ def generate_next_question(
         missing = list((profile.gaps or {}).get("missing") or [])
     asked_gaps = {q.target_gap for q in asked if q.target_gap}
     remaining = [m for m in missing if m not in asked_gaps]
-    if not remaining:
-        return None  # nothing left to ask
+    if not remaining and fields_scope:
+        return None  # resume loop: every empty field was asked once — stop
+    # P1-3: in the MAIN loop an empty gap list no longer stops the conversation —
+    # M7 asks a history-grounded DEEPENING question instead (the route's min/cap
+    # gates decide when the loop actually ends).
 
     user = (
         f"CONVERSATION:\n{_conversation_text(db, visit)}\n\n"
@@ -105,15 +117,16 @@ def generate_next_question(
     reply = call_module(
         db, visit_id=visit.id, module_code="M7", system=_QUESTION_SYSTEM, user=user
     )
+    fallback_gap = remaining[0] if remaining else "deepening detail"  # P1-3: may be empty
     try:
         data = _parse_json(reply)
         question_text = str(data["question"]).strip()
-        target_gap = str(data.get("target_gap") or remaining[0])
+        target_gap = str(data.get("target_gap") or fallback_gap)
         priority = int(data.get("priority") or 1)
     except (json.JSONDecodeError, KeyError, TypeError, ValueError):
         # Salvage: use the raw reply as the question rather than losing the turn.
         logger.warning("M7 returned non-JSON for visit %s; using raw text", visit.id)
-        question_text, target_gap, priority = reply.strip(), remaining[0], 1
+        question_text, target_gap, priority = reply.strip(), fallback_gap, 1
 
     if fields_scope and target_gap not in remaining:
         # The no-repeat memory only works on real field keys — never trust the LLM

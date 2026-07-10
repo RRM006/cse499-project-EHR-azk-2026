@@ -6,8 +6,7 @@
 
 **Status keys:** ⬜ Not started · 🟨 In progress · 🟦 Blocked · ✅ Done · ⛔ Retired
 
-**Last updated:** 2026-07-10 (Session 19 — 2.0 build: STRUCT-2/3 + P1-1/P1-2 done; Teal Medical
-theme ADR-0043)
+**Last updated:** 2026-07-10 (Session 21 — 2.0 build: P1-5 background-assessed submit; **162 tests**)
 **Current phase:** ✅ **Build complete.** The 20-step plan (spec: `context_fixed_problem.md`) is
 fully implemented — **every numbered spec item (STRUCT/KIOSK/MEDIC/DOCTOR) is ✅** and 150 tests
 pass. What remains for the project is NOT build work: the **human live real-mic run**
@@ -37,6 +36,21 @@ system-setup gap (`speech-dispatcher`+`espeak-ng` not installed → empty Linux 
 `tts.js` degrades correctly per ADR-0028). Added guide **PART 1B** (Arch Bangla-voice install);
 no app code. Pending: human runs `sudo pacman -S speech-dispatcher espeak-ng`, then verify 🔊
 speaks (TC-V2 on Arch).
+**Session 21 (no module-status change):** 2.0 cycle item **P1-5** (ADR-0042b): `submit_visit` now
+returns instantly — status+audit synchronous, the M10/M11/M10C LLM work moved to a FastAPI
+`BackgroundTasks` job (`_post_submit_assessment`, own session bound to the request's engine via
+`db.get_bind()` so tests exercise the same path). New `test_submit_background.py` proves the
+assessment lands, a background crash can't block/undo submission, and the **local red-flag rule
+still forces Critical from the background with the model down (rule #3)** → **162 pass** (was 159).
+P1 is now 5/6 done (P1-6 polish left). Module table unchanged (gates on the human live run).
+**Session 20 (no module-status change):** 2.0 cycle items **P1-3 + P1-4**. P1-3 = the first backend
+change of the cycle: the M7–M9 main loop now has a **question floor** (`followup_min_questions=4`,
+cap 5 still wins) and M7 switches to history-grounded **deepening questions** when the M6 gap list
+runs out (human-approved prompt); the KIOSK-7 `scope=fields` resume loop is unaffected. New
+`test_followup_min_questions.py` + 2 tests updated to the new spec → **159 pass** (was 156). P1-4 =
+kiosk summary highlights empty REQUIRED fields (amber `.missing` card + bilingual "Needs info"
+chip). Module table unchanged (still gates on the human live run — note M7's loop behavior changed,
+so the live run will see 4–5 questions per visit).
 **Session 19 (no module-status change):** advanced the 2.0 cycle by 4 tracker items (one per "go"),
 all frontend/CSS, all preview-verified with a stubbed `api` (no LLM calls): **STRUCT-2** logout→`/`
 in all 3 headers; **STRUCT-3** shared "Teal Medical" palette (ADR-0043, human chose Option A from

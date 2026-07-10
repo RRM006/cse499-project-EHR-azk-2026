@@ -60,7 +60,12 @@ class Settings(BaseSettings):
 
     # --- follow-up loop (M7–M9) ---
     # Loop guardrails from the capstone brief: stop on completeness OR max turns
-    # (avoids patient fatigue). Both tunable without code changes.
+    # (avoids patient fatigue). All tunable without code changes.
+    # P1-3 (2.0 build): the main loop also has a FLOOR — it keeps asking useful,
+    # history-grounded questions until at least `followup_min_questions` were asked,
+    # even when the 0.7 completeness threshold is already met. The KIOSK-7
+    # `scope=fields` resume loop is NOT affected by the floor.
+    followup_min_questions: int = 4
     followup_max_questions: int = 5
     completeness_threshold: float = 0.7
 

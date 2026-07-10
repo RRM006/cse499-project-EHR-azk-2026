@@ -16,6 +16,57 @@
 
 ---
 
+## Session 21 — 2026-07-10 — 2.0 build: P1-5 (Confirm & Submit = instant, assessment in background); 162 tests
+- Did: **P1-5** (ADR-0042b, one "go"). `backend/app/api/routes_dashboard.py`:
+  `submit_visit()` now keeps only the guards + `status→awaiting_review` + audit **synchronous**
+  (the case is in the medic queue the moment the response returns); the up-to-3 LLM round-trips
+  (M10 risk + M11 XAI + M10C suggestion) moved into a new **`_post_submit_assessment(engine,
+  visit_id)`** FastAPI `BackgroundTasks` job with its OWN session. Seam detail that kept every
+  existing test green: the job binds to **`db.get_bind()`** (the request's engine), so prod uses
+  the real DB and the tests' overridden in-memory engine exercises the same path — zero fixture
+  churn. Job is fire-and-forget (try/except + `logger.exception`); `assess_visit` /
+  `suggest_condition` were already idempotent + best-effort. No frontend change needed (the tier
+  fills into the staff queues on their 15s refresh; null tier renders "—").
+  Tests: new `test_submit_background.py` (3): assessment+XAI+C1 land after submit · a background
+  crash never blocks/undoes the submission · **red flag still forces Critical from the background
+  with the model down (rule #3)**. **162 pass** (was 159), 6.1 s.
+- Decided: no new ADR — this is the implementation of the already-locked ADR-0042(b).
+- Broke / problem: none; all submit-dependent suites (staff routes, risk, report/review,
+  suggested condition, risk override) passed unchanged thanks to the engine-binding seam.
+- Deferred: P1-6 (kiosk polish — the leftover blue tints in kiosk.html inline CSS), then P2→P4.
+  Live-run caveat: TestClient runs background tasks synchronously, so the "instant return" is
+  proven by design/tests offline — the human live run will see the real wall-clock win.
+- Next: **P1-6** — Patient Portal UI polish (closes P1): retint `#EFF6FF`/`#BFDBFE`/`#F1F5F9` in
+  `frontend/kiosk.html` to teal equivalents + visual polish; layouts/hooks untouched.
+
+## Session 20 — 2026-07-10 — 2.0 build: P1-3 (4–5 follow-up floor + deepening) + P1-4 (missing-field highlight); 159 tests
+- Did: two tracker items, one per "go":
+  - **P1-3 (backend — first of the cycle):** the main follow-up loop now always asks **4–5**
+    history-grounded questions. (1) `config.py`: `followup_min_questions=4` (cap stays 5).
+    (2) `routes_followup.py` `_loop_state()`: "complete" needs the 0.7 threshold **AND** ≥4
+    questions asked; cap exit unchanged; `scope=fields` resume loop untouched. (3) M7
+    (`services/followup.py`): human-approved broadened `_QUESTION_SYSTEM` — gap-filling first,
+    then **DEEPENING** questions grounded in the conversation (severity 1–10, location/spread,
+    triggers/relievers, progression, impact, past episodes, family history) when the gap list is
+    exhausted (main loop only; fields scope still stops); fixed the `remaining[0]` salvage
+    fallbacks that would crash on an empty list. Tests: new `test_followup_min_questions.py`
+    (floor-via-deepening incl. non-JSON salvage · cap terminates when floor>cap · fields scope
+    unaffected) + 2 existing tests updated to the new spec (`test_followup_loop.py` drives to the
+    floor and asserts exactly 4; `test_resume_loop.py` asserts the main loop stays open at 0 asked,
+    re-serving the open question). **159 pass** (was 156).
+  - **P1-4 (frontend):** kiosk summary — empty REQUIRED fields (the `HIGHLIGHT_FIELDS` set) now get
+    `.summary-item.missing` (amber warning border/tint) + a bilingual **"Needs info / তথ্য প্রয়োজন"**
+    chip that follows the P1-2 language toggle; optional empties stay muted "Not mentioned".
+    Preview-verified (classes, chip EN↔BN, screenshot; no console errors).
+- Decided: no new ADR — the 4–5-question floor was already locked in ADR-0042(3); the human
+  approved the exact M7 prompt wording in-session before it was coded.
+- Broke / problem: none. Note for the live run: every visit now spends ~3 more Groq M7 calls +
+  M8 merges than before (still tiny vs the ~1,000/day free tier).
+- Deferred: P1-5 (background-assessed submit), P1-6 (kiosk polish — incl. retinting the leftover
+  blue tints in kiosk.html inline CSS: #EFF6FF/#BFDBFE/#F1F5F9), then P2→P4.
+- Next: **P1-5** — move the 3 blocking LLM calls in `submit_visit` (M10/M11/M10C) into FastAPI
+  `BackgroundTasks` so Confirm & Submit returns instantly (status+audit stay synchronous).
+
 ## Session 19 — 2026-07-10 — 2.0 build: STRUCT-2/3 + P1-1/P1-2 (logout, teal theme, auto-stop, full i18n)
 - Did: executed four tracker items, one per "go", each preview-verified with a stubbed `api`
   (no backend/LLM calls — rule #4):

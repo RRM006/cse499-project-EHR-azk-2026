@@ -6,54 +6,49 @@
 
 ---
 
-**Date:** 2026-07-10 (Session 19 end)
+**Date:** 2026-07-10 (Session 21 end)
 **Phase:** Executing **"Context Fixed Problem 2.0"** (`agent_docs/context fixed problem 2.0.md`,
-now a checkable BUILD TRACKER): UI/UX evolve-the-theme redesign + functional fixes on all three
+the checkable BUILD TRACKER): UI/UX evolve-the-theme redesign + functional fixes on all three
 portals + real OTP + a doctor drug-info chatbot. **One item per "go"**, functional fixes before
-polish. **All STRUCT done; P1-1 + P1-2 done. Next = P1-3.**
+polish. **STRUCT ✅ · P1-1..P1-5 ✅. Next = P1-6 (closes P1).** Test suite: **162 pass**.
 
 ## Where we are right now
-- The S9–S17 build is closed (156 tests pass, Alembic head **0010**). This is a fresh fix/feature
-  cycle on top of it.
-- **Done this cycle:** STRUCT-1 (rename), STRUCT-2 (logout→`/`), STRUCT-3 (Teal Medical theme,
-  ADR-0043), P1-1 (Summary auto-stops mic), P1-2 (full EN↔BN toggle). All frontend/CSS; all
-  preview-verified with a stubbed `api` (no LLM calls). **No pytest changes yet this cycle.**
+- Done this cycle: STRUCT-1/2/3 (rename · logout→`/` · Teal Medical theme ADR-0043),
+  P1-1 (Summary auto-stops mic), P1-2 (full EN↔BN toggle), P1-3 (4–5 follow-up floor +
+  M7 deepening mode), P1-4 (amber "Needs info" highlight), **P1-5** (Confirm & Submit returns
+  instantly — M10/M11/M10C in a `BackgroundTasks` job via `_post_submit_assessment()` in
+  `routes_dashboard.py`, own session bound to `db.get_bind()`; red-flag rule verified effective
+  from the background — rule #3; +3 tests → **162 pass**).
+- Alembic head still **0010** (P3-1 will bump to 0011). Only P1-6 left in P1, then P2→P4.
 
 ## The one thing we are doing next
-👉 **STEP: P1-3 — Always ask 4–5 intelligent, history-based follow-up questions.**
-   This is the **largest** P1 item and the first BACKEND change of the cycle. Plan:
-   1. `backend/app/core/config.py`: add `followup_min_questions: int = 4` (cap stays
-      `followup_max_questions: int = 5`).
-   2. `backend/app/api/routes_followup.py`: in the non-`fields` loop (`next_question` +
-      `answer_question`), do NOT report `complete` via the 0.7 threshold until **≥ min** questions
-      have been asked; still stop at the cap. Count asked questions from the `FollowupQuestion`
-      rows for the visit. Leave the `scope=fields` resume loop (KIOSK-7) behavior unchanged.
-   3. `backend/app/services/followup.py`: broaden `_QUESTION_SYSTEM` + `generate_next_question`
-      so that when the 10 field-gaps are all filled it asks clinically useful **deepening**
-      questions grounded in the conversation (instead of returning `None`). Keep the no-repeat
-      `asked_gaps` guard so it never repeats a target.
-   4. **Add a test** in `backend/tests/` (min-count enforced; cap respected; no infinite loop).
-   5. Run `pytest backend/tests/` — **all 156 must stay green** (+ the new test).
-   Wait for "go". Show the plan/prompt-wording before finalizing the M7 prompt change.
+👉 **STEP: P1-6 — Patient Portal UI polish (closes P1).**
+   Frontend-only, on top of the shared teal base (ADR-0043): retint the leftover BLUE tints in
+   `frontend/kiosk.html` inline CSS (`#EFF6FF`/`#BFDBFE`/`#F1F5F9` → teal equivalents, e.g.
+   `#E6F7F3`/`#B8E5DC`/`#ECF5F3` — summary highlight pills, progress chip, summary icons) +
+   spacing/visual polish per the reference screenshots. KEEP the layout and all wired hooks
+   (`#summary-grid`, docks, modal). Verify in preview (fresh-fetch the assets first).
+   Small, reviewable, wait for "go".
 
 ## The approved plan — priority order (checkable; ONE item per "go")
 > Durable copies: THIS list **and** `agent_docs/context fixed problem 2.0.md` (the BUILD TRACKER,
-> with per-item file pointers). Keep both in sync. Do functional fixes first, theme polish after.
+> with per-item file pointers). Keep both in sync. Functional fixes first, theme polish after.
 
 **Cross-cutting (STRUCT):** [x] STRUCT-1 rename · [x] STRUCT-2 logout→`/` · [x] STRUCT-3 theme =
 "Teal Medical" (ADR-0043).
 
 **P1 Patient Portal (highest):**
-- [x] P1-1 "Summary" auto-stops recording + processes now (`kiosk.js` `submitFinalTurn()` +
-  reworked `finishConversation()`).
+- [x] P1-1 "Summary" auto-stops recording (`kiosk.js` `submitFinalTurn()` + `finishConversation()`).
 - [x] P1-2 Language toggle translates ALL UI (bilingual bubbles + `setBilingualText()`;
   patient raw words verbatim — rule #1).
-- [ ] P1-3 Force 4–5 history-based follow-ups (config gate + `routes_followup.py` + broaden
-  `_QUESTION_SYSTEM` in `services/followup.py`). **Add a test.**
-- [ ] P1-4 Highlight MISSING required fields on the summary (`renderSummary` + `.summary-item.missing` CSS).
-- [ ] P1-5 Submit fast = background assessment (move `assess_visit`+`suggest_condition` in
-  `routes_dashboard.submit_visit`:92 into FastAPI `BackgroundTasks`; keep status+audit synchronous).
-- [ ] P1-6 Patient Portal UI polish (on top of the shared teal base).
+- [x] P1-3 4–5 follow-up floor + deepening (S20: `followup_min_questions=4`, `_loop_state()` gate,
+  M7 deepening mode; resume loop unaffected; cap 5 wins. `test_followup_min_questions.py` — 159 pass).
+- [x] P1-4 Missing REQUIRED fields highlighted (S20: `.summary-item.missing` + bilingual chip).
+- [x] P1-5 Submit fast = background assessment (S21: `_post_submit_assessment()` BackgroundTasks
+  job, own session via `db.get_bind()`; red-flag rule verified effective in background — rule #3.
+  New `test_submit_background.py` — **162 pass**).
+- [ ] P1-6 Patient Portal UI polish (incl. retint leftover blue tints in kiosk.html inline CSS:
+  `#EFF6FF`/`#BFDBFE`/`#F1F5F9` → teal equivalents).
 
 **P2 Medic Portal:**
 - [ ] P2-1 Correct **Dhaka** date/time in the queue (shared `dhakaDateTime()` in `shared.js` using
@@ -81,29 +76,31 @@ polish. **All STRUCT done; P1-1 + P1-2 done. Next = P1-3.**
   reference channel — email-OTP or Telegram-for-opted-in).
 
 ## Locked decisions this cycle — do NOT re-open
-- **ADR-0042:** UI = evolve the theme (KEEP layouts & wired features; no rebuild); Submit = assess
-  in background; faculty "Future Features" (quantized Moshi / STT-TTS) = OUT of scope.
-- **ADR-0043:** shared palette = "Teal Medical" (primary `#0F766E`, secondary `#0D9488`, bg
-  `#F0FBF8`, radius 10px); ADR-0029 structure + semantic risk colors kept.
+- **ADR-0042:** UI = evolve the theme (KEEP layouts); Submit = assess in background; 4–5 follow-up
+  floor; browser-side Dhaka time; OTP seam + `000000`; disclaimered chatbot; faculty quantized
+  "Future Features" OUT of scope.
+- **ADR-0043:** shared palette = "Teal Medical" (primary `#0F766E`, secondary `#0D9488`,
+  bg `#F0FBF8`, radius 10px); semantic risk colors kept.
 - Pre-existing S9–S17 locks (C1/C2, DB-backed prescriptions, bilingual values, quota-aware
   switching) — see `decisions.md`.
 
 ## Important environment notes
 - Server: port 8001. Entry points: `/` · `/kiosk.html` · `/medic/` · `/doctor/` · `/legacy/`.
-  `.env`/migration changes need a restart. **DEV_OTP=000000**. Alembic head `0010` (P3-1 bumps to
-  `0011`); NEVER delete the DB. Windows Bangla console needs `PYTHONIOENCODING=utf-8`.
-- **Preview gotcha (hit this cycle):** the browser caches `kiosk.js`/`shared.js`/`shared.css` — do
-  `await fetch(url, {cache:'reload'})` for each changed asset THEN `location.reload()` before
-  asserting, or you'll test stale code. The screenshot tool can also wedge; the a11y `snapshot` is a
-  reliable fallback proof.
-- Three API keys in `backend/.env` (Gemini/Groq/OpenRouter) — rotate before public demo; never
-  auto-run live LLM calls (rule #4). For UI verification, stub `window.api` in the preview.
+  `.env`/migration changes need a restart. **DEV_OTP=000000**. Alembic head `0010`; NEVER delete
+  the DB. Windows console: `PYTHONIOENCODING=utf-8` (used it for pytest this session).
+- **Preview gotchas:** browser caches `kiosk.js`/`shared.js`/`shared.css` — `await fetch(url,
+  {cache:'reload'})` per changed asset THEN `location.reload()` before asserting. The screenshot
+  tool can wedge; a11y `snapshot` is the fallback proof. Stub `window.api` for UI verification
+  (rule #4 — no live LLM calls). `preview_click` can silently no-op; prefer `el.click()` via eval.
+- Three API keys in `backend/.env` (Gemini/Groq/OpenRouter) — rotate before public demo.
+  P1-3 note: each visit now uses ~3 more Groq M7 calls + M8 merges (fine vs ~1,000/day).
 
 ## Reminders (the four non-negotiables)
 - **Rule #1:** raw words are never edited/translated — patient bubbles/transcript stay verbatim.
 - **Rule #2:** the system never diagnoses — the chatbot (P3-3) is informational + disclaimered.
-- **Rule #3:** red flags are ADD-only; staff can't hide a red-flag Critical.
+- **Rule #3:** red flags are ADD-only — P1-5 must keep the local red-flag rule effective in the
+  background job (it forces Critical even when every LLM is down).
 - **Rule #4:** no auto-run of live LLM calls; synthetic/offline data only in dev.
 - Run (Windows): `.venv\Scripts\python.exe -m uvicorn backend.app.main:app --reload --port 8001`
 - Run (Arch):    `.venv/bin/python -m uvicorn backend.app.main:app --reload --port 8001`
-- Tests: `pytest backend/tests/` (**156 passing** as of S17; P1-3 adds one).
+- Tests: `pytest backend/tests/` (**162 passing** as of S21).

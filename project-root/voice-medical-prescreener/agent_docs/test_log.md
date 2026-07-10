@@ -72,6 +72,41 @@ transcribed by hand (the "ground truth"). Record the model + machine each time.
 
 ## Test entries (newest first)
 
+## 2026-07-10 — Session 21 — P1-5 background-assessed submit: suite 159 → 162, all offline
+- Setup: Windows desktop; `pytest backend/tests/` with `PYTHONIOENCODING=utf-8`; LLM boundary
+  faked via the standard `_attempt` monkeypatch (rule #4 — zero live API spend).
+- Metric(s): pass/fail; the three P1-5 behavioral guarantees.
+- Result: **162 passed, 0 failed, 6.08 s** (was 159). New `test_submit_background.py` (3 tests):
+  (1) after `POST /submit` returns, the background job has stored the RiskAssessment (tier high) +
+  XaiExplanation + C1 `suggested_condition`, and the medic queue shows the tier; (2) with
+  `assess_visit` monkeypatched to raise, submit still returns **200 / awaiting_review**, the visit
+  is queued (tier None → "—"), and nothing is rolled back — a background crash can never block or
+  undo a submission; (3) with a red-flag phrase ("বুকে ব্যথা") and the M10 model call RAISING, the
+  background job still stores **tier=critical, rule_overrode=True** with a stored deterministic
+  reason — rule #3 survives the move off the request thread. All pre-existing submit-dependent
+  suites (staff routes, risk, report/review, suggested condition, risk override) passed UNCHANGED —
+  the job binds to the request's engine (`db.get_bind()`), so the tests' in-memory DB exercises the
+  identical path.
+- Notes: TestClient executes BackgroundTasks synchronously before returning, so offline tests can't
+  measure the wall-clock win — the human live run will see submit drop from ~seconds (3 LLM calls)
+  to instant.
+
+## 2026-07-10 — Session 20 — P1-3 follow-up floor + deepening: suite 156 → 159, all offline
+- Setup: Windows desktop; `pytest backend/tests/` with `PYTHONIOENCODING=utf-8`; all LLM calls
+  faked via the standard `_attempt` monkeypatch (rule #4 — zero live API spend).
+- Metric(s): pass/fail; loop-termination counts (the floor/cap invariants).
+- Result: **159 passed, 0 failed, 6.57 s** (was 156). New `test_followup_min_questions.py` (3
+  tests): (1) threshold met after answer 1 but the loop ends at **exactly 4** questions, Q2–Q4 via
+  DEEPENING (incl. the non-JSON salvage path with empty gap list → `target_gap="deepening detail"`,
+  and the M7 user msg for deepening calls carries an EMPTY missing list); (2) floor 10 > cap 5 →
+  terminates at **exactly 5** (no infinite loop); (3) `scope=fields` resume loop unaffected —
+  completes at **2** questions when both empty fields were asked. Two existing tests updated to the
+  new spec: `test_followup_loop.py` (drives to the floor, asserts 4) and `test_resume_loop.py`
+  (main loop no longer complete at 0 asked; re-serves the open question, no duplicate M7 spend).
+- Notes: P1-4 (missing-field highlight) verified in the browser preview the same session (classes,
+  bilingual chip EN↔BN, screenshot, no console errors) — frontend-only, no pytest surface. The
+  live-run implication of P1-3: every visit now asks 4–5 M7 questions (≈3 extra Groq calls/visit).
+
 ## 2026-07-07 — Session 17 — LLM quota audit + quota-aware switching (ADR-0041) test gate
 - Setup: Windows desktop; read-only SQL on `backend/prescreener.db` `module_events`; one read-only
   `GET https://openrouter.ai/api/v1/key`; then the new switching code + pytest.

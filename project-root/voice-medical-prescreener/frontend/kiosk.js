@@ -385,8 +385,13 @@ function renderSummary(profile) {
     // KIOSK-6: bilingual DERIVED value for the active language (shared.js fieldValue,
     // display-only with cross-language + legacy {value} fallback). Raw is untouched.
     const text = fieldValue(fields[key]);
+    // P1-4: a REQUIRED field (the HIGHLIGHT set) with no text gets the warning
+    // "needs info" treatment so the patient can see exactly what to fill next.
+    const requiredMissing = HIGHLIGHT_FIELDS.includes(key) && !text;
     const cell = document.createElement('div');
-    cell.className = 'summary-item' + (HIGHLIGHT_FIELDS.includes(key) ? ' highlight' : '');
+    cell.className = 'summary-item'
+      + (HIGHLIGHT_FIELDS.includes(key) ? ' highlight' : '')
+      + (requiredMissing ? ' missing' : '');
     if (key === 'symptom_details' || key === 'current_concern') cell.style.gridColumn = 'span 2';
     const head = document.createElement('div');
     head.className = 'summary-item-head';
@@ -398,6 +403,14 @@ function renderSummary(profile) {
     label.textContent = t(FIELD_LABELS[key].en, FIELD_LABELS[key].bn);
     head.appendChild(icon);
     head.appendChild(label);
+    if (requiredMissing) {
+      const chip = document.createElement('span');
+      chip.className = 'missing-chip';
+      chip.dataset.en = 'Needs info';        // P1-2: follows the language toggle
+      chip.dataset.bn = 'তথ্য প্রয়োজন';
+      chip.textContent = t('Needs info', 'তথ্য প্রয়োজন');
+      head.appendChild(chip);
+    }
     const val = document.createElement('div');
     val.className = 'summary-val' + (text ? '' : ' empty');
     val.textContent = text || t('Not mentioned', 'উল্লেখ করা হয়নি');

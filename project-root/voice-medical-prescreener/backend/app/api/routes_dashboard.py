@@ -10,9 +10,10 @@ append-only audit_log row per edit arrives with G6/BE-7; until then the edit
 provenance itself (edited_by/edited_at) is the record.
 """
 
+import logging
 from datetime import datetime, timezone
 
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException
 from pydantic import BaseModel
 from sqlalchemy.orm import Session
 
@@ -38,6 +39,8 @@ from backend.app.services.suggestion import (
 )
 
 router = APIRouter(prefix="/api", tags=["staff"])
+
+logger = logging.getLogger(__name__)
 
 
 def _get_visit_or_404(db: Session, visit_uuid: str) -> Visit:
@@ -89,11 +92,39 @@ def list_users(role: str | None = None, db: Session = Depends(get_db)) -> list[U
 # --- kiosk hand-off ---
 
 
+def _post_submit_assessment(engine, visit_id: int) -> None:
+    """P1-5 (ADR-0042b): the submit-time M10/M11/M10C work (up to 3 LLM round-trips)
+    runs AFTER the response, on its OWN session — the request session closes with
+    the response. Bound to the same engine the request used (so tests with an
+    overridden in-memory DB exercise the same path). Fire-and-forget by design:
+    a failure here must never touch the already-submitted visit, and the LOCAL
+    red-flag rule inside assess_visit still forces Critical even when every LLM
+    is down (rule #3). The staff queues pick the tier up on their 15s refresh."""
+    session = Session(bind=engine, autoflush=False, future=True)
+    try:
+        visit = session.get(Visit, visit_id)
+        if visit is None:
+            return
+        profile = session.query(CaseProfile).filter(CaseProfile.visit_id == visit_id).first()
+        if latest_assessment(session, visit_id=visit_id) is None:
+            assess_visit(session, visit, profile)  # internal LLM failures already swallowed
+        suggest_condition(session, visit, profile)  # C1 — idempotent (once per visit)
+    except Exception:  # noqa: BLE001 — background job: log, never crash the worker
+        logger.exception("Post-submit assessment failed for visit %s", visit_id)
+    finally:
+        session.close()
+
+
 @router.post("/visits/{visit_uuid}/submit", response_model=VisitOut)
-def submit_visit(visit_uuid: str, db: Session = Depends(get_db)) -> VisitOut:
-    """Patient's "Confirm & Submit": in_progress -> awaiting_review, and best-effort
-    run the risk assessment NOW so the medic queue shows a tier immediately
-    (reconciliation f6: M10 runs before staff review — matching the flowchart)."""
+def submit_visit(
+    visit_uuid: str, background_tasks: BackgroundTasks, db: Session = Depends(get_db)
+) -> VisitOut:
+    """Patient's "Confirm & Submit": in_progress -> awaiting_review INSTANTLY.
+
+    P1-5 (ADR-0042b): the risk assessment + C1 suggestion (reconciliation f6 — M10
+    runs before staff review) moved to a BackgroundTasks job so the patient never
+    waits on LLM latency; status + audit stay synchronous, so the case is in the
+    medic queue the moment this returns (tier fills in on the queue's refresh)."""
     visit = _get_visit_or_404(db, visit_uuid)
     if visit.status != "in_progress":
         raise HTTPException(status_code=409, detail=f"Visit is already '{visit.status}'.")
@@ -102,14 +133,10 @@ def submit_visit(visit_uuid: str, db: Session = Depends(get_db)) -> VisitOut:
     ):
         raise HTTPException(status_code=400, detail="Nothing to submit — no patient speech yet.")
 
-    profile = db.query(CaseProfile).filter(CaseProfile.visit_id == visit.id).first()
-    if latest_assessment(db, visit_id=visit.id) is None:
-        assess_visit(db, visit, profile)  # never raises the visit away: rule side is local
-    suggest_condition(db, visit, profile)  # C1 (best-effort) — staff-facing, never blocks
-
     updated = repo.set_visit_status(db, visit=visit, status="awaiting_review")
     audit(db, action="visit.submit", entity_type="visit", entity_id=visit.uuid,
           clinic_id=visit.clinic_id)
+    background_tasks.add_task(_post_submit_assessment, db.get_bind(), visit.id)
     return updated
 
 

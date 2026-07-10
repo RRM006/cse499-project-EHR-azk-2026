@@ -93,9 +93,6 @@ def test_fields_scope_ignores_threshold_and_targets_field_keys(env):
     client, TestSession, state = env
     uuid = _visit_with_intake(client)
 
-    # Default scope: score 0.8 >= 0.7 -> the normal loop says complete.
-    assert client.post(f"/api/visits/{uuid}/followup/next").json()["complete"] is True
-
     # Resume scope: 2 fields still empty -> a question, targeting a FIELD KEY
     # (the fake LLM echoed a non-key target_gap; the service must correct it).
     r = client.post(f"/api/visits/{uuid}/followup/next?scope=fields")
@@ -108,6 +105,13 @@ def test_fields_scope_ignores_threshold_and_targets_field_keys(env):
     turns = client.get(f"/api/visits/{uuid}").json()["utterances"]
     assert turns[-1]["role"] == "system"
     assert turns[-1]["raw_text"] == body["question"]["question_text"]
+
+    # Default scope at score 0.8: before P1-3 this said complete at 0 questions
+    # asked; the floor now keeps the MAIN loop open (here it re-serves the same
+    # open question instead of minting a duplicate).
+    r0 = client.post(f"/api/visits/{uuid}/followup/next").json()
+    assert r0["complete"] is False
+    assert r0["question"]["id"] == body["question"]["id"]
 
 
 def test_negative_answer_counts_as_answered_never_reasked(env):

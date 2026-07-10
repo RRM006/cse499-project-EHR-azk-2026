@@ -1,10 +1,12 @@
 """BE-3 checks — the M7 -> answer -> M8 -> M9 loop, fully offline.
 
 The fake LLM starts with a sparse extraction (low completeness), then returns a
-fuller one after the answer, so the loop's exit-on-threshold is exercised end to
-end. Also covers: question stored + spoken (system utterance), no re-generation
-while a question is open, human-edited fields surviving the M8 merge, the answered
-gap moving missing -> present, max-turns exit, and guard rails.
+fuller one after the answer, so the loop's exit rule is exercised end to end.
+P1-3 (2.0 build): "complete" now needs the 0.7 threshold AND >= 4 questions asked
+(the floor), so the loop keeps asking until the doctor has 4-5 answers' worth.
+Also covers: question stored + spoken (system utterance), no re-generation while a
+question is open, human-edited fields surviving the M8 merge, the answered gap
+moving missing -> present, max-turns exit, and guard rails.
 """
 
 import json
@@ -104,13 +106,27 @@ def test_full_loop_question_answer_complete(env):
     # calling next again re-serves the SAME open question (no duplicate M7 spend)
     assert client.post(f"/api/visits/{uuid}/followup/next").json()["question"]["id"] == q["id"]
 
-    # answer -> M8 re-extract (fuller now) -> M9 over threshold -> complete
+    # answer -> M8 re-extract (fuller now) -> threshold met, BUT the P1-3 floor
+    # (min 4 questions) keeps the loop going: not complete, a next question comes.
+    q1_id = q["id"]
     state["filled"] = 8
     r = client.post(f"/api/visits/{uuid}/followup/answer",
-                    json={"question_id": q["id"], "raw_text": "তিন দিন ধরে জ্বর"})
+                    json={"question_id": q1_id, "raw_text": "তিন দিন ধরে জ্বর"})
     assert r.status_code == 200
     body = r.json()
-    assert body["complete"] is True and body["completeness_score"] == pytest.approx(0.8)
+    assert body["complete"] is False and body["completeness_score"] == pytest.approx(0.8)
+    assert body["next_question"] is not None
+
+    # keep answering: with the threshold already met, the loop must end exactly
+    # when the floor (4 asked) is reached.
+    answered = 1
+    while not body["complete"]:
+        assert answered < 8, "loop failed to terminate"
+        body = client.post(f"/api/visits/{uuid}/followup/answer",
+                           json={"question_id": body["next_question"]["id"],
+                                 "raw_text": "উত্তর"}).json()
+        answered += 1
+    assert answered == 4
 
     # linkage + gap bookkeeping + module_events
     db = TestSession()
@@ -123,7 +139,7 @@ def test_full_loop_question_answer_complete(env):
 
     # question answered -> answering again is a 409
     r = client.post(f"/api/visits/{uuid}/followup/answer",
-                    json={"question_id": q["id"], "raw_text": "again"})
+                    json={"question_id": q1_id, "raw_text": "again"})
     assert r.status_code == 409
 
 

@@ -12,7 +12,7 @@
 
 ## Progress at a glance
 - **Cross-cutting (STRUCT):** ✅ STRUCT-1 · ✅ STRUCT-2 · ✅ STRUCT-3
-- **P1 Patient Portal (highest):** ✅ P1-1 · ✅ P1-2 · 👉⬜ P1-3 · ⬜ P1-4 · ⬜ P1-5 · ⬜ P1-6
+- **P1 Patient Portal (highest):** ✅ P1-1 · ✅ P1-2 · ✅ P1-3 · ✅ P1-4 · ✅ P1-5 · 👉⬜ P1-6
 - **P2 Medic Portal:** ⬜ P2-1 · ⬜ P2-2 · ⬜ P2-3
 - **P3 Doctor Portal:** ⬜ P3-1 · ⬜ P3-2 · ⬜ P3-3 · ⬜ P3-4
 - **P4 OTP (last):** ⬜ P4-1
@@ -50,13 +50,26 @@
   `applyLanguage()` + the 2 fallback inputs. **Patient bubbles have NO dataset — verbatim forever
   (rule #1)**; server questions (EN+BN in one string) left as captured. Preview-verified both
   directions incl. round-trip. *(→ "Language Toggle".)*
-- [ ] **P1-3 — Always ask 4–5 history-based follow-ups.** `followup_min_questions=4` in `config.py`;
-  don't report `complete` before min in `routes_followup.py`; broaden `_QUESTION_SYSTEM` in
-  `services/followup.py`. Add a test. *(→ "Follow-up Questions".)*
-- [ ] **P1-4 — Highlight MISSING required fields on the summary.** `renderSummary` + `.summary-item.missing`
-  CSS in `frontend/kiosk.html`. *(→ "Missing Medical Information".)*
-- [ ] **P1-5 — Confirm & Submit fast = background assessment.** Move M10/M11/M10C in
-  `routes_dashboard.submit_visit` (:92) into FastAPI `BackgroundTasks`; keep status+audit sync. *(→ "Confirm and Submit".)*
+- [x] **P1-3 — Always ask 4–5 history-based follow-ups.** ✅ done S20 — `followup_min_questions=4`
+  in `config.py`; `_loop_state()` in `routes_followup.py` now requires threshold AND ≥4 asked; M7
+  (`services/followup.py`) switches to history-grounded DEEPENING questions when the gap list runs
+  out (main loop only — the `scope=fields` resume loop still stops as before; cap 5 always wins;
+  empty-list salvage fixed). Human approved the new `_QUESTION_SYSTEM` wording. New
+  `test_followup_min_questions.py` (floor via deepening / cap terminates / fields scope unaffected)
+  + 2 existing tests updated to the new spec. **159 tests pass.** *(→ "Follow-up Questions".)*
+- [x] **P1-4 — Highlight MISSING required fields on the summary.** ✅ done S20 — empty REQUIRED
+  fields (the `HIGHLIGHT_FIELDS` clinical set) get `.summary-item.missing` (amber warning border +
+  tinted card + bold amber "Not mentioned") + a bilingual "Needs info / তথ্য প্রয়োজন" chip that
+  follows the language toggle; optional empties stay muted. Preview-verified (classes, chip,
+  EN↔BN, screenshot). *(→ "Missing Medical Information".)*
+- [x] **P1-5 — Confirm & Submit fast = background assessment.** ✅ done S21 (ADR-0042b) — new
+  `_post_submit_assessment()` in `routes_dashboard.py` runs M10/M11/M10C in a FastAPI
+  `BackgroundTasks` job on its OWN session bound via `db.get_bind()` (same engine in prod AND
+  tests); submit keeps only guards + status→`awaiting_review` + audit synchronous, so the endpoint
+  returns instantly and the tier fills in on the staff queues' 15s refresh. Job is fire-and-forget
+  (try/except + log). New `test_submit_background.py`: assessment+C1 land after submit · a
+  background crash never blocks/undoes submission · red flag STILL forces Critical from the
+  background with the model down (rule #3). **162 tests pass.** *(→ "Confirm and Submit".)*
 - [ ] **P1-6 — Patient Portal UI polish** on top of STRUCT-3. *(→ "UI/UX".)*
 
 ### P2 — Medic Portal `/medic/`

@@ -4,11 +4,15 @@
 > re-exploring the whole project each session. Update it whenever you add or move
 > a folder/file. Keep each note to one line.
 
-**Last updated:** 2026-07-10 (Session 19 — still no files added/moved; 2.0 build edited existing
-files only: `shared.css` (Teal Medical palette, ADR-0043), `shared.js` (`logout()`,
-`setBilingualText`-support, placeholder i18n), `kiosk.js`/`kiosk.html`, medic/doctor headers.
-Structure below still current; the 2.0 build will add `Visit.submitted_at`+Alembic 0011, an OTP
-table, and a `routes_assistant.py` chatbot route — update this map when those land.)
+**Last updated:** 2026-07-10 (Session 21 — new test files so far this cycle:
+`backend/tests/test_followup_min_questions.py` (S20, P1-3) and
+`backend/tests/test_submit_background.py` (S21, P1-5) → suite **162**. Otherwise edits to existing
+files only: S19 = `shared.css` (Teal Medical, ADR-0043), `shared.js` (`logout()`, placeholder
+i18n), `kiosk.js`/`kiosk.html`, medic/doctor headers; S20 = `config.py`
+(+`followup_min_questions`), `routes_followup.py` (floor gate), `services/followup.py` (deepening
+M7 prompt), kiosk missing-field highlight; S21 = `routes_dashboard.py`
+(`_post_submit_assessment` BackgroundTasks job). Still coming: `Visit.submitted_at`+Alembic 0011,
+an OTP table, `routes_assistant.py` — update this map when those land.)
 
 ---
 

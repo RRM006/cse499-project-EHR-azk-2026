@@ -9,6 +9,12 @@ Both accept ?scope=fields (KIOSK-7 resume loop on the kiosk summary screen): the
 0.7-threshold gate does NOT apply — "complete" then means every one of the 10
 summary fields carries text, the shared question cap was reached, or every empty
 field has already been asked once ("নেই / জানি না" counts as answered).
+
+P1-3 (2.0 build): the MAIN loop additionally has a question FLOOR — it is not
+"complete" until at least `followup_min_questions` (4) were asked, even when the
+completeness threshold is already met; when the M6 gap list runs out, M7 asks
+history-grounded DEEPENING questions instead. The cap (5) still always wins.
+The `scope=fields` resume loop is unaffected by the floor.
 """
 
 from typing import Literal
@@ -39,9 +45,21 @@ def _visit_and_profile(db: Session, visit_uuid: str) -> tuple[Visit, CaseProfile
     return visit, profile
 
 
-def _loop_state(profile: CaseProfile) -> tuple[float, bool]:
+def _loop_state(db: Session, visit: Visit, profile: CaseProfile) -> tuple[float, bool]:
+    """(score, complete?) for the MAIN loop. P1-3: completeness alone is no longer
+    enough — the patient must also have been asked >= followup_min_questions, so the
+    doctor always gets 4–5 answers' worth of history. The cap exit (generator
+    returning None) is handled by the callers."""
+    settings = get_settings()
     score = completeness_score(profile)
-    return score, score >= get_settings().completeness_threshold
+    asked_count = (
+        db.query(FollowupQuestion).filter(FollowupQuestion.visit_id == visit.id).count()
+    )
+    complete = (
+        score >= settings.completeness_threshold
+        and asked_count >= settings.followup_min_questions
+    )
+    return score, complete
 
 
 def _fields_scope_step(
@@ -70,8 +88,8 @@ def next_question(
     if scope == "fields":  # KIOSK-7 resume loop — no threshold gate
         complete, score, question = _fields_scope_step(db, visit, profile)
         return NextQuestionOut(complete=complete, completeness_score=score, question=question)
-    score, threshold_met = _loop_state(profile)
-    if threshold_met:
+    score, loop_complete = _loop_state(db, visit, profile)
+    if loop_complete:
         return NextQuestionOut(complete=True, completeness_score=score)
     try:
         question = generate_next_question(db, visit, profile)
@@ -115,8 +133,8 @@ def answer_question(
         complete, score, next_q = _fields_scope_step(db, visit, profile)
         return AnswerOut(complete=complete, completeness_score=score, next_question=next_q)
 
-    score, threshold_met = _loop_state(profile)
-    if threshold_met:
+    score, loop_complete = _loop_state(db, visit, profile)
+    if loop_complete:
         return AnswerOut(complete=True, completeness_score=score)
     try:
         next_q = generate_next_question(db, visit, profile)
