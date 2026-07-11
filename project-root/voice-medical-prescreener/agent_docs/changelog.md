@@ -16,6 +16,32 @@
 
 ---
 
+## Session 24b — 2026-07-11 — Docs-only addendum: CLAUDE.md refreshed, 2.0 tracker closed, 3.0 scaffold + faculty future-features file created
+- Did (no code, no tests — documentation structure for what comes next):
+  - **CLAUDE.md**: stale status paragraph (S14/156 tests/head 0010) → current (S24, both cycles
+    complete, real OTP ADR-0045, M16, head 0012, **192 tests**); memory-file list gained items
+    10–11 (the two new files below).
+  - **`context fixed problem 2.0.md`**: P4-1 flipped to ✅ with the S24 summary; header now says
+    the WHOLE 2.0 tracker is complete and points to 3.0 — the file is historical.
+  - **NEW `agent_docs/faculty_future_features.md`**: the faculty's two future requirements
+    (quantized Moshi medical-summary model; quantized on-device STT/TTS replacing the browser
+    APIs) kept VERBATIM + implementation notes mapping each onto existing seams (Req 1 = local
+    OpenAI-compatible server as one more provider in `llm_providers.py`, zero pipeline change;
+    Req 2 = `stt_provider` setting + Phase-1 WebSocket slot for STT, `tts.js speak()` for TTS,
+    latency gates, Banglish-output caveat) + a suggested order (summary → STT → TTS). Research
+    track, ⬜ not started, needs the human's "go" + its own plan.
+  - **NEW `agent_docs/context fixed problem 3.0.md`**: the next-cycle scaffold, 🕐 EMPTY/waiting —
+    encodes the 2.0 workflow: human pastes RAW manual-testing findings into its 📥 inbox → Claude
+    triages into a numbered checkable tracker (original words kept verbatim) → human approves the
+    plan → ONE item per "go", functional before polish. Carries over the locked rules + the
+    baseline (192 tests, head 0012).
+  - Consistency touches: `codebase_map.md` agent_docs listing + `current_task.md` next-step now
+    name both new files.
+- Decided: nothing new — documentation organization only (no ADR; ADR-0045 from S24 stands).
+- Broke / problem: none.
+- Deferred: everything in `faculty_future_features.md` (explicitly future).
+- Next: unchanged — the human live real-mic run; findings → the 3.0 inbox.
+
 ## Session 24 — 2026-07-11 — P4-1 real OTP (Alembic 0012, pluggable sender seam, TextBee) — **2.0 TRACKER COMPLETE**; 192 tests
 - Did:
   - **OTP channel research (human asked for deep 2026 research first):** a truly FREE SMS-OTP to

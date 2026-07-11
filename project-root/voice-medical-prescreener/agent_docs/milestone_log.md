@@ -7,7 +7,11 @@
 **Status keys:** ⬜ Not started · 🟨 In progress · 🟦 Blocked · ✅ Done · ⛔ Retired
 
 **Last updated:** 2026-07-11 (Session 24 — **P4-1 real OTP done (Alembic 0012, ADR-0045) — the
-"Context Fixed Problem 2.0" tracker is FULLY COMPLETE**; **192 tests**)
+"Context Fixed Problem 2.0" tracker is FULLY COMPLETE**; **192 tests**. Session 24b docs addendum:
+CLAUDE.md status refreshed; 2.0 tracker marked closed; NEW `context fixed problem 3.0.md` (empty
+scaffold for the next cycle — raw manual-testing findings go in its inbox) and NEW
+`faculty_future_features.md` (quantized Moshi summary + quantized STT/TTS — verbatim faculty text
++ seam notes, future research track). No module/status/test change in 24b.)
 **Current phase:** ✅ **Build complete.** The 20-step plan (spec: `context_fixed_problem.md`) is
 fully implemented — **every numbered spec item (STRUCT/KIOSK/MEDIC/DOCTOR) is ✅** and 150 tests
 pass. What remains for the project is NOT build work: the **human live real-mic run**

@@ -6,7 +6,8 @@
 
 ---
 
-**Date:** 2026-07-11 (Session 24 end)
+**Date:** 2026-07-11 (Session 24 end; 24b docs addendum: CLAUDE.md refreshed, 2.0 tracker closed,
+`context fixed problem 3.0.md` scaffold + `faculty_future_features.md` created)
 **Phase:** ✅ **"Context Fixed Problem 2.0" is COMPLETE** — STRUCT, P1, P2, P3 and P4-1 (real OTP,
 ADR-0045) are ALL done. Test suite: **192 pass**. Alembic head: **0012** (applied to the dev DB).
 There is no open build tracker. What remains is HUMAN work, not build work.
@@ -31,7 +32,10 @@ There is no open build tracker. What remains is HUMAN work, not build work.
    the kiosk OTP can now be EITHER `000000` OR the real code from the server log. Also rotate the
    three API keys before any public demo (guide PART 3). Optional demo upgrade: install TextBee on
    an Android phone (BD SIM), set `OTP_CHANNEL=textbee` + creds in `backend/.env`, restart, and
-   show a real SMS OTP. If a new feature cycle opens instead, plan it with the human first.
+   show a real SMS OTP. **Bugs/UX findings from the manual testing go into
+   `agent_docs/context fixed problem 3.0.md`** (S24 scaffold: human pastes raw notes in its inbox
+   → we triage into a numbered tracker like 2.0 → one item per "go"). The faculty quantized-model
+   work is filed in `agent_docs/faculty_future_features.md` (research track — needs its own plan).
 
 ## Locked decisions this cycle — do NOT re-open
 - **ADR-0045 (S24):** OTP = hashed/expiring/single-use codes in `otp_codes` + pluggable sender

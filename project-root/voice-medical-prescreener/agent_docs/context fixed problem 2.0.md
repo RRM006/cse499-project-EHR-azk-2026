@@ -15,9 +15,12 @@
 - **P1 Patient Portal (highest):** ✅ P1-1 · ✅ P1-2 · ✅ P1-3 · ✅ P1-4 · ✅ P1-5 · ✅ P1-6 — **P1 CLOSED**
 - **P2 Medic Portal:** ✅ P2-1 · ✅ P2-2 · ✅ P2-3 — **P2 CLOSED**
 - **P3 Doctor Portal:** ✅ P3-1 · ✅ P3-2 · ✅ P3-3 · ✅ P3-4 — **P3 CLOSED**
-- **P4 OTP (last):** 👉⬜ P4-1 — ⚠ blocked on the HUMAN's sender-channel choice (ask first)
+- **P4 OTP (last):** ✅ P4-1 — **P4 CLOSED. 🎉 THE WHOLE 2.0 TRACKER IS COMPLETE (S24).**
 - **Out of scope (future research):** the "Faculty Requirement – Future Features" below
-  (quantized Moshi summary model; quantized on-device STT/TTS) — NOT part of this cycle.
+  (quantized Moshi summary model; quantized on-device STT/TTS) — NOT part of this cycle;
+  now filed separately in `agent_docs/faculty_future_features.md`.
+- **The next fix/feature cycle (from the human's manual testing) goes in
+  `agent_docs/context fixed problem 3.0.md` — this file is now history.**
 
 ## Checklist (maps to the requirements below)
 
@@ -139,10 +142,18 @@
   **P3 CLOSED.** *(→ "UI/UX".)*
 
 ### P4 — OTP verification (LAST)
-- [ ] **P4-1 — Real OTP + `000000` universal bypass.** Persisted, expiring code (new `OtpCode` table +
-  migration) + a **pluggable sender seam**. ⚠ Free reliable OTP-to-any-phone is NOT feasible (WhatsApp/SMS
-  cost money/approval; a Telegram bot can't cold-message a phone). **Confirm the channel with the human
-  before building the sender.** *(→ "Patient Login (OTP)".)*
+- [x] **P4-1 — Real OTP + `000000` universal bypass.** ✅ done S24 (**ADR-0045**) — after human-requested
+  deep research (free SMS-OTP to any BD number does not exist: Twilio BD ~$0.60/SMS, WhatsApp
+  ~$0.0113/auth msg + Meta verification, Firebase Blaze-only, Telegram Gateway $0.01/code but
+  Telegram-only), the human chose Option A + a real channel: new `otp_codes` table (**Alembic 0012**),
+  salted-SHA-256 hashed / 5-min expiring / single-use codes, constant-time compare, 5-attempt lockout
+  (429), 60s resend throttle, and a **pluggable sender seam** `backend/app/services/otp/` —
+  `OTP_CHANNEL=dev` (default: code printed to the server log) | `textbee` (real SMS via a TextBee.dev
+  Android-SIM gateway, httpx). The `000000` bypass works ONLY on the dev channel with
+  `OTP_DEV_BYPASS=true` — structurally impossible under textbee (tested). Kiosk UX unchanged.
+  +15 tests → **192 pass**; live-verified end to end (log code → 401 wrong → 200 real → bypass ok).
+  Bonus: fixed pre-existing `migrations/env.py` fileConfig bug that silenced uvicorn logs at startup.
+  *(→ "Patient Login (OTP)".)*
 
 ---
 

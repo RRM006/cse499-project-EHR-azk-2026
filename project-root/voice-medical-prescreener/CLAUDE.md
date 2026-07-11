@@ -15,15 +15,17 @@ regional dialect — *before* they see the doctor. The system:
 3. extracts clinical info, asks follow-up questions (spoken aloud + on screen),
 4. assesses risk, and produces a structured report for the doctor.
 
-This is a **15-module** system (Module 5 is retired in the current design — see below).
+This is a **15-module** system (Module 5 is retired in the current design — see below; S23 added
+**M16**, a doctor-side drug-info assistant with a server-attached disclaimer — ADR-0044).
 We build it one module at a time.
-**Status (Session 14, 2026-07-07): the reconciled system is BUILT and the 20-step fix/feature
-build is COMPLETE** — DB (Alembic head `0010`, all 15 tables + prescriptions/letterhead), the
-M1–M12 backend pipeline + M13 store + M14/M15 doctor side, and all **three portals** (patient
-kiosk, medic, doctor) with the kiosk/medic/doctor spec items all ✅. **156 tests pass** (S17 added
-quota-aware free-provider switching, ADR-0041). What's
-left is NOT build work: the **human live run** (real API keys + a real mic) + a Bangla TTS voice
-on Windows — see `agent_docs/human_live_run_guide.md` and `agent_docs/current_task.md`.
+**Status (Session 24, 2026-07-11): BOTH build cycles are COMPLETE** — the original 20-step build
+AND the **"Context Fixed Problem 2.0" cycle** (teal redesign, bilingual portals, background-assessed
+submit, Dhaka times, M16 assistant, and **real OTP**: hashed/expiring/single-use codes behind a
+pluggable sender seam, `OTP_CHANNEL=dev|textbee`, `000000` bypass dev-channel-only — ADR-0045).
+DB = Alembic head **0012** (17 tables). **192 tests pass.** What's left is NOT build work:
+the **human live real-mic run** + API-key rotation (see `agent_docs/human_live_run_guide.md` and
+`agent_docs/current_task.md`); the next fix cycle, when manual testing finds issues, goes in
+`agent_docs/context fixed problem 3.0.md`.
 
 ## NON-NEGOTIABLE RULES (never break these)
 
@@ -134,6 +136,10 @@ Spread load across **three independent daily buckets** so no single quota is the
 7. `agent_docs/codebase_map.md` — where everything lives in the repo
 8. `agent_docs/test_log.md` — what was tested + results (WER, accuracy, etc.)
 9. `agent_docs/update_system_flowchart.md` — TikZ source of the Patient Journey flow
+10. `agent_docs/context fixed problem 3.0.md` — the NEXT fix/feature cycle (human pastes raw
+    findings from manual testing; we turn them into a numbered, checkable tracker like 2.0)
+11. `agent_docs/faculty_future_features.md` — faculty-required FUTURE work (quantized Moshi
+    summary model + quantized on-device STT/TTS) — research track, NOT current build work
 
 **At the END of every session**, update `changelog.md` and `current_task.md`
 (and `milestone_log.md` / `decisions.md` / `test_log.md` / `codebase_map.md` if

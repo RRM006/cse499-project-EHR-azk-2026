@@ -17,7 +17,10 @@ Edits: `config.py` (OTP_CHANNEL/OTP_DEV_BYPASS/TTL/attempts/cooldown/TextBee cre
 401/429; bypass only on the dev channel), `schemas/patient.py` (+`retry_after_seconds`),
 `.env.example` (OTP block), and `migrations/env.py`
 (`fileConfig(..., disable_existing_loggers=False)` — pre-existing bug: startup migrations silenced
-all uvicorn logs). No frontend changes (kiosk UX identical). **The 2.0 tracker is COMPLETE.**)
+all uvicorn logs). No frontend changes (kiosk UX identical). **The 2.0 tracker is COMPLETE.**
+S24b docs addendum: CLAUDE.md status refreshed; NEW agent_docs files `context fixed problem
+3.0.md` (next-cycle scaffold, empty inbox) + `faculty_future_features.md` (quantized-model
+research track) — see the agent_docs listing below.)
 
 ---
 
@@ -39,7 +42,11 @@ voice-medical-prescreener/
 ├── agent_docs/                   # the project's shared brain (living docs) — now incl. architecture.md,
 │   │                              #   reconciliation.md, mockups-redesign.html, update_system_flowchart.md,
 │   │                              #   context_fixed_problem.md (20-step spec, all ✅), human_live_run_guide.md (S14: human handoff),
-│   │                              #   context fixed problem 2.0.md (S18: UI/UX + fixes + OTP + doctor chatbot — now a checkable BUILD TRACKER; STRUCT-1 ✅)
+│   │                              #   context fixed problem 2.0.md (S18–S24 cycle tracker — ALL items ✅, historical),
+│   │                              #   context fixed problem 3.0.md (S24: NEXT cycle scaffold — human pastes raw manual-testing
+│   │                              #     findings → numbered tracker; currently EMPTY/waiting),
+│   │                              #   faculty_future_features.md (S24: quantized Moshi summary + quantized STT/TTS —
+│   │                              #     verbatim faculty text + seam-mapping notes; research track, NOT current work)
 │   └── ... (constitution, milestone_log, current_task, changelog, test_log, decisions, codebase_map, session_protocol)
 ├── backend/
 │   ├── .env / .env.example       # + OTP block (S24: OTP_CHANNEL=dev|textbee, OTP_DEV_BYPASS, DEV_OTP,
