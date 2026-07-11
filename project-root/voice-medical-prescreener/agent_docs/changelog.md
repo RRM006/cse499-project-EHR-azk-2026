@@ -16,6 +16,44 @@
 
 ---
 
+## Session 24 — 2026-07-11 — P4-1 real OTP (Alembic 0012, pluggable sender seam, TextBee) — **2.0 TRACKER COMPLETE**; 192 tests
+- Did:
+  - **OTP channel research (human asked for deep 2026 research first):** a truly FREE SMS-OTP to
+    arbitrary BD numbers does not exist — Twilio BD $0.5962/SMS (trial = verified numbers only);
+    WhatsApp auth templates ~$0.0113/msg + Meta Business verification; Firebase phone auth is
+    Blaze-plan-only (billing card, per-SMS); local BTRC aggregators (sms.bd / Alpha / MiM) are the
+    real production route at ~৳0.30–0.40/OTP; Telegram Gateway is $0.01/code but recipients must
+    have Telegram; email (Brevo 300/day, Gmail SMTP) is free but verifies the wrong thing. The
+    free-AND-real option: **TextBee.dev** (open-source Android-phone SMS gateway, own BD SIM) —
+    demo-grade, chosen as the second sender.
+  - **Built P4-1 (ADR-0045):** `otp_codes` table (**Alembic 0012**, applied — head 0011→0012) +
+    `OtpCode` model; new package `backend/app/services/otp/` (base ABC + `DevLogSender` default +
+    `TextBeeSender` via httpx + channel-independent `service.py`); config `OTP_CHANNEL=dev|textbee`,
+    `OTP_DEV_BYPASS`, TTL/attempts/cooldown knobs + TextBee creds. Security: salted-SHA-256 hash
+    only (plaintext never persisted/audited), 5-min expiry, single-use, constant-time compares,
+    5-attempt lockout (429 even for the CORRECT code), 60 s resend throttle (`otp_sent=false` +
+    `retry_after_seconds`), undelivered codes voided, random codes can't collide with `000000`.
+    The `000000` bypass lives ONLY inside the `otp_channel=="dev"` branch — a test proves it is
+    rejected under `textbee` even with `OTP_DEV_BYPASS=true`. `lookup` now really issues+audits
+    (`otp_issued`); kiosk UX unchanged (zero frontend edits). `httpx==0.28.1` pinned (now direct).
+  - **Fixed a PRE-EXISTING logging bug** found while verifying: `migrations/env.py` ran
+    `fileConfig(alembic.ini)` at every startup with default `disable_existing_loggers=True`,
+    silencing ALL `uvicorn.*` logs after migrations (entry-point banner, access logs — and the new
+    dev-OTP line). Fix: `disable_existing_loggers=False`; DevLogSender logs via `uvicorn.error`
+    (same channel as main.py's banner).
+  - **Live-verified end to end** on the dev server: 0012 applied at startup → lookup printed
+    `[OTP] verification code for +8801766666666: 130303` → wrong code 401 → real code 200 with an
+    `in_progress` visit → `000000` still accepted on the dev channel.
+- Decided: **ADR-0045** (OTP design: hashed single-use codes behind a pluggable sender seam;
+  dev-log default; TextBee = free real-SMS demo channel; BTRC aggregator = future prod sender).
+- Broke / problem: nothing in the suite (**192 pass**, was 177; +test_otp.py 13 + 
+  test_migration_0012.py 2). The env.py logging bug above was pre-existing, now fixed.
+- Deferred: activating `textbee` (human must install the TextBee app on an Android+BD-SIM phone
+  and put API key + device id in `.env`); a BTRC-approved aggregator sender for real deployment
+  (paid ~৳0.35/OTP — same seam, new subclass).
+- Next: **the 2.0 tracker is COMPLETE (STRUCT+P1+P2+P3+P4 all ✅).** Next real work = the human
+  live real-mic run (`human_live_run_guide.md`) + key rotation; optional: TextBee real-SMS demo.
+
 ## Session 23 — 2026-07-10 — 2.0 build: P2-3 + P3-1..P3-4 (P2 AND P3 CLOSED — Alembic 0011, M16 drug-info assistant); 177 tests
 - Did: five tracker items, one per "go":
   - **P2-3 (closes P2):** the medic portal needed NO retint — `frontend_medic/index.html` is fully

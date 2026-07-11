@@ -763,3 +763,40 @@
   live-loop + fallback lane); adding `httpx` + hand-rolled search scraping (ddgs already covers
   it); trusting the LLM to include the disclaimer (violates rule #2 by construction).
 - Status: Accepted
+
+## ADR-0045 — 2026-07-11 — P4-1 real OTP: hashed single-use codes + pluggable sender seam (dev log default, TextBee real-SMS demo channel)
+- Decision: The kiosk OTP stub becomes REAL verification. (1) **Storage:** new `otp_codes` table
+  (Alembic **0012**) keyed by the normalized phone (nullable `patient_id` audit link) holding ONLY
+  a salted SHA-256 hash — plaintext exists solely in the sender call and is never persisted,
+  audited or logged (the dev-channel server log is the one sanctioned exception; that is its
+  entire purpose). (2) **Policy (channel-independent, `services/otp/service.py`):** 6 random
+  digits via `secrets` (regenerated if ever equal to the bypass code), 5-min expiry
+  (`OTP_TTL_SECONDS`), single-use (`consumed_at`), constant-time compares (`hmac.compare_digest`
+  on hashes — also unicode-safe), 5-attempt lockout that rejects even the CORRECT code (HTTP 429;
+  a fresh code unlocks), 60 s resend throttle (re-lookup returns `otp_sent=false` +
+  `retry_after_seconds`, the outstanding code stays valid), exactly one live code per phone (a new
+  issue voids predecessors), and send-failure voids the fresh code (502). (3) **Seam:** `OtpSender`
+  ABC + `get_sender()` factory on `OTP_CHANNEL`: `dev` = `DevLogSender` (code printed to the
+  server log via the `uvicorn.error` logger) — the Option-A default; `textbee` = `TextBeeSender`
+  (real SMS through a TextBee.dev Android-SIM gateway via httpx, now a pinned direct dep).
+  (4) **Bypass containment:** `000000` is honored ONLY inside the `otp_channel == "dev"` branch
+  AND with `OTP_DEV_BYPASS=true` — structurally impossible under any production channel (a test
+  asserts textbee+flag-on still rejects it). Kiosk UX unchanged; existing tests unaffected because
+  the default config reproduces the old behavior. Also fixed in passing: `migrations/env.py` now
+  calls `fileConfig(..., disable_existing_loggers=False)` — the default silently disabled every
+  `uvicorn.*` logger at startup (banner/access/OTP lines invisible), a pre-existing bug.
+- Why: P4-1 required a real OTP while keeping the free dev/demo path. S24 research showed no
+  truly free SMS-OTP to arbitrary BD numbers exists (Twilio BD $0.5962/SMS, trial only to
+  verified numbers; WhatsApp auth ~$0.0113/msg behind Meta Business verification; Firebase phone
+  auth is Blaze-plan-only with a billing card; Telegram Gateway $0.01/code but recipients must
+  have Telegram; email free tiers verify the wrong identifier). TextBee (open-source, own BD SIM)
+  is the only free REAL-SMS option — demo-grade, perfect for the capstone. Hash-only storage +
+  the structural bypass gate make the security properties hold identically for every channel.
+- Rejected: Firebase phone auth (paid + client-SDK/reCAPTCHA rework of the kiosk); WhatsApp
+  (paid + heaviest setup); Telegram Gateway/bot as primary (excludes non-Telegram walk-in
+  patients; bots cannot cold-message a number); email OTP (kiosk patients often have no email;
+  verifies email, not the phone the DB keys on); storing plaintext or reversible codes (rule #4);
+  a bypass flag independent of channel (accident-prone — the flag alone must never be able to
+  open production). Production later = a BTRC-approved BD aggregator (~৳0.30–0.40/OTP, e.g.
+  sms.bd/Alpha/MiM) as one new `OtpSender` subclass — no core change.
+- Status: Accepted

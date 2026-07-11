@@ -1,12 +1,14 @@
 """Visit routes (BE-1): the aggregate-root API from architecture.md §4, plus the
-kiosk phone + stub-OTP identification flow (ADR-0030).
+kiosk phone + OTP identification flow (ADR-0030; real OTP since P4-1, ADR-0045).
 
 The existing flat routes in routes_transcripts.py stay as-is (aliases during
 migration); nothing here touches raw/corrected transcript logic or .docx export.
 
 Kiosk flow:
-  1. POST /api/patients/lookup      — phone -> find-or-create patient (stub "sends" OTP)
-  2. POST /api/patients/verify-otp  — code == DEV_OTP -> open (or reuse) an in_progress visit
+  1. POST /api/patients/lookup      — phone -> find-or-create patient + ISSUE an OTP
+                                      (hashed in otp_codes; sent via OTP_CHANNEL)
+  2. POST /api/patients/verify-otp  — DB-verified code (or the dev-only 000000
+                                      bypass) -> open (or reuse) an in_progress visit
   3. POST /api/visits/{uuid}/utterances — append raw turns (patient AND system questions)
   4. GET  /api/visits/{uuid}        — visit + full conversation in turn order
 """
@@ -19,8 +21,10 @@ from backend.app.db import repository_visits as repo
 from backend.app.db.database import get_db
 from backend.app.db.models import CaseProfile, Patient, Visit
 from backend.app.schemas.profile import CaseProfileOut
+from backend.app.services.audit import audit
 from backend.app.services.intake import run_intake
 from backend.app.services.llm_client import LLMCallError
+from backend.app.services.otp import OtpSendError, issue_otp, verify_otp_code
 from backend.app.schemas.patient import (
     OtpVerifyOut,
     OtpVerifyRequest,
@@ -51,7 +55,13 @@ def _get_visit_or_404(db: Session, visit_uuid: str) -> Visit:
 
 @router.post("/patients/lookup", response_model=PatientLookupOut)
 def lookup_patient(payload: PatientLookupRequest, db: Session = Depends(get_db)) -> PatientLookupOut:
-    """Find or create the patient for a phone number. The OTP 'send' is a stub."""
+    """Find or create the patient, then ISSUE a real OTP (P4-1, ADR-0045).
+
+    The code is stored hashed in otp_codes and handed to the configured sender
+    (OTP_CHANNEL: dev = server log, textbee = real SMS). Re-lookups inside the
+    resend cooldown do NOT send again — ``otp_sent`` is False and the previous
+    code stays valid (``retry_after_seconds`` says when a resend is allowed).
+    """
     clinic = repo.get_default_clinic(db)
     try:
         patient, created = repo.get_or_create_patient_by_phone(
@@ -59,17 +69,45 @@ def lookup_patient(payload: PatientLookupRequest, db: Session = Depends(get_db))
         )
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=str(exc))
-    return PatientLookupOut(patient=PatientOut.model_validate(patient), created=created)
+    try:
+        issued = issue_otp(db, phone=patient.external_ref, patient_id=patient.id)
+    except OtpSendError as exc:
+        raise HTTPException(status_code=502, detail=f"Could not send the verification code: {exc}")
+    if issued.sent:
+        audit(
+            db,
+            action="otp_issued",
+            entity_type="patient",
+            entity_id=patient.id,
+            clinic_id=clinic.id,
+            detail={"channel": get_settings().otp_channel},
+        )
+    return PatientLookupOut(
+        patient=PatientOut.model_validate(patient),
+        created=created,
+        otp_sent=issued.sent,
+        retry_after_seconds=issued.retry_after_seconds,
+    )
 
 
 @router.post("/patients/verify-otp", response_model=OtpVerifyOut)
 def verify_otp(payload: OtpVerifyRequest, db: Session = Depends(get_db)) -> OtpVerifyOut:
-    """STUB verification: the code must equal the DEV_OTP setting (no SMS in the demo).
+    """DB-backed verification (P4-1): hashed compare, 5-min expiry, single-use,
+    max-attempt lockout. The 000000 bypass works only on the dev channel.
 
     On success, returns the patient's open in_progress visit — creating one if none
     exists — so the kiosk lands directly in the voice conversation.
     """
-    if payload.otp != get_settings().dev_otp:
+    try:
+        normalized = repo.normalize_phone(payload.phone)
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc))
+    outcome = verify_otp_code(db, phone=normalized, code=payload.otp)
+    if outcome == "locked":
+        raise HTTPException(
+            status_code=429, detail="Too many wrong attempts — request a new code."
+        )
+    if outcome != "ok":
         raise HTTPException(status_code=401, detail="Invalid verification code.")
     clinic = repo.get_default_clinic(db)
     try:

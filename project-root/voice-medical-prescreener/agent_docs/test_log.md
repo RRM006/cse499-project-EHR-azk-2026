@@ -72,6 +72,36 @@ transcribed by hand (the "ground truth"). Record the model + machine each time.
 
 ## Test entries (newest first)
 
+## 2026-07-11 — Session 24 — P4-1 real OTP: suite 177 → 192, all offline; live end-to-end verified on the dev server
+- Setup: Python 3.14 on Windows; in-memory SQLite via dependency override; the OTP sender replaced
+  by a recording fake (no SMS, no network); TextBee HTTP layer mocked (`httpx.post` monkeypatched).
+  Live check: real uvicorn dev server on port 8001 (real SQLite DB, DevLogSender).
+- Metric(s): test pass/fail; HTTP statuses; hash-only storage; bypass containment.
+- Result:
+  * `pytest backend/tests/` → **192 passed** (was 177). New: `test_otp.py` (13) +
+    `test_migration_0012.py` (2). Zero regressions — the default config (dev channel + bypass on)
+    reproduces the old stub behavior, so no existing test needed changes.
+  * Security properties each locked by a test: hash≠plaintext in `otp_codes` + audit row carries
+    no code · expiry (backdated → 401) · wrong code 401 + attempts increment · single-use
+    (2nd verify of a consumed code → 401) · bypass matrix (dev+flag → 200; dev+flag-off → 401;
+    **textbee+flag-ON → 401**, the production-impossibility proof) · lockout (5th wrong → 429,
+    then 429 even for the CORRECT code; fresh code unlocks) · resend throttle (2nd lookup in 60 s:
+    sender called once, `otp_sent=false`, `retry_after` 1–60; after cooldown the old code is void) ·
+    send-failure → 502 + code voided · `get_sender` selection (dev/textbee/missing-creds/unknown) ·
+    TextBee request contract (URL/`x-api-key`/recipients/message) + HTTP-500/network → OtpSendError.
+  * Migration gates: fresh DB → head has `otp_codes` (no plaintext column); 0011 DB with a visit
+    upgrades in place (row survives, empty otp_codes appears).
+  * LIVE (dev server): startup log shows `0011 → 0012` applied; `POST /patients/lookup` printed
+    `[OTP] verification code for +8801766666666: 130303`; wrong code → **401**; real code → **200**
+    + `in_progress` visit; `000000` → **200** (dev channel). Throttled re-lookup returned
+    `otp_sent=false` earlier in the same sequence.
+- Notes: The live check first FAILED to show the OTP log line — root cause was a pre-existing bug:
+  `migrations/env.py` `fileConfig(alembic.ini)` with default `disable_existing_loggers=True`
+  silenced every `uvicorn.*` logger at startup (the entry-point banner and access logs had been
+  invisible after migrations too). Fixed with `disable_existing_loggers=False`; DevLogSender logs
+  via the `uvicorn.error` logger (same channel as main.py's banner). No LLM calls anywhere in the
+  OTP path (rule #4-safe).
+
 ## 2026-07-10 — Session 23 — P3-1/P3-2/P3-3: suite 166 → 177, all offline; P2-3/P3-4 preview-verified
 - Setup: Windows desktop; `pytest backend/tests/` with `PYTHONIOENCODING=utf-8`; LLM + ddgs
   boundaries faked (rule #4 — zero live API spend); migration gates on throwaway SQLite files;

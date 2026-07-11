@@ -6,9 +6,8 @@
 
 **Status keys:** ⬜ Not started · 🟨 In progress · 🟦 Blocked · ✅ Done · ⛔ Retired
 
-**Last updated:** 2026-07-10 (Session 23 — 2.0 build: P2 AND P3 CLOSED (Alembic 0011, M16
-drug-info assistant ADR-0044); only P4-1 OTP left, blocked on the human's channel choice;
-**177 tests**)
+**Last updated:** 2026-07-11 (Session 24 — **P4-1 real OTP done (Alembic 0012, ADR-0045) — the
+"Context Fixed Problem 2.0" tracker is FULLY COMPLETE**; **192 tests**)
 **Current phase:** ✅ **Build complete.** The 20-step plan (spec: `context_fixed_problem.md`) is
 fully implemented — **every numbered spec item (STRUCT/KIOSK/MEDIC/DOCTOR) is ✅** and 150 tests
 pass. What remains for the project is NOT build work: the **human live real-mic run**
@@ -38,6 +37,19 @@ system-setup gap (`speech-dispatcher`+`espeak-ng` not installed → empty Linux 
 `tts.js` degrades correctly per ADR-0028). Added guide **PART 1B** (Arch Bangla-voice install);
 no app code. Pending: human runs `sudo pacman -S speech-dispatcher espeak-ng`, then verify 🔊
 speaks (TC-V2 on Arch).
+**Session 24 (no module-status change):** **P4-1 real OTP (ADR-0045) — the LAST 2.0 tracker item;
+the cycle (STRUCT + P1 + P2 + P3 + P4) is now fully complete.** Research first (human-requested):
+no truly free SMS-OTP to any BD number exists (Twilio BD ~$0.60/SMS; WhatsApp ~$0.0113/auth msg;
+Firebase phone auth Blaze-only; Telegram Gateway $0.01/code but Telegram-only; BTRC aggregators
+~৳0.30–0.40/OTP = the real production route) → free real-SMS demo channel = **TextBee.dev**
+(open-source Android-SIM gateway). Built: `otp_codes` (**Alembic 0012**, head 0011→0012, applied),
+pluggable sender seam `services/otp/` (`OTP_CHANNEL=dev|textbee`; dev = code in the server log),
+hashed single-use codes, 5-min expiry, constant-time compare, 5-attempt lockout, 60 s resend
+throttle; the `000000` bypass works ONLY on the dev channel (`OTP_DEV_BYPASS`) and is structurally
+impossible under textbee (tested). Kiosk UX unchanged. Bonus: fixed a pre-existing bug where
+`migrations/env.py`'s `fileConfig` silenced all uvicorn logs at startup. Live-verified end to end
+(log code → 401 wrong → 200 real → bypass ok). +15 tests → **192 pass** (was 177). Module table
+unchanged (still gates on the human live run — now the only remaining work).
 **Session 23 (no module-status change):** five 2.0 cycle items — **P2 and P3 are both CLOSED**.
 **P2-3** medic polish: portal already token-clean; real fixes in `shared.css` (`.card` radius →
 `var(--radius)`, verbatim speaker labels on their own line). **P3-1**: `Visit.submitted_at` via

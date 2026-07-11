@@ -4,21 +4,20 @@
 > re-exploring the whole project each session. Update it whenever you add or move
 > a folder/file. Keep each note to one line.
 
-**Last updated:** 2026-07-10 (Session 23 — **new backend files (P3-3, ADR-0044):**
-`backend/app/services/assistant.py` (M16 ddgs search + LLM answer + server disclaimer),
-`backend/app/api/routes_assistant.py` (`POST /api/visits/{uuid}/assistant/drug-info`),
-`backend/app/schemas/assistant.py`, and migration
-`backend/migrations/versions/0011_visit_submitted_at.py` (P3-1 — **Alembic head is now 0011**).
-New test files: `test_submitted_at.py` (3) · `test_migration_0011.py` (2) ·
-`test_doctor_sees_medic_edits.py` (1) · `test_assistant.py` (5) → suite **177**. New dep:
-`ddgs==9.14.4` in requirements.txt (Arch laptop: re-run `pip install -r requirements.txt`).
-Edits: `models.py`+`schemas/visit.py`+`schemas/dashboard.py`+`routes_dashboard.py` (submitted_at),
-`repository_visits.py` (stamp on awaiting_review), `llm_providers.py` (+M16→Flash), `main.py`
-(assistant router), `staff.js` (queue time = submitted_at||started_at), `frontend_doctor/
-index.html` (Submitted row + the 💊 assistant slide-in panel), `shared.css` (P2-3/P3-4: the last
-two hardcoded 12px radii → `var(--radius)`; verbatim speaker labels display:block).
-Cycle history: S19–S22 notes moved to changelog.md. Still coming: an `OtpCode` table +
-Alembic 0012 (P4-1) — update this map when it lands.)
+**Last updated:** 2026-07-11 (Session 24 — **P4-1 real OTP (ADR-0045): new package
+`backend/app/services/otp/`** — `base.py` (`OtpSender` ABC + `OtpSendError`), `dev_log.py`
+(`DevLogSender`: code → server log via `uvicorn.error`), `textbee.py` (`TextBeeSender`: real SMS
+via httpx), `service.py` (issue/verify core: hash, expiry, single-use, lockout, throttle,
+`get_sender()` factory), `__init__.py` (re-exports) — plus migration
+`backend/migrations/versions/0012_otp_codes.py` (**Alembic head is now 0012**) and the `OtpCode`
+model. New test files: `test_otp.py` (13) · `test_migration_0012.py` (2) → suite **192**. New
+direct dep: `httpx==0.28.1` (was transitive; Arch laptop: re-run `pip install -r requirements.txt`).
+Edits: `config.py` (OTP_CHANNEL/OTP_DEV_BYPASS/TTL/attempts/cooldown/TextBee creds),
+`routes_visits.py` (lookup ISSUES a real OTP + audits `otp_issued`; verify-otp = DB check,
+401/429; bypass only on the dev channel), `schemas/patient.py` (+`retry_after_seconds`),
+`.env.example` (OTP block), and `migrations/env.py`
+(`fileConfig(..., disable_existing_loggers=False)` — pre-existing bug: startup migrations silenced
+all uvicorn logs). No frontend changes (kiosk UX identical). **The 2.0 tracker is COMPLETE.**)
 
 ---
 
@@ -34,7 +33,7 @@ voice-medical-prescreener/
 │     # CLAUDE.md frontend section points at the clinical-blue system (ADR-0029, done S8b);
 │     # DESIGN-mintlify.md carries a SUPERSEDED banner — design source of truth is frontend_shared/shared.css.
 ├── requirements.txt              # CORE deps (FastAPI, uvicorn, pydantic-settings, SQLAlchemy, alembic, openai, python-docx, pytest)
-│                                  #   + ddgs (S23, M16 web search — ADR-0044)
+│                                  #   + ddgs (S23, M16 web search — ADR-0044) + httpx (S24, TextBee OTP sender)
 ├── .gitignore                    # ignores .env, .venv/, *.db, *.db.*.bak, *.bak, data/, audio/, models/
 ├── .claude/launch.json           # preview dev-server configs (uvicorn; PORT 8001): Windows + backend-linux
 ├── agent_docs/                   # the project's shared brain (living docs) — now incl. architecture.md,
@@ -43,15 +42,17 @@ voice-medical-prescreener/
 │   │                              #   context fixed problem 2.0.md (S18: UI/UX + fixes + OTP + doctor chatbot — now a checkable BUILD TRACKER; STRUCT-1 ✅)
 │   └── ... (constitution, milestone_log, current_task, changelog, test_log, decisions, codebase_map, session_protocol)
 ├── backend/
-│   ├── .env / .env.example       # + DEV_OTP (stub OTP), per-bucket model names (ADR-0026)
-│   ├── alembic.ini · migrations/env.py (render_as_batch)
+│   ├── .env / .env.example       # + OTP block (S24: OTP_CHANNEL=dev|textbee, OTP_DEV_BYPASS, DEV_OTP,
+│   │                              #   TTL/attempts/cooldown, TEXTBEE_* creds), per-bucket model names (ADR-0026)
+│   ├── alembic.ini · migrations/env.py (render_as_batch; S24: disable_existing_loggers=False so
+│   │                              #   startup migrations no longer silence uvicorn logs)
 │   ├── migrations/versions/      # 0001_baseline · 0002_add_stt_provider_and_doc_kind ·
 │   │                              #   0003_aggregate_root (clinics/users/patients/visits + deltas + backfill + seeds) ·
 │   │                              #   0004_intake_profile (case_profiles, module_events) · 0005_followup_questions ·
 │   │                              #   0006_risk_xai · 0007_reports · 0008_doctor_reviews_feedback · 0009_audit_log ·
 │   │                              #   0010_prescriptions_letterhead (visit-grain docs, vitals, letterhead, prescriptions — ADR-0032) ·
-│   │                              #   0011_visit_submitted_at (P3-1, S23)
-│   ├── prescreener.db            # SQLite (gitignored); 16 tables + alembic_version (head 0011)
+│   │                              #   0011_visit_submitted_at (P3-1, S23) · 0012_otp_codes (P4-1, S24 — ADR-0045)
+│   ├── prescreener.db            # SQLite (gitignored); 17 tables + alembic_version (head 0012)
 │   ├── prescreener.db.pre-000{3,4,5,6,7}.bak · .pre-0010.bak  # per-migration backups (gitignored)
 │   ├── data/documents/           # generated .docx (gitignored)
 │   ├── app/
@@ -60,12 +61,15 @@ voice-medical-prescreener/
 │   │   │                          #   routers; mounts /shared /medic
 │   │   │                          #   /doctor /legacy + landing/kiosk at / (ADR-0031)
 │   │   ├── core/
-│   │   │   ├── config.py         # + dev_otp, followup_max_questions, completeness_threshold, per-bucket models
+│   │   │   ├── config.py         # + OTP settings (S24: otp_channel/otp_dev_bypass/dev_otp/ttl/attempts/
+│   │   │   │                      #   cooldown/textbee_*), followup floors/caps, per-bucket models
 │   │   │   └── llm_providers.py  # provider registry + MODULE_PROVIDERS map (ADR-0026); S17: FALLBACK_ORDER
 │   │   │                          #   assigned→Groq→Cerebras→Mistral→OpenRouter + optional Cerebras/Mistral buckets (ADR-0041)
 │   │   ├── api/
 │   │   │   ├── routes_transcripts.py · routes_documents.py   # (existing, untouched)
-│   │   │   ├── routes_visits.py  # NEW: patients/lookup + verify-otp; visits CRUD + utterances; intake; profile
+│   │   │   ├── routes_visits.py  # patients/lookup (S24: ISSUES a real OTP, audits otp_issued, resend-throttle
+│   │   │   │                      #   fields) + verify-otp (S24: DB check, 401/429, dev-only 000000 bypass);
+│   │   │   │                      #   visits CRUD + utterances; intake; profile
 │   │   │   ├── routes_visit_documents.py # S9: POST /api/visits/{uuid}/documents/{transcript|summary_report}
 │   │   │   ├── routes_followup.py# NEW: followup/next (M7) · followup/answer (M8+M9); S11: ?scope=fields
 │   │   │   │                      #   = KIOSK-7 resume loop (no threshold gate; ADR-0034)
@@ -104,6 +108,11 @@ voice-medical-prescreener/
 │   │   │   ├── assistant.py      # S23 (P3-3, ADR-0044): M16 — ddgs/DuckDuckGo search (top-5, capped snippets,
 │   │   │   │                      #   best-effort → []) + one Flash-bucket call_module; disclaimer attached
 │   │   │   │                      #   SERVER-side always (rule #2); search gets only the doctor's question (rule #4)
+│   │   │   ├── otp/              # S24 (P4-1, ADR-0045): base.py (OtpSender ABC + OtpSendError) ·
+│   │   │   │                      #   dev_log.py (DevLogSender — code → server log, the ONE sanctioned
+│   │   │   │                      #   plaintext spot) · textbee.py (TextBeeSender — real SMS via httpx) ·
+│   │   │   │                      #   service.py (issue/verify: salted-SHA-256 hash, 5-min expiry, single-use,
+│   │   │   │                      #   constant-time, 5-attempt lockout, 60s resend throttle, get_sender())
 │   │   │   ├── red_flags.py      # NEW: RED_FLAG_RULES (5 categories, bn/banglish/en) — LOCAL, no API
 │   │   │   ├── report.py         # NEW: M12 local report assembly (Red Flags + disclaimer); S12: sections gain
 │   │   │   │                      #   patient vitals + suggested_condition (ADR-0037)
@@ -134,7 +143,9 @@ voice-medical-prescreener/
 │                                  #   test_followup_min_questions (S20) · test_submit_background (S21) ·
 │                                  #   test_patient_demographics (S22) · test_submitted_at (S23, P3-1) ·
 │                                  #   test_migration_0011 (S23) · test_doctor_sees_medic_edits (S23, P3-2) ·
-│                                  #   test_assistant (S23, M16)  (177 total)
+│                                  #   test_assistant (S23, M16) · test_otp (S24, 13: hash-only + expiry +
+│                                  #   single-use + bypass matrix + lockout + throttle + sender seam) ·
+│                                  #   test_migration_0012 (S24)  (192 total)
 ├── frontend/                     # patient side (served at /)
 │   ├── index.html                # NEW (S9): landing page linking the 4 entry points (ADR-0031)
 │   ├── kiosk.html · kiosk.js     # patient kiosk (at /kiosk.html): phone→OTP (auto-advance/Backspace/paste, S10
@@ -172,7 +183,7 @@ REMOVED in Session 4 (browser-only): `services/stt/**`, `api/routes_stt.py`, the
 requirements files, the STT config/.env block. (Still gone.)
 
 Run from the project root. App: `python -m uvicorn backend.app.main:app --reload --port 8001`
-(use the venv's Python). Tests: `pytest backend/tests/` (**177 passing**). Schema is Alembic-managed
+(use the venv's Python). Tests: `pytest backend/tests/` (**192 passing**). Schema is Alembic-managed
 and migrates at startup — never delete the DB. Entry points: `/` (landing), `/kiosk.html`,
 `/medic/`, `/doctor/`, `/legacy/`.
 

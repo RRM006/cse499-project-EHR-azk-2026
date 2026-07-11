@@ -1,8 +1,10 @@
-"""API data contracts for the kiosk phone + stub-OTP identification flow (ADR-0030).
+"""API data contracts for the kiosk phone + OTP identification flow (ADR-0030).
 
 The phone number is normalized to ``+8801XXXXXXXXX`` and stored in
-``patients.external_ref``. OTP verification is a STUB for the capstone demo:
-no SMS is sent; the code is compared to the ``DEV_OTP`` setting.
+``patients.external_ref``. Since P4-1 (ADR-0045) the OTP is REAL: lookup issues
+a hashed, expiring, single-use code delivered by the configured sender
+(OTP_CHANNEL: dev = server log, textbee = SMS); the 000000 bypass survives only
+on the dev channel with OTP_DEV_BYPASS enabled.
 """
 
 from datetime import datetime
@@ -45,7 +47,12 @@ class PatientLookupOut(BaseModel):
     patient: PatientOut
     created: bool = Field(..., description="True if this lookup created the patient.")
     otp_sent: bool = Field(
-        True, description="Always true in the demo — the stub 'sends' the DEV_OTP code."
+        True,
+        description="True if a code was issued and sent; False when throttled — the "
+        "previously sent code is still valid.",
+    )
+    retry_after_seconds: int | None = Field(
+        None, description="Set only when throttled: seconds until a resend is allowed."
     )
 
 

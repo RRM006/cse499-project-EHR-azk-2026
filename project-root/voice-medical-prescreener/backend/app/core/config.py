@@ -69,10 +69,22 @@ class Settings(BaseSettings):
     followup_max_questions: int = 5
     completeness_threshold: float = 0.7
 
-    # --- patient identification (kiosk phone + OTP; ADR-0030) ---
-    # The OTP flow is a STUB for the capstone demo: no SMS is sent; the kiosk accepts
-    # exactly this code. Swap in a real gateway later behind the same verify endpoint.
+    # --- patient identification (kiosk phone + OTP; ADR-0030 + P4-1 ADR-0045) ---
+    # OTP_CHANNEL picks the delivery seam (services/otp):
+    #   dev     — DevLogSender: code printed to the server log, no SMS.
+    #   textbee — TextBeeSender: real SMS via a TextBee.dev Android gateway device.
+    # The 000000 universal bypass (dev_otp) is honored ONLY when otp_channel == "dev"
+    # AND otp_dev_bypass is true — the check lives inside the dev branch of
+    # verify_otp_code, so it is structurally impossible under a production channel.
+    otp_channel: str = "dev"
+    otp_dev_bypass: bool = True
     dev_otp: str = "000000"
+    otp_ttl_seconds: int = 300
+    otp_max_attempts: int = 5
+    otp_resend_cooldown_seconds: int = 60
+    textbee_api_key: str = ""
+    textbee_device_id: str = ""
+    textbee_base_url: str = "https://api.textbee.dev/api/v1"
 
     # --- persistence ---
     # Leave empty to use the default local SQLite file. Set a full SQLAlchemy URL

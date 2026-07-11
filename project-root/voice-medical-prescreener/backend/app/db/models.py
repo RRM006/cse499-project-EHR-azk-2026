@@ -274,6 +274,29 @@ class AuditLog(Base):
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=_utcnow)
 
 
+class OtpCode(Base):
+    """P4-1 (rev 0012, ADR-0045) — one issued kiosk verification code.
+
+    Only a salted SHA-256 hash is stored — the plaintext code exists solely in
+    the sender payload (server log in dev, SMS via TextBee) and is never
+    persisted or audit-logged (rule #4). Keyed by the normalized phone because
+    verification happens before a visit exists; single-use via ``consumed_at``;
+    ``attempts`` drives the max-attempt lockout.
+    """
+
+    __tablename__ = "otp_codes"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    phone: Mapped[str] = mapped_column(String(32), nullable=False, index=True)
+    patient_id: Mapped[int | None] = mapped_column(ForeignKey("patients.id"), nullable=True)
+    code_hash: Mapped[str] = mapped_column(String(64), nullable=False)
+    salt: Mapped[str] = mapped_column(String(32), nullable=False)
+    attempts: Mapped[int] = mapped_column(Integer, nullable=False, default=0, server_default="0")
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=_utcnow)
+    expires_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
+    consumed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+
+
 class ModuleEvent(Base):
     """Per-module execution log — THE extensibility keystone (principle 5) and the
     observability record for the free-tier strategy (provider, latency, fallback).

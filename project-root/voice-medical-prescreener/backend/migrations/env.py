@@ -21,9 +21,11 @@ from backend.app.db import models  # noqa: F401  (registers Utterance + Document
 
 config = context.config
 
-# Configure Python logging from the ini file, if present.
+# Configure Python logging from the ini file, if present. Migrations run inside
+# app startup, so existing loggers (uvicorn.*) must survive — otherwise the
+# entry-point banner, access logs and the P4-1 dev-OTP log line all go silent.
 if config.config_file_name is not None:
-    fileConfig(config.config_file_name)
+    fileConfig(config.config_file_name, disable_existing_loggers=False)
 
 target_metadata = Base.metadata
 
