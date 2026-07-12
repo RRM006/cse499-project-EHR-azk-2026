@@ -16,6 +16,33 @@
 
 ---
 
+## Session 25 — 2026-07-12 — HUMAN LIVE REAL-MIC RUN PASSED (Windows 11); Modules 1–14 → ✅ (docs-only, no code)
+- Did (no code, no new tests — recording the human's live-run result):
+  - **The human ran the live real-mic test** (`human_live_run_guide.md` PART 2) on **Windows 11 +
+    Chrome + real mic**, synthetic data, OTP via the `000000` dev bypass. **TC-V1/V2/V3/F2/R1 all
+    PASS.** Observations: STT **very accurate**, latency **≈ 2 s**, TTS **spoke correctly**,
+    follow-up questions **good**. **No bugs / UX issues found.**
+  - **`test_log.md`**: added the S25 live-run entry (all 5 cases PASS + the qualitative numbers +
+    the explicit caveat that this run was qualitative & Windows-only — formal WER/precision-recall
+    still to be logged).
+  - **`milestone_log.md`**: the human live-voice gate is CLEARED → **Modules 1–14 flipped 🟨 → ✅**
+    (M5 stays ⛔ retired; **M15 stays 🟨** = future retrain/regression pipeline). Status board,
+    "Last updated", and Phase-0 step-6 marker updated; added the S25 note.
+  - **`CLAUDE.md`**: status paragraph → Session 25, live run PASSED, Modules 1–14 ✅.
+  - **`current_task.md`**: overwritten — the live run is DONE; next real work = **rotate the 3 API
+    keys** (still pending) + optional formal WER/precision-recall as thesis evidence; future issues
+    → the 3.0 inbox.
+- Decided: **ADR-0046** — on the passed live-voice gate, move the happy-path module board (1–14) to
+  ✅ (M5 ⛔, M15 🟨), with a standing caveat that the run was qualitative + Windows-only so formal
+  WER/precision-recall is still owed as evidence. The human chose this over the more conservative
+  "flip M1 & M7 only" and "change nothing" options.
+- Broke / problem: none. **192 tests still pass** (no code touched). Caveat recorded, not a bug: the
+  live run was qualitative (no by-hand WER / precision-recall / labeled set) and Windows-only.
+- Deferred: rotating the 3 API keys (human, before any public demo); formal WER/precision-recall on
+  ~50 samples; the optional TextBee real-SMS demo; everything in `faculty_future_features.md`.
+- Next: **rotate the 3 API keys** (`human_live_run_guide.md` PART 3) before showing anyone; then the
+  project is demo-ready. Any manual-testing issues found later → `context fixed problem 3.0.md` inbox.
+
 ## Session 24b — 2026-07-11 — Docs-only addendum: CLAUDE.md refreshed, 2.0 tracker closed, 3.0 scaffold + faculty future-features file created
 - Did (no code, no tests — documentation structure for what comes next):
   - **CLAUDE.md**: stale status paragraph (S14/156 tests/head 0010) → current (S24, both cycles

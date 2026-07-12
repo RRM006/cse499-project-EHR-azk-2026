@@ -6,16 +6,18 @@
 
 **Status keys:** ⬜ Not started · 🟨 In progress · 🟦 Blocked · ✅ Done · ⛔ Retired
 
-**Last updated:** 2026-07-11 (Session 24 — **P4-1 real OTP done (Alembic 0012, ADR-0045) — the
-"Context Fixed Problem 2.0" tracker is FULLY COMPLETE**; **192 tests**. Session 24b docs addendum:
-CLAUDE.md status refreshed; 2.0 tracker marked closed; NEW `context fixed problem 3.0.md` (empty
-scaffold for the next cycle — raw manual-testing findings go in its inbox) and NEW
-`faculty_future_features.md` (quantized Moshi summary + quantized STT/TTS — verbatim faculty text
-+ seam notes, future research track). No module/status/test change in 24b.)
+**Last updated:** 2026-07-12 (Session 25 — **the HUMAN LIVE REAL-MIC RUN PASSED on Windows 11**:
+TC-V1/V2/V3/F2/R1 all ✅ (STT very accurate, ~2 s latency, TTS spoke, follow-ups good; OTP via the
+`000000` dev bypass; no bugs found). On that cleared gate the human chose to move **Modules 1–14 →
+✅** (M5 retired ⛔, **M15 stays 🟨** = future retrain/regression pipeline). Docs-only, no code —
+**192 tests still pass**. Caveat: the live run was qualitative (no by-hand WER/precision-recall,
+Windows-only) — formal metrics remain the recommended thesis-evidence follow-up. Prior: S24 P4-1
+real OTP (Alembic 0012, ADR-0045); S24b 3.0 scaffold + `faculty_future_features.md`.)
 **Current phase:** ✅ **Build complete.** The 20-step plan (spec: `context_fixed_problem.md`) is
 fully implemented — **every numbered spec item (STRUCT/KIOSK/MEDIC/DOCTOR) is ✅** and 150 tests
-pass. What remains for the project is NOT build work: the **human live real-mic run**
-(TC-V2/V3/F2/R1/A1, real keys already in `.env`) + a Bangla TTS voice on Windows. **Steps 1–20 DONE:** S9 = legacy
+pass. What remains for the project is NOT build work: **S25 — the human live real-mic run PASSED on
+Windows (TC-V1/V2/V3/F2/R1 all ✅)**, so the only open item is **rotating the 3 API keys** before a
+public demo (+ optional formal WER/precision-recall as thesis evidence). **Steps 1–20 DONE:** S9 = legacy
 isolation ADR-0031 · Alembic 0010 ADR-0032 · visit-grain docx seam · `fieldValue()` +
 `TIER_BANDS` · bilingual values ADR-0033. S10 = kiosk OTP KIOSK-1 · per-message 🔊 +
 no-bn-voice hint KIOSK-2/3. S11 = kiosk summary complete KIOSK-4/5/6/7 (resume loop ADR-0034) ·
@@ -32,10 +34,19 @@ save** (step 19, ADR-0039: `POST …/prescription` saves a `prescriptions` row +
 structurally un-AI-fillable). **S14 = step 20 (final):** 150-test gate re-confirmed; all
 `context_fixed_problem` markers flipped to ✅ (KIOSK-4/5/6/7 + MEDIC-1/2/3/5 from S11,
 DOCTOR-3/4/5/6/7 from S13); doc sweep. **150 tests pass.**
-**Module in focus:** none — the fix/feature build is closed. The **15-module table below stays
-🟨**: those modules gate on the HUMAN live-voice run (TC-V2/V3/F2/R1/A1 with real numbers), NOT on
-build completion — that gate is unchanged. Next real work = the human live run
-(step-by-step: `agent_docs/human_live_run_guide.md`).
+**Module in focus:** none — the fix/feature build is closed AND the human live-voice gate is now
+CLEARED. **Modules 1–14 are ✅** (as of S25, on the passed live run); **M15 stays 🟨** (future
+retrain/regression pipeline). Next real work = **rotate the 3 API keys** before any public demo
+(`human_live_run_guide.md` PART 3) + optionally record formal WER/precision-recall as thesis evidence.
+**Session 25 (module board moved):** the HUMAN ran the live real-mic test on **Windows 11 + Chrome +
+real mic** (synthetic data, OTP `000000` dev bypass) per `human_live_run_guide.md` PART 2 —
+**TC-V1/V2/V3/F2/R1 all PASS**: STT "very accurate", latency **≈ 2 s**, TTS **spoke correctly**,
+follow-up questions **good**, **no bugs / UX issues**. This is the gate the 15-module board had waited
+on since S8 → the human chose to flip **Modules 1–14 to ✅** (over the more conservative "M1 & M7
+only" / "no change" options); M5 stays retired ⛔, M15 stays 🟨. ⚠ The run was **qualitative**
+(no by-hand WER / precision-recall / labeled set) and **Windows-only** (Arch was the S16 browser-level
+TTS+mic pass) — formal metrics are the recommended follow-up but were not required for the board flip.
+Docs-only session; **192 tests unchanged**. Remaining: API-key rotation (human, pre-demo).
 **Session 15 (no status change):** diagnosed the silent kiosk 🔊 on the Arch laptop as a
 system-setup gap (`speech-dispatcher`+`espeak-ng` not installed → empty Linux `speechSynthesis`;
 `tts.js` degrades correctly per ADR-0028). Added guide **PART 1B** (Arch Bangla-voice install);
@@ -195,22 +206,27 @@ DOCTOR-1..7 targets are now all built (final `context_fixed_problem` flips happe
 
 ## The 15 modules
 
+> **S25 update:** Modules 1–14 moved 🟨 → ✅ after the human live real-mic run PASSED on Windows 11
+> (TC-V1/V2/V3/F2/R1 all ✅). That run was **qualitative** — **formal WER / precision-recall on a
+> labeled set is still to be logged as thesis evidence** (see `test_log.md` "Metrics we care about"),
+> and it was Windows-only this pass. M5 stays retired ⛔; **M15 stays 🟨** (future retrain pipeline).
+
 | # | Module | Status | "Done" means (testable) |
 |---|--------|:------:|--------------------------|
-| 1 | Speech-to-Text | 🟨 | Live mic audio is transcribed and the **raw** Bangla/Banglish text appears on screen within ~3s; raw text is stored unchanged; works on both Windows and Linux; manual text-input fallback exists. |
-| 2 | Text Processing & Normalization | 🟨 | Given raw text, a separate cleaned/normalized field is produced (spelling, fillers removed, sentence boundaries); raw is never modified; measured on a small test set. **Built** (existing `/api/correct` corrector, reused as M2); live accuracy on a test set still pending. |
-| 3 | Information Extraction | 🟨 | From normalized text, symptoms / body part / duration / severity / meds / history are extracted as structured fields; precision & recall recorded in test_log. **Built** (`services/intake.py`, M3 → 10-field `summary_fields` JSON); precision/recall on real data pending. |
-| 4 | Initial Clinical Summary | 🟨 | A 2–4 sentence chief-complaint summary is generated from extracted fields and shown to the doctor. **Built** (`services/intake.py`, M4). |
+| 1 | Speech-to-Text | ✅ | Live mic audio is transcribed and the **raw** Bangla/Banglish text appears on screen within ~3s; raw text is stored unchanged; works on both Windows and Linux; manual text-input fallback exists. |
+| 2 | Text Processing & Normalization | ✅ | Given raw text, a separate cleaned/normalized field is produced (spelling, fillers removed, sentence boundaries); raw is never modified; measured on a small test set. **Built** (existing `/api/correct` corrector, reused as M2); live accuracy on a test set still pending. |
+| 3 | Information Extraction | ✅ | From normalized text, symptoms / body part / duration / severity / meds / history are extracted as structured fields; precision & recall recorded in test_log. **Built** (`services/intake.py`, M3 → 10-field `summary_fields` JSON); precision/recall on real data pending. |
+| 4 | Initial Clinical Summary | ✅ | A 2–4 sentence chief-complaint summary is generated from extracted fields and shown to the doctor. **Built** (`services/intake.py`, M4). |
 | 5 | ~~Emergency Detection~~ | ⛔ | **RETIRED (Session 7, ADR-0024).** The standalone module + its flowchart diamond/alert are removed. Its job is now a **rule-based red-flag check inside Module 10** (see M10). Number 5 is left as a permanent gap so M6–M15 keep their IDs. |
-| 6 | Missing Information Analysis | 🟨 | System outputs a checklist of present vs. missing data points for the case. Now fed **directly by M4** (M4→M6, no emergency branch). **Built** (`services/intake.py`, M6 → `case_profiles.gaps`). |
-| 7 | Follow-up Question Generation | 🟨 | System generates prioritized follow-up questions (Bangla/English) for the gaps, no repeats of answered items; each question is **shown as text AND spoken via TTS**, and the patient replies **by voice only** (ADR-0027/0028). **Built** (`services/followup.py` + kiosk STT/TTS; S10: per-message 🔊 + no-voice hint; S11: KIOSK-7 resume loop — `?scope=fields` targets the empty summary fields, shared cap, "নেই/জানি না" counts as answered, ADR-0034). TC-V2 partial: Windows dev box has NO bn TTS voice (text fallback + hint verified; audio needs a voice installed). Live voice loop pending (TC-V3/F2). |
-| 8 | Response Processing & Profile Update | 🟨 | Patient answers are re-processed and merged into the profile with conflict handling. **Built** (`services/profile_update.py`, M8; human-edited fields are never overwritten). |
-| 9 | Case Completion Check | 🟨 | A completeness score is computed; loops back to Module 7 until threshold or max turns reached. **Built** (`services/completion.py`, LOCAL; threshold + max-turn exit, both env-tunable). |
-| 10 | Risk Assessment Engine | 🟨 | Each case is classified Low/Medium/High/Critical from rules + model; **a rule-based red-flag check forces Critical for clearly life-threatening symptoms (chest pain, stroke signs, severe breathing difficulty, loss of consciousness) and surfaces them prominently**; accuracy + red-flag recall recorded on a labeled test set. **Built** (`services/risk.py` + `red_flags.py`; rule survives total LLM outage; red-flag recall enforced per-phrase in tests; S11: MEDIC-3 staff override appends a human row, audit-logged, red-flag-Critical downgrade blocked — ADR-0035). Accuracy on labeled real data pending. |
-| 11 | Explainable AI (XAI) | 🟨 | Every risk output has a plain-language reason listing the contributing factors. **Built** (`services/risk.py`, M11; deterministic fallback so no risk row is ever reason-less). |
-| 12 | Structured Clinical Report | 🟨 | A full report (all sections) is generated and exportable as PDF + dashboard view; contains **no diagnosis**; includes a **Red Flags** section sourced from M10. **Built** (`services/report.py`, LOCAL assembly + disclaimer; shown in doctor portal). Per-visit `.docx` export of the summary report + raw transcript SHIPPED (S9 step 3, `visit_docx.py`); S12: summary_report carries the C1 possible-condition block + vitals and regenerates FRESH at download (ADR-0037). PDF still pending. |
-| 13 | EHR Database | 🟨 | Transcripts, profiles, reports, and audit logs are stored and retrievable by patient ID/date; data encrypted. **Built** (all 15 tables, Alembic head `0009`; retrieval by phone + status; `audit_log` on every state change). Encryption-at-rest still pending. |
-| 14 | Doctor Dashboard | 🟨 | Web UI shows report, risk, flags, XAI; doctor can override/annotate; high/critical cases alerted. **Built** (`frontend_doctor/`: queue, risk/red-flags/XAI panel, field edit, Override/Accept; S12: fully bilingual, ↻ Queue removed, print CSS. Medic side: C1 condition card + post-referral summary + .docx download, S12). |
+| 6 | Missing Information Analysis | ✅ | System outputs a checklist of present vs. missing data points for the case. Now fed **directly by M4** (M4→M6, no emergency branch). **Built** (`services/intake.py`, M6 → `case_profiles.gaps`). |
+| 7 | Follow-up Question Generation | ✅ | System generates prioritized follow-up questions (Bangla/English) for the gaps, no repeats of answered items; each question is **shown as text AND spoken via TTS**, and the patient replies **by voice only** (ADR-0027/0028). **Built** (`services/followup.py` + kiosk STT/TTS; S10: per-message 🔊 + no-voice hint; S11: KIOSK-7 resume loop — `?scope=fields` targets the empty summary fields, shared cap, "নেই/জানি না" counts as answered, ADR-0034). TC-V2 partial: Windows dev box has NO bn TTS voice (text fallback + hint verified; audio needs a voice installed). Live voice loop pending (TC-V3/F2). |
+| 8 | Response Processing & Profile Update | ✅ | Patient answers are re-processed and merged into the profile with conflict handling. **Built** (`services/profile_update.py`, M8; human-edited fields are never overwritten). |
+| 9 | Case Completion Check | ✅ | A completeness score is computed; loops back to Module 7 until threshold or max turns reached. **Built** (`services/completion.py`, LOCAL; threshold + max-turn exit, both env-tunable). |
+| 10 | Risk Assessment Engine | ✅ | Each case is classified Low/Medium/High/Critical from rules + model; **a rule-based red-flag check forces Critical for clearly life-threatening symptoms (chest pain, stroke signs, severe breathing difficulty, loss of consciousness) and surfaces them prominently**; accuracy + red-flag recall recorded on a labeled test set. **Built** (`services/risk.py` + `red_flags.py`; rule survives total LLM outage; red-flag recall enforced per-phrase in tests; S11: MEDIC-3 staff override appends a human row, audit-logged, red-flag-Critical downgrade blocked — ADR-0035). Accuracy on labeled real data pending. |
+| 11 | Explainable AI (XAI) | ✅ | Every risk output has a plain-language reason listing the contributing factors. **Built** (`services/risk.py`, M11; deterministic fallback so no risk row is ever reason-less). |
+| 12 | Structured Clinical Report | ✅ | A full report (all sections) is generated and exportable as PDF + dashboard view; contains **no diagnosis**; includes a **Red Flags** section sourced from M10. **Built** (`services/report.py`, LOCAL assembly + disclaimer; shown in doctor portal). Per-visit `.docx` export of the summary report + raw transcript SHIPPED (S9 step 3, `visit_docx.py`); S12: summary_report carries the C1 possible-condition block + vitals and regenerates FRESH at download (ADR-0037). PDF still pending. |
+| 13 | EHR Database | ✅ | Transcripts, profiles, reports, and audit logs are stored and retrievable by patient ID/date; data encrypted. **Built** (all 15 tables, Alembic head `0009`; retrieval by phone + status; `audit_log` on every state change). Encryption-at-rest still pending. |
+| 14 | Doctor Dashboard | ✅ | Web UI shows report, risk, flags, XAI; doctor can override/annotate; high/critical cases alerted. **Built** (`frontend_doctor/`: queue, risk/red-flags/XAI panel, field edit, Override/Accept; S12: fully bilingual, ↻ Queue removed, print CSS. Medic side: C1 condition card + post-referral summary + .docx download, S12). |
 | 15 | Feedback & Continuous Learning | 🟨 | Doctor feedback is collected and usable to retrain/fine-tune; regression check before deploying updates. **Built** (feedback stored via `POST /api/visits/{uuid}/feedback`); retrain/regression pipeline still future. |
 
 ---
@@ -227,7 +243,8 @@ live, see a corrected version beside it, and the raw text is stored unchanged.
 (Also: ~50 real sample utterances collected for later testing.)
 **Build steps (6):** 1 scaffolding ✅ · 2 backend skeleton ✅ · 3 correction service ✅
 · 4 API routes + static serving ✅ · 5 frontend (mic + boxes + fallback) ✅
-· 6 end-to-end live test + collect ~50 samples ⬜ (human-driven, still pending).
+· 6 end-to-end live test ✅ (S25 — human real-mic run PASSED on Windows) · collect ~50 samples ⬜
+(still pending, for formal WER).
 
 **Session 7 (architect lock):** flowchart updated (Emergency removed, M4→M6 direct); stack +
 per-module API strategy + voice model locked; all tracking docs rewritten. No code. The full

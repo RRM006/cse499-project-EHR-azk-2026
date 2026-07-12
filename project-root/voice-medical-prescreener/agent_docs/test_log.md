@@ -72,6 +72,31 @@ transcribed by hand (the "ground truth"). Record the model + machine each time.
 
 ## Test entries (newest first)
 
+## 2026-07-12 — Session 25 — HUMAN LIVE REAL-MIC RUN: TC-V1/V2/V3/F2/R1 all PASS (Windows 11)
+- Setup: **Human-driven live run** (the one thing that can't be automated). Windows 11, Google
+  Chrome, real microphone, real dev server on port 8001 (real SQLite DB, Alembic head 0012).
+  **Synthetic/pretend patient data only** (rule #4). OTP via the `000000` dev bypass
+  (`OTP_CHANNEL=dev`). Followed `agent_docs/human_live_run_guide.md` PART 2 end to end.
+- Metric(s): per-test-case PASS/FAIL from the guide (TC-V1 raw transcript · TC-V2 spoken+text ·
+  TC-V3 voice-only reply · TC-F2 smart follow-up loop · TC-R1 red-flag→Critical); qualitative
+  STT accuracy, rough latency, TTS audibility, follow-up quality.
+- Result: **ALL FIVE PASS.**
+  * **TC-V1 (STT raw)** ✅ — live mic words appeared on screen and stayed verbatim (rule #1 held).
+  * **TC-V2 (TTS)** ✅ — follow-up questions were BOTH shown as text AND spoken aloud; a Bangla
+    voice was available on this Windows box (the "no bn voice" hint did not block — PART 1 done).
+  * **TC-V3 (voice-only)** ✅ — answers were given by voice and transcribed; no keyboard needed.
+  * **TC-F2 (follow-up loop)** ✅ — questions were relevant, one at a time, no repeats of answered
+    items ("Follow-up questions: Good").
+  * **TC-R1 (red-flag)** ✅ — the severe-symptom phrase forced **Critical** with a Red Flag surfaced.
+  * Qualitative observations (human's words): **STT "very accurate"**, **latency ≈ 2 s** speech→text,
+    **TTS worked correctly**, **follow-up questions "good"**. No bugs or UX issues found this run.
+- Notes: This clears the long-standing HUMAN live-voice gate the module board waited on → the human
+  chose to move **Modules 1–14 to ✅** (M5 retired ⛔, M15 stays 🟨 = future retrain pipeline). ⚠
+  This run is **qualitative** — no by-hand WER, precision/recall, or a labeled test set was recorded,
+  and it was **Windows-only** this pass (Arch browser-level TTS+mic was S16). Formal WER/precision-
+  recall on ~50 samples remains the recommended thesis-evidence follow-up. No app code changed.
+  Still pending (not build): **rotate the 3 API keys** (guide PART 3) before any public demo.
+
 ## 2026-07-11 — Session 24 — P4-1 real OTP: suite 177 → 192, all offline; live end-to-end verified on the dev server
 - Setup: Python 3.14 on Windows; in-memory SQLite via dependency override; the OTP sender replaced
   by a recording fake (no SMS, no network); TextBee HTTP layer mocked (`httpx.post` monkeypatched).

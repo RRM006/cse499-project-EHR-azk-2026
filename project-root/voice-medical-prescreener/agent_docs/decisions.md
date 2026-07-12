@@ -800,3 +800,22 @@
   open production). Production later = a BTRC-approved BD aggregator (~৳0.30–0.40/OTP, e.g.
   sms.bd/Alpha/MiM) as one new `OtpSender` subclass — no core change.
 - Status: Accepted
+
+## ADR-0046 — 2026-07-12 — Move the 15-module board to ✅ on the passed HUMAN live-voice gate (formal WER deferred as evidence)
+- Decision: After the human live real-mic run PASSED on Windows 11 (S25 — TC-V1/V2/V3/F2/R1 all ✅,
+  STT very accurate, ~2 s latency, TTS spoke, follow-ups good, no bugs), flip **Modules 1–14 from
+  🟨 → ✅** in `milestone_log.md`. M5 stays retired (⛔); **M15 stays 🟨** (its "Done means" needs a
+  retrain/regression pipeline that does not exist yet). The move is recorded WITH a standing caveat
+  in `milestone_log.md` + `test_log.md`: this run was **qualitative** (no by-hand WER / precision-
+  recall / labeled test set) and **Windows-only** — collecting formal metrics on ~50 samples remains
+  the recommended thesis-evidence follow-up, but is NOT a blocker for the board state.
+- Why: The 15-module board had explicitly gated on "the HUMAN live-voice run" since S8 — that was the
+  one thing standing between the built-and-offline-tested modules and ✅. The run happened and passed
+  cleanly, so holding the whole board at 🟨 would misrepresent project status for the capstone. The
+  caveat keeps us honest about the evidence still owed without blocking the status.
+- Rejected: (a) "Flip M1 & M7 only" (the two modules whose "Done means" the live run most directly
+  proves) — technically tightest but under-reports the many modules that were only live-gated;
+  (b) "Change no marks; keep all 🟨 until formal WER exists" — most conservative but leaves the board
+  contradicting its own "gates on the human live run" note now that the gate is cleared. The human
+  chose the middle-bold option (flip 1–14) with the metrics caveat attached.
+- Status: Accepted

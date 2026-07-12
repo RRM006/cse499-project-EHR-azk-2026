@@ -18,14 +18,19 @@ regional dialect — *before* they see the doctor. The system:
 This is a **15-module** system (Module 5 is retired in the current design — see below; S23 added
 **M16**, a doctor-side drug-info assistant with a server-attached disclaimer — ADR-0044).
 We build it one module at a time.
-**Status (Session 24, 2026-07-11): BOTH build cycles are COMPLETE** — the original 20-step build
-AND the **"Context Fixed Problem 2.0" cycle** (teal redesign, bilingual portals, background-assessed
-submit, Dhaka times, M16 assistant, and **real OTP**: hashed/expiring/single-use codes behind a
-pluggable sender seam, `OTP_CHANNEL=dev|textbee`, `000000` bypass dev-channel-only — ADR-0045).
-DB = Alembic head **0012** (17 tables). **192 tests pass.** What's left is NOT build work:
-the **human live real-mic run** + API-key rotation (see `agent_docs/human_live_run_guide.md` and
-`agent_docs/current_task.md`); the next fix cycle, when manual testing finds issues, goes in
-`agent_docs/context fixed problem 3.0.md`.
+**Status (Session 25, 2026-07-12): BOTH build cycles COMPLETE + the HUMAN LIVE RUN PASSED.** The
+original 20-step build AND the **"Context Fixed Problem 2.0" cycle** are done (teal redesign,
+bilingual portals, background-assessed submit, Dhaka times, M16 assistant, and **real OTP**:
+hashed/expiring/single-use codes behind a pluggable sender seam, `OTP_CHANNEL=dev|textbee`,
+`000000` bypass dev-channel-only — ADR-0045). DB = Alembic head **0012** (17 tables). **192 tests
+pass.** **S25: the human live real-mic run PASSED on Windows 11** — TC-V1/V2/V3/F2/R1 all ✅ (STT
+"very accurate", ~2 s latency, TTS spoke, follow-ups good; OTP via the `000000` dev bypass). On
+that gate the module board moved: **Modules 1–14 are now ✅** (M5 retired, **M15 stays 🟨** = future
+retrain/regression pipeline). What's left is NOT build work: **rotate the 3 API keys** before any
+public demo (still pending) + optionally log formal WER/precision-recall as thesis evidence (the
+live run was qualitative). Future issues from manual testing go in
+`agent_docs/context fixed problem 3.0.md`; faculty quantized-model work in
+`agent_docs/faculty_future_features.md`.
 
 ## NON-NEGOTIABLE RULES (never break these)
 
