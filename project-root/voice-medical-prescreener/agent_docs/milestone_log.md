@@ -36,8 +36,11 @@ structurally un-AI-fillable). **S14 = step 20 (final):** 150-test gate re-confir
 DOCTOR-3/4/5/6/7 from S13); doc sweep. **150 tests pass.**
 **Module in focus:** none — the fix/feature build is closed AND the human live-voice gate is now
 CLEARED. **Modules 1–14 are ✅** (as of S25, on the passed live run); **M15 stays 🟨** (future
-retrain/regression pipeline). Next real work = **rotate the 3 API keys** before any public demo
-(`human_live_run_guide.md` PART 3) + optionally record formal WER/precision-recall as thesis evidence.
+retrain/regression pipeline). **Next real work = the HUMAN's choice** (S26 standing note) from an
+open menu: (1) rotate the 3 API keys before any public demo (`human_live_run_guide.md` PART 3,
+recommended); (2) paste manual-testing bugs/UX findings into `context fixed problem 3.0.md`;
+(3) faculty future features (`faculty_future_features.md`); (4) formal WER/precision-recall or the
+TextBee real-SMS demo; (5) anything else. No status/phase changed in S26 (docs-only).
 **Session 25 (module board moved):** the HUMAN ran the live real-mic test on **Windows 11 + Chrome +
 real mic** (synthetic data, OTP `000000` dev bypass) per `human_live_run_guide.md` PART 2 —
 **TC-V1/V2/V3/F2/R1 all PASS**: STT "very accurate", latency **≈ 2 s**, TTS **spoke correctly**,

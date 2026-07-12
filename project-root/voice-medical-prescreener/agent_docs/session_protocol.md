@@ -28,6 +28,15 @@ Why: Claude Code auto-loads `CLAUDE.md`, but the living logs are not auto-loaded
 (on purpose, to save context). This prompt makes Claude read the few files that
 matter and orient in seconds — without you re-explaining the project.
 
+> **Standing note (Session 26 — the build is complete, so there is no single forced next step):**
+> after the 5-line summary + the one next step, Claude must ALSO surface the open **menu of options**
+> and make clear that choosing among them (or doing something else) is **the human's call** — never
+> assume one. Current menu (kept up to date in `current_task.md`): (1) rotate the 3 API keys
+> (recommended before any public demo), (2) paste manual-testing bugs/UX findings into
+> `context fixed problem 3.0.md` (→ triaged into the 3.0 fix cycle), (3) the faculty quantized-model
+> work in `faculty_future_features.md` (research track), (4) formal WER / TextBee real-SMS demo, or
+> (5) anything else. Surface the menu, then STOP and wait for the human's "go".
+
 ---
 
 ## ⏹️ END-OF-SESSION prompt (paste this before you stop working)

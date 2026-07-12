@@ -6,35 +6,40 @@
 
 ---
 
-**Date:** 2026-07-12 (Session 25 end)
+**Date:** 2026-07-12 (Session 26 end)
 **Phase:** ✅ **Build complete AND the human live-voice gate is CLEARED.** Both build cycles (the
-20-step build + "Context Fixed Problem 2.0") are done, and **the human live real-mic run PASSED**.
-Test suite: **192 pass**. Alembic head: **0012** (17 tables). There is no open build tracker.
+20-step build + "Context Fixed Problem 2.0") are done, the human live real-mic run PASSED (S25),
+and Modules 1–14 are ✅ (ADR-0046). Test suite: **192 pass**. Alembic head: **0012** (17 tables).
+**There is no forced next step — what we work on next is the HUMAN's choice** (see the menu below).
 
 ## Where we are right now
-- **S25 — the HUMAN live real-mic run PASSED on Windows 11** (Chrome + real mic, synthetic data,
-  OTP via the `000000` dev bypass), following `agent_docs/human_live_run_guide.md` PART 2:
-  - **TC-V1/V2/V3/F2/R1 all ✅.** STT **very accurate**, latency **≈ 2 s**, TTS **spoke correctly**,
-    follow-up questions **good**. **No bugs / UX issues found.**
-- On that cleared gate the human chose to move **Modules 1–14 → ✅** in `milestone_log.md`
-  (M5 retired ⛔; **M15 stays 🟨** = future retrain/regression pipeline). Docs-only — no code changed.
-- ⚠ Honesty caveat recorded in `test_log.md` + `milestone_log.md`: the run was **qualitative**
-  (no by-hand WER / precision-recall / labeled set) and **Windows-only** this pass (Arch was the
-  S16 browser-level TTS+mic pass). Formal metrics are a recommended follow-up, not a blocker.
+- The system is **demo-ready** except for API-key rotation. Nothing is broken; no open build tracker.
+- **The 3.0 tracker (`context fixed problem 3.0.md`) is intentionally EMPTY.** In S25 the human
+  reported **0 bugs** from the live run and said "leave it empty for now" — so the 📥 inbox reads
+  "(nothing yet)" by design. The moment the human pastes findings there, we triage into a numbered
+  cycle (one item per "go", functional before polish).
+- ⚠ Standing honesty caveat: the S25 live run was **qualitative** (no by-hand WER/precision-recall)
+  and **Windows-only**. Formal metrics are a recommended thesis-evidence follow-up, not a blocker.
 
-## The one thing we are doing next
-👉 **STEP: rotate the 3 API keys** (`GEMINI_API_KEY` / `GROQ_API_KEY` / `OPENROUTER_API_KEY` in
-   `backend/.env`) before showing anyone / any public demo — they were typed into chat during dev, so
-   treat them as burned. Exact steps: `agent_docs/human_live_run_guide.md` **PART 3** (make a new key
-   on each provider, revoke the old one, paste over the value in `backend/.env`, **restart the server**
-   — `.env` is read only at startup). This is a HUMAN step (I must never enter/handle the keys).
-- **Optional follow-ups (not blockers):** (1) record **formal WER / precision-recall** on ~50 samples
-  for thesis evidence (`test_log.md` "Metrics we care about"); (2) the **TextBee real-SMS OTP demo**
-  (install TextBee on an Android+BD-SIM phone, set `OTP_CHANNEL=textbee` + creds, restart); (3) the
-  faculty quantized-model work in `agent_docs/faculty_future_features.md` (research track, own plan).
-- **If manual testing later finds bugs/UX issues** → paste the raw notes into
-  `agent_docs/context fixed problem 3.0.md` (📥 inbox); we triage into a numbered tracker, one item
-  per "go", functional fixes before polish.
+## The one thing we are doing next — 👉 HUMAN'S CHOICE from this menu (do NOT assume one)
+> At the START of every session, surface this menu and wait for the human to pick — picking among
+> these (or something else entirely) is the human's call. This is a standing request (S26).
+
+1. **Rotate the 3 API keys** — `GEMINI_API_KEY` / `GROQ_API_KEY` / `OPENROUTER_API_KEY` in
+   `backend/.env`. *Recommended before any public demo* (the keys were typed into chat during dev, so
+   treat them as burned). Steps: `agent_docs/human_live_run_guide.md` **PART 3** (new key on each
+   provider → revoke the old → paste into `backend/.env` → **restart the server**; `.env` is read
+   only at startup). **HUMAN step — I must never enter/handle the keys.**
+2. **Report manual-testing bugs/UX findings** → paste raw notes into
+   `agent_docs/context fixed problem 3.0.md` (📥 inbox). I triage → numbered tracker → your approval
+   → one item per "go".
+3. **Faculty future features** (research track, needs its own plan) — the two faculty requirements in
+   `agent_docs/faculty_future_features.md`: a **quantized Moshi** medical-summary model + **quantized
+   on-device STT/TTS** replacing the browser APIs. Suggested order there: summary → STT → TTS.
+4. **Record formal WER / precision-recall** on ~50 samples for thesis evidence
+   (`test_log.md` "Metrics we care about"), and/or the **TextBee real-SMS OTP demo**
+   (install TextBee on an Android+BD-SIM phone, set `OTP_CHANNEL=textbee` + creds, restart).
+5. **Anything else the human wants.**
 
 ## Locked decisions — do NOT re-open
 - **ADR-0046 (S25):** on the passed live-voice gate, the module board (1–14) moved to ✅ (M5 ⛔,
@@ -56,8 +61,8 @@ Test suite: **192 pass**. Alembic head: **0012** (17 tables). There is no open b
   `TEXTBEE_API_KEY/TEXTBEE_DEVICE_ID/TEXTBEE_BASE_URL`.
 - `httpx==0.28.1` is a DIRECT dep — **Arch laptop: re-run `pip install -r requirements.txt`** (also
   needed for S23's `ddgs`).
-- Three API keys in `backend/.env` (Gemini/Groq/OpenRouter) — **still NOT rotated** (this is the
-  next step). Some synthetic patients (0175–0179 9-digit fakes) linger in the dev DB — harmless demo data.
+- Three API keys in `backend/.env` (Gemini/Groq/OpenRouter) — **still NOT rotated** (option 1 above).
+  Some synthetic patients (0175–0179 9-digit fakes) linger in the dev DB — harmless demo data.
 
 ## Reminders (the four non-negotiables)
 - **Rule #1:** raw words are never edited/translated — verbatim panels stay untouched.

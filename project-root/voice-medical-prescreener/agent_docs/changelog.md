@@ -16,6 +16,29 @@
 
 ---
 
+## Session 26 — 2026-07-12 — Standing start-of-session "options menu"; confirmed 3.0 tracker intentionally empty (docs-only, no code)
+- Did (no code, no tests):
+  - **Confirmed the 3.0 tracker is EMPTY by design, not by oversight.** Re-read
+    `context fixed problem 3.0.md` — 📥 inbox still "(nothing yet)". In S25 the human reported 0 bugs
+    and explicitly said "leave 3.0 empty for now", so there is correctly nothing to file.
+  - **Established a standing start-of-session behavior (human's request):** the 5-line orientation
+    summary must ALSO surface the open **menu of options** and stress that picking among them is the
+    **human's choice** — never assume one. Menu = (1) rotate the 3 API keys (recommended pre-demo),
+    (2) paste manual-testing bugs/UX findings → `context fixed problem 3.0.md`, (3) faculty future
+    features (`faculty_future_features.md`), (4) formal WER / TextBee demo, (5) anything else.
+  - Wired it in three places so it survives: **`current_task.md`** next-step is now that menu with
+    the choice framing; **`session_protocol.md`** gained a standing note in its START section; a
+    **feedback memory** (`session-start-options-menu`) captures the preference.
+- Decided: no new ADR — this is a **session-workflow preference**, not an architecture/design choice
+  (ADRs stay reserved for real technical decisions). Captured in session_protocol.md + current_task.md
+  + memory instead.
+- Broke / problem: none. **192 tests still pass** (no code touched; carried over, unverified this
+  session).
+- Deferred: the whole menu itself — key rotation, the 3.0 fix cycle, faculty future features, formal
+  WER, TextBee demo — all remain the human's to pick from.
+- Next: **HUMAN's choice from the menu** (recommended pre-demo default = rotate the 3 API keys,
+  `human_live_run_guide.md` PART 3).
+
 ## Session 25 — 2026-07-12 — HUMAN LIVE REAL-MIC RUN PASSED (Windows 11); Modules 1–14 → ✅ (docs-only, no code)
 - Did (no code, no new tests — recording the human's live-run result):
   - **The human ran the live real-mic test** (`human_live_run_guide.md` PART 2) on **Windows 11 +
