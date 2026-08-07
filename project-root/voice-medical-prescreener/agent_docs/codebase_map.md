@@ -45,8 +45,9 @@ voice-medical-prescreener/
 │   │                              #   context fixed problem 2.0.md (S18–S24 cycle tracker — ALL items ✅, historical),
 │   │                              #   context fixed problem 3.0.md (S24: NEXT cycle scaffold — human pastes raw manual-testing
 │   │                              #     findings → numbered tracker; currently EMPTY/waiting),
-│   │                              #   faculty_future_features.md (S24: quantized Moshi summary + quantized STT/TTS —
-│   │                              #     verbatim faculty text + seam-mapping notes; research track, NOT current work)
+│   │                              #   faculty_future_features.md (S24: quantized Moshi summary + quantized STT/TTS;
+│   │                              #     +2026-08-08: Req 3 fully voice-driven follow-up loop — faculty text +
+│   │                              #     seam-mapping notes; research track, NOT current work)
 │   └── ... (constitution, milestone_log, current_task, changelog, test_log, decisions, codebase_map, session_protocol)
 ├── backend/
 │   ├── .env / .env.example       # + OTP block (S24: OTP_CHANNEL=dev|textbee, OTP_DEV_BYPASS, DEV_OTP,

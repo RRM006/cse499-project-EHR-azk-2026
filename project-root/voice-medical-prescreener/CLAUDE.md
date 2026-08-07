@@ -29,7 +29,8 @@ that gate the module board moved: **Modules 1–14 are now ✅** (M5 retired, **
 retrain/regression pipeline). What's left is NOT build work: **rotate the 3 API keys** before any
 public demo (still pending) + optionally log formal WER/precision-recall as thesis evidence (the
 live run was qualitative). Future issues from manual testing go in
-`agent_docs/context fixed problem 3.0.md`; faculty quantized-model work in
+`agent_docs/context fixed problem 3.0.md`; the **three** faculty future requirements (quantized
+summary model, quantized STT/TTS, and — added 2026-08-08 — a fully voice-driven follow-up loop) in
 `agent_docs/faculty_future_features.md`.
 
 ## NON-NEGOTIABLE RULES (never break these)
@@ -143,8 +144,9 @@ Spread load across **three independent daily buckets** so no single quota is the
 9. `agent_docs/update_system_flowchart.md` — TikZ source of the Patient Journey flow
 10. `agent_docs/context fixed problem 3.0.md` — the NEXT fix/feature cycle (human pastes raw
     findings from manual testing; we turn them into a numbered, checkable tracker like 2.0)
-11. `agent_docs/faculty_future_features.md` — faculty-required FUTURE work (quantized Moshi
-    summary model + quantized on-device STT/TTS) — research track, NOT current build work
+11. `agent_docs/faculty_future_features.md` — faculty-required FUTURE work, 3 requirements
+    (quantized Moshi summary model + quantized on-device STT/TTS + fully voice-driven follow-up
+    conversation) — research track, NOT current build work
 
 **At the END of every session**, update `changelog.md` and `current_task.md`
 (and `milestone_log.md` / `decisions.md` / `test_log.md` / `codebase_map.md` if

@@ -819,3 +819,36 @@
   contradicting its own "gates on the human live run" note now that the gate is cleared. The human
   chose the middle-bold option (flip 1–14) with the metrics caveat attached.
 - Status: Accepted
+
+## ADR-0047 — 2026-08-08 — Faculty Requirement 3 (fully voice-driven follow-up) = research-track, client-side turn-taking, independent of Reqs 1 & 2
+- Decision: File the faculty's third future requirement — the follow-up conversation must become
+  fully voice-driven (AI speaks → mic opens itself → patient answers → answer captured automatically
+  → next question, with no screen contact mid-conversation) — in `faculty_future_features.md` as
+  **Requirement 3, ⬜ NOT STARTED research track**, NOT as an item in the `context fixed problem 3.0`
+  bug cycle. Scope it as a **client-side turn-taking change**: the basic loop needs **no backend
+  change**, and it is **independent of Reqs 1 & 2** (touches no model), so it can be scheduled at any
+  point. When built, it ships behind a `voice_loop = manual | auto` config switch following the
+  ADR-0045 pattern (switch lives in `.env`, the existing tap-to-talk path is never deleted).
+- Why: Reading the code rather than assuming showed the server loop is **already autonomous** —
+  `POST /followup/answer` returns `next_question` in the same response after M8 merge + M9 check, and
+  `kiosk.js submitPatientTurn()` already chains it into `assistantSays()`. Faculty steps 4–8 therefore
+  work today; only steps 2–3 (the two mic taps in `toggleListening()`) are manual. That reframes the
+  requirement from "rebuild the conversation engine" to "automate two taps in the browser", and the
+  seams already exist: `speak(text, {onend})` in `tts.js` (unused today), `interimResults = true` for
+  silence-based endpointing, `stopListening(true)` to submit, `activeDock()` to cover the KIOSK-7
+  resume dock. It is *not* a bug — tap-to-talk was a deliberate 2.0 choice (explicit turn boundaries =
+  clean verbatim record, no echo risk) and the S25 live run passed with it; going hands-free changes
+  the kiosk's interaction contract and introduces real speech-engineering risk (endpointing, TTS echo,
+  waiting-room noise), so it needs its own planned cycle. Two rule-#1 hazards are recorded up front:
+  an endpointer that clips an answer, and TTS echo transcribed into a `patient` utterance, are
+  **correctness defects, not UX nits**. The existing server-side caps
+  (`followup_max_questions = 5` / `min = 4` / `threshold = 0.7`) are what make hands-free safe — the
+  cap ends the conversation, not the patient's finger.
+- Rejected: (a) **File it as a 3.0 bug** — wrong cycle; 3.0 is for manual-testing defects, and nothing
+  here is broken. (b) **Fold it into Requirement 2** (wait for the quantized STT/TTS work) — the
+  cleanest full-duplex end-state, but it would block a frontend-only, independently demoable win
+  behind the heaviest research item; instead Req 3 is kept achievable on the CURRENT browser stack,
+  with full-duplex noted as its final step once Req 2's streaming STT provides real VAD.
+  (c) **Start building it now** — out of scope for a documentation-only session and it needs the
+  human's "go" plus its own plan (CLAUDE.md workflow).
+- Status: Accepted

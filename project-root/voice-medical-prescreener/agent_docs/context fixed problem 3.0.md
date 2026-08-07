@@ -16,8 +16,10 @@
 >    made), then executed **ONE item per human "go"**, functional fixes before UI polish.
 >
 > **Status: 🕐 EMPTY — waiting for the human's manual-testing findings. No items yet, nothing to
-> build from this file yet.** (The faculty's quantized-model requirements are NOT part of this
-> cycle either — they live in `agent_docs/faculty_future_features.md`, a separate research track.)
+> build from this file yet.** (The faculty's **three** future requirements are NOT part of this
+> cycle either — quantized summary model, quantized STT/TTS, and the fully voice-driven follow-up
+> loop live in `agent_docs/faculty_future_features.md`, a separate research track. In particular:
+> "the mic needs two taps" is a **Req 3 research item, not a 3.0 bug** — do not file it here.)
 >
 > **Legend (same as 2.0):** ✅ done · ⏳ in progress · ⬜ not started · 👉 the next step
 

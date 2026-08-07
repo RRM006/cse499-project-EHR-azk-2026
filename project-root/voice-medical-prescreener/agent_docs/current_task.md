@@ -6,18 +6,29 @@
 
 ---
 
-**Date:** 2026-07-12 (Session 26 end)
+**Date:** 2026-08-08 (Session 27 end)
 **Phase:** ✅ **Build complete AND the human live-voice gate is CLEARED.** Both build cycles (the
 20-step build + "Context Fixed Problem 2.0") are done, the human live real-mic run PASSED (S25),
-and Modules 1–14 are ✅ (ADR-0046). Test suite: **192 pass**. Alembic head: **0012** (17 tables).
+and Modules 1–14 are ✅ (ADR-0046). Test suite: **192 pass** (carried over — S27 touched no code).
+Alembic head: **0012** (17 tables).
 **There is no forced next step — what we work on next is the HUMAN's choice** (see the menu below).
 
 ## Where we are right now
 - The system is **demo-ready** except for API-key rotation. Nothing is broken; no open build tracker.
-- **The 3.0 tracker (`context fixed problem 3.0.md`) is intentionally EMPTY.** In S25 the human
-  reported **0 bugs** from the live run and said "leave it empty for now" — so the 📥 inbox reads
-  "(nothing yet)" by design. The moment the human pastes findings there, we triage into a numbered
-  cycle (one item per "go", functional before polish).
+- **S27 was documentation-only.** The faculty's **third** future requirement was filed:
+  **Requirement 3 — a fully voice-driven follow-up conversation** (AI speaks → mic opens itself →
+  patient answers → answer captured automatically → next question, with no screen contact between
+  "start" and "end"). It lives in `agent_docs/faculty_future_features.md` alongside Reqs 1 & 2.
+  **ADR-0047** scopes it: research track (NOT a 3.0 bug), client-side turn-taking, **independent of
+  Reqs 1 & 2**, no backend change for the basic loop.
+- **Worth knowing before anyone re-derives it:** the server-side follow-up loop is **already
+  autonomous** — `POST /api/visits/{uuid}/followup/answer` runs M8 merge → M9 check → M7 next
+  question and returns `next_question` in the SAME response, and `kiosk.js submitPatientTurn()`
+  already chains it into `assistantSays()`. Faculty steps 4–8 therefore work TODAY; only the two mic
+  taps in `toggleListening()` are manual.
+- **The 3.0 tracker (`context fixed problem 3.0.md`) is still intentionally EMPTY.** The human
+  reported 0 bugs from the S25 live run. The moment findings are pasted there, we triage into a
+  numbered cycle (one item per "go", functional before polish).
 - ⚠ Standing honesty caveat: the S25 live run was **qualitative** (no by-hand WER/precision-recall)
   and **Windows-only**. Formal metrics are a recommended thesis-evidence follow-up, not a blocker.
 
@@ -32,16 +43,24 @@ and Modules 1–14 are ✅ (ADR-0046). Test suite: **192 pass**. Alembic head: *
    only at startup). **HUMAN step — I must never enter/handle the keys.**
 2. **Report manual-testing bugs/UX findings** → paste raw notes into
    `agent_docs/context fixed problem 3.0.md` (📥 inbox). I triage → numbered tracker → your approval
-   → one item per "go".
-3. **Faculty future features** (research track, needs its own plan) — the two faculty requirements in
-   `agent_docs/faculty_future_features.md`: a **quantized Moshi** medical-summary model + **quantized
-   on-device STT/TTS** replacing the browser APIs. Suggested order there: summary → STT → TTS.
+   → one item per "go". (Note: "the mic needs two taps" is **Req 3 below**, not a 3.0 bug.)
+3. **Faculty future features** (research track, each needs its own plan) — the **three** requirements
+   in `agent_docs/faculty_future_features.md`: a **quantized Moshi** medical-summary model +
+   **quantized on-device STT/TTS** + the **fully voice-driven follow-up loop**. Suggested order for
+   1 & 2: summary → STT → TTS. **Req 3 is independent and can go at any point** — its step 1
+   (**auto-listen by passing `speak()`'s already-existing `onend` callback**, patient still taps once
+   to finish) is the smallest, most visible starting point in the whole faculty track.
 4. **Record formal WER / precision-recall** on ~50 samples for thesis evidence
    (`test_log.md` "Metrics we care about"), and/or the **TextBee real-SMS OTP demo**
    (install TextBee on an Android+BD-SIM phone, set `OTP_CHANNEL=textbee` + creds, restart).
 5. **Anything else the human wants.**
 
 ## Locked decisions — do NOT re-open
+- **ADR-0047 (S27):** faculty Req 3 = research track, client-side turn-taking, independent of
+  Reqs 1 & 2, ships behind a `voice_loop = manual | auto` switch (ADR-0045 pattern, old path never
+  deleted). Rejected: filing it as a 3.0 bug; folding it into Req 2. **Rule #1 hazards recorded:** an
+  endpointer that clips an answer, or TTS echo transcribed into a `patient` utterance, are
+  **correctness defects, not UX nits**.
 - **ADR-0046 (S25):** on the passed live-voice gate, the module board (1–14) moved to ✅ (M5 ⛔,
   M15 🟨), with the caveat that formal WER/precision-recall is still owed (qualitative Windows-only
   run). The human picked this over the more conservative "flip M1 & M7 only" / "change nothing".
@@ -50,7 +69,8 @@ and Modules 1–14 are ✅ (ADR-0046). Test suite: **192 pass**. Alembic head: *
   (structurally impossible elsewhere); TextBee = free real-SMS demo channel; BTRC aggregator = future
   production sender (new subclass, no core change).
 - **ADR-0042/0043/0044** (2.0 approach / Teal Medical / M16 assistant) and the pre-existing S9–S17
-  locks — see `decisions.md`.
+  locks — see `decisions.md`. Note ADR-0042 correctly says "two" faculty features: that was true when
+  written, and it was left unchanged on purpose.
 
 ## Important environment notes
 - Server: port 8001. Entry points: `/` · `/kiosk.html` · `/medic/` · `/doctor/` · `/legacy/`.
@@ -59,6 +79,8 @@ and Modules 1–14 are ✅ (ADR-0046). Test suite: **192 pass**. Alembic head: *
 - OTP env (backend/.env, see .env.example): `OTP_CHANNEL=dev|textbee`, `OTP_DEV_BYPASS`,
   `DEV_OTP=000000`, `OTP_TTL_SECONDS=300`, `OTP_MAX_ATTEMPTS=5`, `OTP_RESEND_COOLDOWN_SECONDS=60`,
   `TEXTBEE_API_KEY/TEXTBEE_DEVICE_ID/TEXTBEE_BASE_URL`.
+- Follow-up loop knobs (`backend/app/core/config.py`): `followup_min_questions = 4`,
+  `followup_max_questions = 5`, `completeness_threshold = 0.7` — these bound the loop server-side.
 - `httpx==0.28.1` is a DIRECT dep — **Arch laptop: re-run `pip install -r requirements.txt`** (also
   needed for S23's `ddgs`).
 - Three API keys in `backend/.env` (Gemini/Groq/OpenRouter) — **still NOT rotated** (option 1 above).
@@ -72,4 +94,4 @@ and Modules 1–14 are ✅ (ADR-0046). Test suite: **192 pass**. Alembic head: *
   never persisted or logged in plaintext (the dev-channel server log is the ONE sanctioned spot).
 - Run (Windows): `.venv\Scripts\python.exe -m uvicorn backend.app.main:app --reload --port 8001`
 - Run (Arch):    `.venv/bin/python -m uvicorn backend.app.main:app --reload --port 8001`
-- Tests: `pytest backend/tests/` (**192 passing** as of S24/S25).
+- Tests: `pytest backend/tests/` (**192 passing** as of S24/S25; S27 touched no code).

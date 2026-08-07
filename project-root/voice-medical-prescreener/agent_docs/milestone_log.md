@@ -6,7 +6,10 @@
 
 **Status keys:** ⬜ Not started · 🟨 In progress · 🟦 Blocked · ✅ Done · ⛔ Retired
 
-**Last updated:** 2026-07-12 (Session 25 — **the HUMAN LIVE REAL-MIC RUN PASSED on Windows 11**:
+**Last updated:** 2026-08-08 (Session 27 — docs-only: **faculty Requirement 3 filed** (fully
+voice-driven follow-up loop, **ADR-0047**) in `faculty_future_features.md`, plus 5 cross-reference
+fixes. **No module status and no phase changed**; 192 tests unchanged and not re-run — no code was
+touched. Prior: Session 25 — **the HUMAN LIVE REAL-MIC RUN PASSED on Windows 11**:
 TC-V1/V2/V3/F2/R1 all ✅ (STT very accurate, ~2 s latency, TTS spoke, follow-ups good; OTP via the
 `000000` dev bypass; no bugs found). On that cleared gate the human chose to move **Modules 1–14 →
 ✅** (M5 retired ⛔, **M15 stays 🟨** = future retrain/regression pipeline). Docs-only, no code —
@@ -41,6 +44,14 @@ open menu: (1) rotate the 3 API keys before any public demo (`human_live_run_gui
 recommended); (2) paste manual-testing bugs/UX findings into `context fixed problem 3.0.md`;
 (3) faculty future features (`faculty_future_features.md`); (4) formal WER/precision-recall or the
 TextBee real-SMS demo; (5) anything else. No status/phase changed in S26 (docs-only).
+**Session 27 (no status change):** docs-only. The faculty's **third** future requirement — a fully
+voice-driven follow-up conversation (AI speaks → mic auto-opens → answer auto-captured → next
+question, no screen contact mid-conversation) — was filed as **Requirement 3** in
+`faculty_future_features.md` (**ADR-0047**: research track, client-side turn-taking, independent of
+Reqs 1 & 2, no backend change for the basic loop). Notable finding: the server loop is **already
+autonomous** (`POST /followup/answer` returns the next question in the same response), so faculty
+steps 4–8 work today and only the two mic taps are manual. Reqs 1–3 all stay ⬜ NOT STARTED. **No
+module status, no phase change; 192 tests unchanged (no code touched, not re-run).**
 **Session 25 (module board moved):** the HUMAN ran the live real-mic test on **Windows 11 + Chrome +
 real mic** (synthetic data, OTP `000000` dev bypass) per `human_live_run_guide.md` PART 2 —
 **TC-V1/V2/V3/F2/R1 all PASS**: STT "very accurate", latency **≈ 2 s**, TTS **spoke correctly**,

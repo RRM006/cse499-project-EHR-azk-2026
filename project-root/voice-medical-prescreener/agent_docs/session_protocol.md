@@ -33,8 +33,9 @@ matter and orient in seconds — without you re-explaining the project.
 > and make clear that choosing among them (or doing something else) is **the human's call** — never
 > assume one. Current menu (kept up to date in `current_task.md`): (1) rotate the 3 API keys
 > (recommended before any public demo), (2) paste manual-testing bugs/UX findings into
-> `context fixed problem 3.0.md` (→ triaged into the 3.0 fix cycle), (3) the faculty quantized-model
-> work in `faculty_future_features.md` (research track), (4) formal WER / TextBee real-SMS demo, or
+> `context fixed problem 3.0.md` (→ triaged into the 3.0 fix cycle), (3) the **three** faculty future
+> requirements in `faculty_future_features.md` (research track: quantized summary model, quantized
+> STT/TTS, voice-driven follow-up loop), (4) formal WER / TextBee real-SMS demo, or
 > (5) anything else. Surface the menu, then STOP and wait for the human's "go".
 
 ---

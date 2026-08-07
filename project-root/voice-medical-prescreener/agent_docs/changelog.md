@@ -16,6 +16,53 @@
 
 ---
 
+## Session 27 — 2026-08-08 — Faculty Requirement 3 filed (fully voice-driven follow-up conversation) + doc cross-references synced (docs-only, no code)
+- Did (no code, no tests — 6 markdown files):
+  - **`faculty_future_features.md`: added Requirement 3 — "Fully Voice-Driven Interactive Follow-up
+    Conversation"** (a later faculty clarification relayed by the human). Written in the same formal
+    register as Reqs 1–2 (`Currently… / As a future faculty requirement…`), plus a full
+    implementation-notes block: why it is future work, current vs. future workflow, reusable seams,
+    research challenges, evaluation ideas, benefits, and an internal build order.
+    **Reqs 1 & 2 left byte-identical** (the only deletion was the header's status block).
+  - **Key finding — read from the code, not assumed: the server-side loop is ALREADY autonomous.**
+    `POST /api/visits/{uuid}/followup/answer` runs M8 merge → M9 check → M7 next question and returns
+    `next_question` in the SAME response (`AnswerOut`), and `kiosk.js submitPatientTurn()` already
+    chains it into `assistantSays()`. **Faculty steps 4–8 work today**; only steps 2–3 are manual
+    (the two taps in `toggleListening()`). So Req 3 = frontend turn-taking, **no backend change**
+    needed for the basic loop.
+  - **Seams recorded for the future build:** `tts.js speak(text, {onend})` — the callback already
+    exists and is ignored at all 3 kiosk call sites (= "mic starts automatically");
+    `interimResults = true` already supplies the silence-timer ticks for auto-endpointing, replacing
+    `r.onend = () => { if (listening) r.start(); }`; `stopListening(true)` already submits the turn;
+    `activeDock()` means the KIOSK-7 resume dock inherits the change; and the loop is already bounded
+    server-side (`followup_max_questions = 5`, `min = 4`, `threshold = 0.7`) — so hands-free cannot
+    run forever. That bound is the safety property that makes removing the taps acceptable.
+  - **Provenance kept honest:** Reqs 1–2 are the faculty's own pasted text; Req 3 was **relayed as a
+    spoken clarification**, so the header marks it "faithful, not literally verbatim".
+  - **Cross-references synced (5 spots)** so nothing still reads "two faculty requirements":
+    `CLAUDE.md` (status pointer + memory-file item 11), `current_task.md` (menu option 3),
+    `session_protocol.md` (the standing start-of-session menu), `codebase_map.md` (tree entry), and
+    `context fixed problem 3.0.md` — the last one also gained a **misfiling guard**: "the mic needs
+    two taps" is a **Req 3 research item, NOT a 3.0 bug**.
+  - **Deliberately NOT touched (history stays honest):** this changelog's S24b entry, **ADR-0042**,
+    `context fixed problem 2.0.md`, and `codebase_map.md`'s S24b note all correctly said "two" when
+    written. `milestone_log.md` line 42 was checked and left alone (its wording carries no count).
+- Decided: **ADR-0047** — Requirement 3 is filed to the **research track** (explicitly NOT the 3.0 bug
+  cycle) and scoped as a **client-side turn-taking change, independent of Reqs 1 & 2**, to ship behind
+  a `voice_loop = manual | auto` config switch (ADR-0045 pattern: switch in `.env`, old path never
+  deleted). Rule #1 framing recorded: an endpointer that clips an answer, or TTS echo captured into a
+  `patient` utterance, is a **rule #1 defect — not a UX nit**.
+- Broke / problem: none. **No code was touched**, so the 192-test suite is unchanged and was
+  deliberately **NOT re-run** this session (there was nothing for it to prove) — the number is carried
+  over from S24/S25, not re-verified today.
+- Deferred: building any of it. Reqs 1–3 all stay ⬜ NOT STARTED (research track). Still open from
+  before: rotating the 3 API keys (pre-demo), formal WER/precision-recall, the TextBee real-SMS demo,
+  and the empty 3.0 inbox.
+- Next: **HUMAN's choice from the menu** — now with 4 real candidates: (1) rotate the 3 API keys
+  (recommended before any public demo), (2) paste manual-testing findings into the 3.0 inbox,
+  (3) faculty Reqs 1–3 — **Req 3 step 1 (auto-listen via `speak()`'s existing `onend`) is the
+  smallest and most visible starting point**, (4) formal WER / TextBee demo.
+
 ## Session 26 — 2026-07-12 — Standing start-of-session "options menu"; confirmed 3.0 tracker intentionally empty (docs-only, no code)
 - Did (no code, no tests):
   - **Confirmed the 3.0 tracker is EMPTY by design, not by oversight.** Re-read
