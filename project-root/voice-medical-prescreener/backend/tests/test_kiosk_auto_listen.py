@@ -35,15 +35,19 @@ def test_every_question_the_patient_must_answer_goes_through_askaloud():
 
 
 def test_replaying_an_old_bubble_does_not_open_the_microphone():
-    """The per-message 🔊 button is for review — it must stay plain speak()."""
+    """The per-message 🔊 button is for review — it must stay plain speak(), never
+    askAloud(). (ADR-0049 added an explicit replay language; the rule is unchanged.)"""
     js = kiosk_js()
-    assert "speakBtn.onclick = () => speak(body.textContent);" in js
+    assert "speakBtn.onclick = () => speak(body.textContent, { lang: replayLang });" in js
+    assert "askAloud(body.textContent" not in js
 
 
 def test_the_mic_never_opens_while_the_ai_is_still_audible():
-    """Echo guard, rule #1: AI words must never enter the patient's verbatim record."""
+    """Echo guard, rule #1: AI words must never enter the patient's verbatim record.
+    ADR-0049 widened the predicate to ttsSpeaking() so it also covers server-side audio,
+    which `speechSynthesis.speaking` cannot see — see test_kiosk_tts_fallback.py."""
     js = kiosk_js()
-    assert "window.speechSynthesis.speaking" in js
+    assert "ttsSpeaking()" in js
     assert "voiceConfig.tts_guard_ms" in js
 
 

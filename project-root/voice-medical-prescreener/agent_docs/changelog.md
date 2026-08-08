@@ -16,6 +16,113 @@
 
 ---
 
+## Session 29 — 2026-08-08 — **Step S4 SHIPPED + live-tested PASS**, then **Bangla TTS solved architecturally (ADR-0049)** — 234 → 274 tests
+- Did (two separate pieces of work, each after its own "go"):
+  - **Step S4 — silence detection + the visible 3-2-1 countdown + barge-in cancel.** `kiosk.html`
+    gained a `.countdown` block in **both** docks (2.2rem digit + bilingual caption); `kiosk.js` gained
+    the endpointer: `restartSilenceWindow()` / `renderCountdown()` / `endTurnOnSilence()` /
+    `finishFlushedTurn()`, a deadline-driven window so a tuned `countdown_ms` displays honestly, and
+    `r.onend` rewritten from the old "always restart" line into an arbiter. **Every `onresult` tick —
+    interim OR final — restarts the window**, so a pause or a cough cannot clip an answer; the window
+    **arms only after real words are captured**, leaving the silent-patient case to S5. **The human's
+    live run PASSED.** → 234 → **247 tests**.
+  - **The flush (the human's call).** `stopListening()` reads `finalBuffer` immediately, so at zero we
+    now `recognition.stop()` FIRST and submit from `onend` (or a 600 ms grace, whichever wins, exactly
+    once). Proven in-browser: the submitted buffer was `"আমার জ্বর — এবং গলা ব্যথাও আছে"`, i.e. it
+    **included the tail the engine only released on stop()** — without this that tail was silently lost.
+  - **Then: Bangla TTS.** Audited first, as instructed. **Verified root cause, not guessed:** Bengali is
+    **absent from Microsoft's entire Windows TTS voice list** (no `bn-BD`, no `bn-IN`), and the dev box
+    confirms it — only `David/Zira (en-US)`, no `bn` token in the classic OR `Speech_OneCore` hive, no
+    Bengali language pack. **So `human_live_run_guide.md` PART 1 was instructing the human to do
+    something impossible**, and ADR-0040's "Windows path is unchanged" rested on that false premise.
+  - **Built the seam (ADR-0049):** `backend/app/services/tts/` (`base.py` ABC + `espeak.py` +
+    `service.py` selector — deliberately mirroring the ADR-0045 OTP seam) and public
+    **`GET /api/tts?text=&lang=`** → `audio/wav`. `tts.js` keeps its exact signature but now walks a
+    chain: **browser voice → server → `false`**. Text goes to espeak-ng via **stdin** (never argv, so
+    Bangla dodges Windows argv encoding), `shell=False`, length-capped because the endpoint is
+    unauthenticated. **Zero new Python dependencies** — stdlib `subprocess`.
+  - **Honest failure, which was the actual ask:** the old `speak()` returned `true` whenever
+    `speechSynthesis` merely existed, so Bangla read by an en-US voice *looked* like success. Now Bangla
+    demands a matching voice, a missing engine is a **503** (never a silent 200), `speak()` returns
+    **false**, and `/api/config` gained **`server_tts: bool`** — a capability, never the provider name
+    or path (the schema's own no-disclosure rule, re-asserted by a test).
+- Decided: **ADR-0049 — Accepted.** espeak-ng over the alternatives on verified grounds: **Piper has no
+  Bengali voice at all** (checked `VOICES.md`); **`facebook/mms-tts-ben`** is a real bn model but needs
+  torch+transformers and is **CC-BY-NC-4.0**, so it is parked as the natural fit for **Requirement 2**
+  and drops into this seam as one subclass; **edge-tts** has genuine bn-BD neural voices
+  (`NabanitaNeural`/`PradeepNeural`) but pulls binary `aiohttp` and ships question text to Microsoft —
+  kept as a documented future provider. espeak-ng wins because it is **already this project's accepted
+  Bangla voice** (ADR-0040, Arch), keeps question text **on the machine** (M7 questions are derived from
+  patient speech — rule #4), and adds no dependency.
+- Broke / problem — **three real bugs found and fixed, two of them mine:**
+  1. **A rule #1 trap I created.** Server audio plays through `<audio>`, and `speechSynthesis.speaking`
+     is **false** the whole time — so S3's echo guard would have opened the mic while the AI was
+     audible. Fixed with **`ttsSpeaking()`** (true for either provider **and while the request is still
+     in flight**) swapped into `openMicWhenQuiet()`, plus `ttsCancel()` in `toggleListening()`. Measured:
+     `ttsSpeaking()` is already true the instant the request is created.
+  2. **I broke English TTS** by making the browser path conditional on finding a matching voice —
+     `getVoices()` is empty during Chrome's async load, so English returned `false`. Caught in the
+     browser, not by tests. Only **Bangla** now demands a matching voice.
+  3. **Stale `shared.js` served from cache** silently sent every question down the wrong language path —
+     this is what made bug 2 invisible for two rounds. Starlette's `StaticFiles` sends no
+     `Cache-Control`, so Chrome applied heuristic freshness. Fixed with `RevalidatedStaticFiles`
+     (`no-cache, must-revalidate`; the existing ETag keeps it a cheap 304), and `tts.js` now reads the
+     language from the **`lang` localStorage key shared.js already owns** instead of a shared.js helper,
+     removing the cross-file version skew entirely. On a clinic kiosk that staleness would have silently
+     disabled Bangla audio after an update.
+- **Then espeak-ng was installed (winget, with the human approving the UAC prompt) and the pipeline was
+  verified end to end → 274 → 277 tests, 0 skipped:**
+  - Engine has a **Bengali voice** (`bn`, `inc\bn`); a Bangla question renders **exit 0, 158,098 bytes,
+    RIFF/WAVE, 22,050 Hz, 3.58 s**. Endpoint: **200, `audio/wav`, 157,438 bytes, 3.57 s**.
+    `/api/config` → **`"server_tts": true"`**; the KIOSK-2 banner is now **hidden** while
+    `banglaVoiceAvailable()` is still false — proving the fallback, not a browser voice, is speaking.
+  - **Playback genuinely completes:** `onend` at **3877 ms** vs the measured **22 ms** error path.
+  - **Rule #1 integration proof:** with `toggleListening` spied, the mic opened **exactly once at
+    4110 ms**; `ttsSpeaking()` was true at 509/1525/2553/3583 ms and the mic stayed shut throughout.
+    Without the predicate swap it would have opened at ~400 ms, mid-question.
+  - Hardened en route: `resolve_binary()` now also checks the installers' well-known paths, because the
+    Windows MSI updates the **machine** PATH and processes started earlier cannot see it — a clinic
+    would otherwise see "not installed" forever.
+- Deferred: **S5–S7 are still NOT built.** ⚠ And the honest remaining gap: **nobody has HEARD the
+  Bangla.** Bytes, duration and completed playback are proven; espeak-ng Bangla is known to be robotic
+  (ADR-0040), and whether it is *intelligible* to a Bangladeshi patient is the human's judgement.
+  Voice quality must not be described as validated. Also noted, not acted on: **CLAUDE.md says Python
+  3.14 but the venv is 3.13.3.**
+
+### 🔊 LIVE RUN VERDICT — end of Session 29 (the human's real listen, in Chrome)
+> Recorded as part of Session 29, not a new session: this was one continuous session, and inventing a
+> "Session 30" would corrupt the numbering the whole memory system relies on.
+- Did: the human ran the kiosk in Chrome with real audio and reported: **Bangla voice: Too robotic ·
+  Mic timing: Pass · Countdown: Pass · Transcript clean: Yes · English: Pass**, plus *"there are no gap
+  when tts Bangla and English hear . some time 2 question hear at a same time this is confusing"* and
+  *"i want make it like human not too robotic"*. Verbatim wording preserved in
+  `context fixed problem 3.0.md`. **I then root-caused the audio defect** to
+  `services/followup.py:45`.
+- Decided: **ADR-0050 (Proposed).** The ADR-0049 **seam is validated and stays**; only its **first
+  provider is rejected**. espeak-ng is a formant synthesizer, so "too robotic" is **inherent, not
+  tunable** — no `.env` value fixes it. Replacing the voice is **one subclass**, which is exactly what
+  the seam was built for. espeak-ng is **demoted, not deleted** (offline, zero-dep, no-network fallback +
+  the Arch path). **The replacement provider is deliberately NOT chosen** — edge-tts (natural `bn-BD`
+  neural, but a binary dep + sends question text to Microsoft), `facebook/mms-tts-ben` (local, but torch
+  + CC-BY-NC), or fold into faculty Requirement 2. That choice carries a **rule #4 privacy trade-off**
+  that is the human's to make explicitly, not mine to assume.
+- Broke / problem: **TTS-1 — one question is spoken as Bangla then English with no gap**, which sounds
+  like two questions. **Root cause found, not guessed:** `services/followup.py:45` forces the M7 prompt
+  to emit `"question": "<Bangla question> (<English question>)"` — every question is a SINGLE bilingual
+  string, so TTS reads both halves in one breath. **It is not an overlap bug and not caused by
+  ADR-0049**; it has existed since S25 and was merely exposed, because espeak `-v bn` also applies
+  Bengali phonetics to the English half. The fix must be **TTS-only**: the stored `system` utterance and
+  the on-screen text keep the full bilingual string (rule #1 + ADR-0028).
+- Deferred: **everything.** The human explicitly asked to fix nothing this session — "i want fixed some
+  bug and add some features in upcoming session for now i want you will remember". So **no code was
+  written after the verdict**; TTS-1 and TTS-2 are filed as the first two items of the **3.0 cycle**
+  (`context fixed problem 3.0.md`, now 🟢 OPEN after being empty since S24). Also still open: **Steps
+  S5–S7** of Requirement 3, rotating the 3 API keys, formal WER, the TextBee demo, **CLAUDE.md claiming
+  Python 3.14 when the venv is 3.13.3**, and a **stray second uvicorn on port 8000**.
+- Next: **TTS-1 first** (functional before polish) — but it needs one human decision before any code:
+  should the patient hear **only their UI language** (recommended: faster, less confusing) or **both
+  halves with a real pause**? Then TTS-2's provider choice, then Step S5.
+
 ## Session 28 — 2026-08-08 — Requirement 3 EXPANDED to voice-first + typing-fallback; inspection, 7-step plan, and **Steps S1 + S2 + S3 SHIPPED** — 234 tests pass
 - Did (inspection + docs FIRST as instructed, then Steps S1 → S2 → S3, each after its own separate
   "go" from the human — no code was written before the plan was approved):

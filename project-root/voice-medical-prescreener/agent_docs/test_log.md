@@ -120,6 +120,100 @@ transcribed by hand (the "ground truth"). Record the model + machine each time.
   only by static-source assertions plus the **12-point live Chrome checklist**
   (`faculty_future_features.md` §K). Nothing reads `/api/config` yet; kiosk behaviour is unchanged.
 
+## 2026-08-08 — Session 29 — ADR-0049 Bangla TTS seam: suite 247 → 274 (3 skipped), plus real-browser provider checks
+- Setup: `pytest backend/tests/` on Windows 11, **Python 3.13.3** (note: `CLAUDE.md` still claims 3.14).
+  New: `test_tts_provider.py` (backend seam) and `test_kiosk_tts_fallback.py` (static-source, frontend).
+  Real-browser checks via the in-app Chrome preview with **no microphone**: the current `tts.js` source
+  was fetched past the cache and evaluated, then each provider path was exercised directly.
+- Metric(s): suite size / pass count; provider-selection correctness; failure latency; echo-guard
+  truthfulness while a request is in flight.
+- Result (SECOND PASS, after espeak-ng 1.52.0 was installed via winget): **277 passed, 0 skipped,
+  0 failed** (247 → 277, +30). Engine carries a **Bengali voice** (`bn`, `inc\bn`). Measured:
+  · Engine direct: Bangla → exit 0, **158,098 bytes**, RIFF/WAVE, **22,050 Hz, 3.58 s**.
+  · `GET /api/tts?lang=bn` → **200, audio/wav, 157,438 bytes, 3.57 s**, `private, max-age=300`.
+  · `/api/config` → **`"server_tts": true`**; KIOSK-2 banner **hidden** while
+    `banglaVoiceAvailable()` is still **false** — so the FALLBACK is what speaks, not a browser voice.
+  · **Playback completes:** `onend` at **3877 ms** (≈ the 3.57 s clip) vs the **22 ms** error path —
+    the difference is what distinguishes real playback from silent failure.
+  · **Rule #1 integration proof:** `toggleListening` spied → mic opened **exactly once at 4110 ms**;
+    `ttsSpeaking()` true at 509 / 1525 / 2553 / 3583 ms with the mic **shut** throughout. Without the
+    ttsSpeaking() swap it would have opened at ~400 ms, mid-question.
+  · **HUMAN LIVE LISTEN (end of S29, Chrome, real audio) — the seam PASSED, the voice FAILED:**
+    **Mic timing PASS** · **Countdown PASS** · **Transcript clean = YES (zero AI words in the patient's
+    verbatim record — rule #1 holds end-to-end WITH a server TTS provider; this was the cycle's biggest
+    risk)** · **English PASS** · **Bangla voice: "Too robotic" → REJECTED on quality (ADR-0050).**
+    Two defects reported → filed as TTS-1 / TTS-2 in `context fixed problem 3.0.md`.
+  ⚠ **Quality is therefore measured and NEGATIVE, not unmeasured.** espeak-ng is a formant synthesizer,
+  so this is inherent, not tunable — no `TTS_SPEED_WPM` or voice-variant change fixes it.
+
+## 2026-08-08 — Session 29 — HUMAN LIVE LISTEN of ADR-0049 Bangla TTS: 4 PASS, 1 FAIL (voice quality), 1 new defect root-caused
+- Setup: the human, real Chrome on Windows 11, real speakers and a real microphone, espeak-ng 1.52.0 as
+  the server provider (`server_tts: true`), `voice_loop=auto`. Qualitative by design — this is the only
+  gate that can judge audio.
+- Metric(s): the 10-point checklist agreed for this feature (audible Bangla · mic timing · countdown ·
+  barge-in · transcript purity · English regression · manual-mode regression).
+- Result: **Bangla is now genuinely AUDIBLE on Windows** (it was structurally impossible before —
+  Bengali is absent from Microsoft's entire Windows TTS voice list).
+  · **Mic timing: PASS** — the echo guard holds against real server audio.
+  · **Countdown: PASS** — S4's confirmation window survived the TTS change untouched.
+  · **Transcript clean: YES** — **zero AI words captured into a patient utterance. Rule #1 verified
+    end-to-end with a server-side audio provider.**
+  · **English: PASS.**
+  · **Bangla voice quality: FAIL — "Too robotic."** Requirement stated as *"i want make it like human
+    not too robotic"*.
+  · **NEW DEFECT (TTS-1):** *"there are no gap when tts Bangla and English hear . some time 2 question
+    hear at a same time this is confusing."* **Root-caused by inspection to
+    `backend/app/services/followup.py:45`**, which forces the M7 prompt to emit
+    `"question": "<Bangla question> (<English question>)"` — every question is ONE bilingual string, so
+    TTS speaks both halves in a single breath. **Not an overlap bug; pre-existing since S25**, merely
+    exposed because espeak `-v bn` also applies Bengali phonetics to the English half.
+- Notes: 4 of 5 structural checks passed, so **ADR-0049's architecture is validated and retained** — only
+  its first provider is rejected (**ADR-0050, Proposed**), which is a one-subclass swap by design. No code
+  was written after the verdict, at the human's explicit request. **Next measurement owed:** after TTS-1,
+  re-listen and confirm one question = one spoken question; after TTS-2, a human judgement of naturalness
+  against `bn-BD-NabanitaNeural` or `mms-tts-ben`.
+- Result (FIRST PASS, engine absent): **274 passed, 3 skipped, 0 failed** (247 → 274, +27). The 3 skips
+  were the real-audio tests, self-skipping because espeak-ng was not installed. Browser-measured:
+  · English → `speak()` returns **true**, `ttsSpeaking()` true during playback, **`onend` fired**.
+  · Bangla, no bn voice, no engine → `speak()` returns **false** (no fake success) and the KIOSK-2
+    banner shows; `banglaAudioAvailable() === false`.
+  · With `serverTts` advertised → Bangla takes the server path and **`ttsSpeaking()` is already true
+    while the HTTP request is still in flight** — this is the echo-guard hole that `<audio>` would
+    otherwise open (rule #1).
+  · Engine missing → **`GET /api/tts` = 503** (not 500, not a silent 200) and the caller is released in
+    **22 ms**, so the auto-listen loop cannot hang.
+  · `/api/config` → `"server_tts": false`, correctly reporting that the engine is not installed.
+- Notes: ⚠ **NO Bangla audio has been heard — audibility and intelligibility are unproven.** Three bugs
+  were found by measurement, not by tests: (1) the `<audio>` echo-guard hole above; (2) **English TTS
+  broken** by making the browser path require a matching voice while Chrome's `getVoices()` is still
+  loading — only Bangla now demands one; (3) **a stale cached `shared.js`** silently routing every
+  question down the wrong language path, which hid bug (2) for two rounds → static assets are now
+  served `no-cache, must-revalidate` and `tts.js` reads the language from localStorage instead of a
+  shared.js helper. **Next measurement owed:** after `winget install eSpeak-NG.eSpeak-NG`, the 3 skipped
+  tests must pass (valid RIFF/WAVE, duration > 0.3 s) and the human must confirm audible, intelligible
+  Bangla in Chrome.
+
+## 2026-08-08 — Session 29 — Requirement 3 step S4 (silence + 3-2-1 countdown + barge-in): suite 234 → 247, live run PASSED
+- Setup: `pytest backend/tests/` plus a **fake-`onresult` harness** in the in-app Chrome —
+  `webkitSpeechRecognition` was replaced with a stub engine so the endpointer state machine could be
+  driven with synthetic interim/final results, **with no microphone and no permission prompt**.
+  Followed by the **human's live real-mic run**.
+- Metric(s): countdown visibility and tick accuracy; barge-in cancellation; submit-exactly-once;
+  whether the trailing final chunk survives the auto-submit (rule #1).
+- Result: **247 passed, 0 failed** (234 → 247, +13). Harness-measured:
+  · Countdown appears on first speech and ticks **3 → 2 → 1** (**৩ → ২** with the Bangla UI).
+  · **Barge-in at 2115 ms reset the digit to 3**; at 3418 ms — past the original deadline — still
+    listening with **0 submits**. The answer was not clipped.
+  · A blank/noise-only tick **cancels** a running window but can never **arm** one.
+  · Zero → `stopListening(true)` **exactly once**, with `engine.stopped === 1` (flushed first).
+  · **Flush proof:** the buffer at submit was `"আমার জ্বর — এবং গলা ব্যথাও আছে"`, i.e. it **included the
+    tail the engine only released on `stop()`** — without the flush that tail is silently lost.
+  · Window length is genuinely server-driven: `countdown_ms: 30000` → the digit showed **৩০**.
+  · `voice_loop=manual` → no countdown, nothing submitted, old "tap again" hint (S25 behaviour intact);
+    Type mode → no countdown, mic hidden.
+- Notes: **The human's live real-mic run PASSED.** Synthetic events prove the state machine, not real
+  Bangla endpointing — but the live run covered that. Zero console errors, zero server errors.
+
 ## 2026-08-08 — Session 28 — Requirement 3 step S3 (auto-listen): suite 222 → 234, plus a real-browser timing check
 - Setup: `pytest backend/tests/` (static-source assertions over `/kiosk.js` and `/shared/tts.js`)
   **plus** an instrumented Chrome check via the in-app preview: `toggleListening` was replaced with a

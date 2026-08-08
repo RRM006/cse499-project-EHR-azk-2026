@@ -21,6 +21,9 @@ EXPECTED_KEYS = {
     "tts_guard_ms",
     "no_speech_ms",
     "max_answer_ms",
+    # ADR-0049: a boolean CAPABILITY (can /api/tts actually speak?), never the
+    # provider's name or its path — see test_tts_provider.py.
+    "server_tts",
 }
 
 

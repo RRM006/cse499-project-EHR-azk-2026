@@ -6,7 +6,34 @@
 
 **Status keys:** ⬜ Not started · 🟨 In progress · 🟦 Blocked · ✅ Done · ⛔ Retired
 
-**Last updated:** 2026-08-08 (Session 28 — faculty **Requirement 3 EXPANDED to §3b: a VOICE-FIRST
+**Last updated:** 2026-08-08 (**Session 29** — **Step S4 of 7 is DONE and its live run PASSED**:
+silence detection, the visible 3-2-1 confirmation countdown in both docks, barge-in cancel on every
+`onresult` tick, and a flush-before-submit so the tail Chrome had not yet finalized is not dropped
+(rule #1). Then **Bangla TTS was solved architecturally — ADR-0049**: a server-side TTS provider seam
+(`services/tts/`, mirroring the ADR-0045 OTP seam) + public `GET /api/tts` with **espeak-ng**, chosen
+because it is already this project's accepted Bangla voice (ADR-0040) and keeps patient-derived
+question text on the machine; zero new Python dependencies. **Verified root cause: Windows has NO
+Bengali TTS voice at all**, so `human_live_run_guide.md` PART 1 was documenting an impossible step —
+now corrected. `speak()` no longer fakes success: Bangla demands a matching voice, a missing engine is
+a **503**, and `/api/config` gained a `server_tts` capability flag. Three bugs were found and fixed en
+route (an echo-guard hole from `<audio>` being invisible to `speechSynthesis.speaking`; English TTS
+broken by the async `getVoices()` race; and stale cached `shared.js`, now `no-cache`). **espeak-ng
+1.52.0 was then installed and the pipeline verified end to end: 234 → 277 tests pass, 0 skipped** —
+`/api/tts` serves a valid 3.57 s Bangla WAV, `/api/config` reports `server_tts: true`, the KIOSK-2
+banner is hidden while `banglaVoiceAvailable()` is still false (so the fallback is what speaks),
+`onend` fires at 3877 ms vs a 22 ms error path (real playback), and with the mic spied it opens
+**exactly once at 4110 ms** — never while `ttsSpeaking()` is true (rule #1).
+**Then the HUMAN LIVE LISTEN closed the session: the seam PASSED, the voice FAILED.** Mic timing ✅ ·
+countdown ✅ · **transcript clean ✅ = zero AI words in the patient's verbatim record, so rule #1 holds
+end-to-end even with a server-side TTS provider (the cycle's biggest risk, now retired)** · English ✅ ·
+**Bangla voice "Too robotic" ❌ → rejected on quality (ADR-0050, Proposed: keep the seam, replace the
+provider — one subclass; provider and the rule #4 privacy trade-off deliberately UNDECIDED).** One new
+defect **root-caused, not guessed**: `services/followup.py:45` forces every M7 question into ONE
+bilingual string `"<Bangla> (<English>)"`, so TTS speaks both halves in a single breath — heard as "two
+questions, no gap". **Pre-existing since S25**, only exposed by ADR-0049. ⚠ **No module status and no
+phase changed; Alembic stays at 0012. S5–S7 are NOT built.** The **"Context Fixed Problem 3.0" cycle is
+now 🟢 OPEN** (empty since S24) with its first two items, **TTS-1** and **TTS-2**; no code was written
+after the verdict, at the human's explicit request. Prior: Session 28 — faculty **Requirement 3 EXPANDED to §3b: a VOICE-FIRST
 Patient Portal with typing always available as the fallback** (**ADR-0048, Accepted**; supersedes
 ADR-0027's voice-only rule, and `CLAUDE.md` was amended accordingly). Full 7-step GO-gated plan +
 12-point live checklist in `faculty_future_features.md` §A–K. **Step S1 of 7 is DONE** — backend
@@ -46,8 +73,11 @@ save** (step 19, ADR-0039: `POST …/prescription` saves a `prescriptions` row +
 structurally un-AI-fillable). **S14 = step 20 (final):** 150-test gate re-confirmed; all
 `context_fixed_problem` markers flipped to ✅ (KIOSK-4/5/6/7 + MEDIC-1/2/3/5 from S11,
 DOCTOR-3/4/5/6/7 from S13); doc sweep. **150 tests pass.**
-**Module in focus:** none — the fix/feature build is closed AND the human live-voice gate is now
-CLEARED. **Modules 1–14 are ✅** (as of S25, on the passed live run); **M15 stays 🟨** (future
+**Module in focus (S29):** **M7 (follow-up question presentation)** — its audio half is the active work:
+Bangla is audible at last, but the voice is too robotic (TTS-2) and one question is spoken as two
+(TTS-1). Board status unchanged (M7 stays ✅ — the loop itself works; these are audio-delivery defects
+tracked in the 3.0 cycle, not module regressions). Prior note: the fix/feature build is closed AND the
+human live-voice gate is now CLEARED. **Modules 1–14 are ✅** (as of S25, on the passed live run); **M15 stays 🟨** (future
 retrain/regression pipeline). **Next real work = the HUMAN's choice** (S26 standing note) from an
 open menu: (1) rotate the 3 API keys before any public demo (`human_live_run_guide.md` PART 3,
 recommended); (2) paste manual-testing bugs/UX findings into `context fixed problem 3.0.md`;

@@ -4,7 +4,26 @@
 > re-exploring the whole project each session. Update it whenever you add or move
 > a folder/file. Keep each note to one line.
 
-**Last updated:** 2026-07-11 (Session 24 — **P4-1 real OTP (ADR-0045): new package
+**Last updated:** 2026-08-08 (**Session 29 — ADR-0049 Bangla TTS: new package
+`backend/app/services/tts/`** — `base.py` (`TtsProvider` ABC + `TtsUnavailable`), `espeak.py`
+(`EspeakNgProvider`: local espeak-ng via stdlib `subprocess`, text through **stdin** so Bangla never
+hits Windows argv encoding, `shell=False`, 600-char cap), `service.py` (`get_provider()` selector +
+`server_tts_available()` + `synthesize()`), `__init__.py` — deliberately mirroring the `services/otp/`
+seam. New route `api/routes_tts.py`; `schemas/kiosk_config.py` + `server_tts: bool`; `core/config.py`
++ `TTS_PROVIDERS`, four `tts_*` settings and `resolved_tts_provider`; `main.py` registers the router
+and now serves ALL static mounts through **`RevalidatedStaticFiles`** (`no-cache, must-revalidate`) —
+a stale cached `shared.js` had silently broken TTS language selection. Frontend: `frontend_shared/tts.js`
+rewritten around a provider chain (browser voice → `/api/tts` → `false`) + `ttsSpeaking()` / `ttsCancel()`
+/ `configureTts()` / `banglaAudioAvailable()`; `frontend/kiosk.js` swaps ONE echo-guard predicate to
+`ttsSpeaking()`. New tests: `test_tts_provider.py` · `test_kiosk_tts_fallback.py` · (S4)
+`test_kiosk_countdown.py` → suite **274 (+3 skipped)**. **No new Python dependency; Alembic stays 0012.**
+**S29 end — no files added or moved by the live run; the only map-relevant note is a POINTER:**
+`backend/app/services/followup.py:45` is where the M7 prompt forces
+`"question": "<Bangla question> (<English question>)"` — i.e. **every question is ONE bilingual string**.
+That single line is the root cause of the TTS-1 "two questions, no gap" defect, and
+`followup.py:145` is where that same string is stored verbatim as a `system` utterance (so a TTS-only
+fix must not touch either). Also: `agent_docs/context fixed problem 3.0.md` is now 🟢 OPEN with TTS-1/TTS-2.
+Prior: 2026-07-11, Session 24 — **P4-1 real OTP (ADR-0045): new package
 `backend/app/services/otp/`** — `base.py` (`OtpSender` ABC + `OtpSendError`), `dev_log.py`
 (`DevLogSender`: code → server log via `uvicorn.error`), `textbee.py` (`TextBeeSender`: real SMS
 via httpx), `service.py` (issue/verify core: hash, expiry, single-use, lockout, throttle,
@@ -91,9 +110,14 @@ voice-medical-prescreener/
 │   │   │   │                      #   POST .../prescription (DOCTOR-6 save row + render .docx, ADR-0039)
 │   │   │   ├── routes_assistant.py # S23 (P3-3, ADR-0044): POST /api/visits/{uuid}/assistant/drug-info — M16,
 │   │   │   │                      #   visit-scoped, 404 guard before any LLM call, LLMCallError → 502
-│   │   │   └── routes_config.py   # NEW S28 (Req 3 step S1, ADR-0048): GET /api/config — PUBLIC, no DB/auth.
-│   │   │                          #   Kiosk voice-loop mode + timings so a clinic tunes them from .env,
-│   │   │                          #   not JS. Built field-by-field so a Settings secret can never leak.
+│   │   │   ├── routes_config.py   # NEW S28 (Req 3 step S1, ADR-0048): GET /api/config — PUBLIC, no DB/auth.
+│   │   │   │                      #   Kiosk voice-loop mode + timings so a clinic tunes them from .env,
+│   │   │   │                      #   not JS. Built field-by-field so a Settings secret can never leak.
+│   │   │   │                      #   S29: + server_tts (a CAPABILITY bool, never the provider name/path)
+│   │   │   └── routes_tts.py      # NEW S29 (ADR-0049): GET /api/tts?text=&lang= -> audio/wav. PUBLIC (the
+│   │   │                          #   kiosk needs it pre-login) but renders ONLY the assistant's own
+│   │   │                          #   question — no raw_text/utterance/transcript ever passes through, so
+│   │   │                          #   rule #1 is untouched. Missing engine => 503, NEVER a silent 200.
 │   │   ├── schemas/              # transcript, document (existing) + visit (S23: +submitted_at), patient, profile,
 │   │   │                          #   followup, risk, dashboard (S23: +submitted_at), prescription (S13: no diagnosis
 │   │   │                          #   field, rule #2), assistant (S23: disclaimer fields REQUIRED in the contract);

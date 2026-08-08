@@ -30,27 +30,50 @@
 
 ---
 
-## 🔊 PART 1 — Install a Bangla voice on Windows (5 min, do this before testing audio)
+## 🔊 PART 1 — Install espeak-ng so Windows can speak Bangla (2 min, before testing audio)
 
-Right now the kiosk **can't speak Bangla out loud** because Windows has no Bangla voice
-installed. It still shows the question as text (that's the safety fallback), but you want
-the audio for the demo.
+> ⚠ **CORRECTED 2026-08-08 (ADR-0049). The old version of this section was wrong** and told you
+> to add a Bengali voice in Settings → Speech. **That is impossible: Windows has no Bengali
+> TTS voice at all** — Bengali appears nowhere in Microsoft's supported-voices list (neither
+> `bn-BD` nor `bn-IN`, neither the classic nor the Natural-voices table). Searching "Bengali"
+> in "Add voices" will never find one, however long you look. That is not a bug in the kiosk
+> and not something you did wrong. Do not spend time on it.
 
-**Steps:**
-1. Press **Windows key**, type **"Speech settings"**, open it.
-   (Full path: Settings → Time & Language → Speech.)
-2. Find **"Manage voices"** → click **"Add voices"**.
-3. Search **"Bengali"** (or "Bangla"), tick **Bengali (Bangladesh)** and/or
-   **Bengali (India)**, click **Add**. Wait for it to download.
-4. **Close Chrome completely and reopen it** (voices only load on a fresh start).
+Instead the kiosk now has a **server-side Bangla voice**: the backend renders the question
+with **espeak-ng** and the browser plays the audio. An installed browser Bangla voice still
+wins if one exists (that is the Arch path, PART 1B) — this is the fallback for Windows.
+
+**Steps — ✅ ALREADY DONE on the Windows desktop (S29). Kept for the Arch laptop / a fresh machine:**
+1. Open **PowerShell** and run (it will show a **UAC prompt** — click **Yes**):
+   ```
+   winget install eSpeak-NG.eSpeak-NG
+   ```
+2. **Restart the server** (`Ctrl+C`, then the usual `uvicorn` command). The backend looks for the
+   engine and reports it to the kiosk. ⚠ The MSI updates the **machine** PATH, which processes
+   started *before* the install cannot see — so the restart genuinely matters. (The code also
+   checks `C:\Program Files\eSpeak NG\espeak-ng.exe` directly, so it works even without a reboot.)
+3. Reload the kiosk with **Ctrl+Shift+R** (a plain reload can keep old JavaScript).
 
 **How to know it worked:**
-- Open the kiosk and start a consultation. Before, a yellow **"no Bangla voice"** hint
-  banner showed at the top. After installing + restarting Chrome, **that banner disappears**
-  and you'll actually hear the questions spoken. ✅ = banner gone + you hear audio.
-- (Quick check without the kiosk: open Chrome, press F12 → Console tab, paste
-  `speechSynthesis.getVoices().filter(v=>v.lang.startsWith('bn'))` and press Enter — if the
-  result is not an empty `[]`, the voice is installed.)
+- Visit `http://localhost:8001/api/config` — you want **`"server_tts": true`**. If it says
+  `false`, the engine was not found: reopen PowerShell and check `espeak-ng --version` works.
+- Open the kiosk and start a consultation. The yellow **"no Bangla voice"** banner should now
+  be **gone**, and you should **hear** each question. ✅ = banner gone + audible Bangla.
+- Direct engine check, no kiosk needed — paste in PowerShell:
+  ```
+  espeak-ng -v bn -w test.wav --stdin
+  ```
+  then type some Bangla, press Enter, `Ctrl+Z`, Enter — and play `test.wav`.
+- ⚠ **espeak-ng's Bangla is robotic**, exactly as on Arch (ADR-0040). That is expected and
+  accepted: the on-screen text is always the primary channel (ADR-0028). If you later want a
+  natural neural Bangla voice, ADR-0049 records the two options and where they plug in.
+
+**If you would rather not install anything:** try opening the kiosk in **Microsoft Edge**
+instead of Chrome. Edge may expose Microsoft's online `bn-BD` neural voices to the page, which
+would sound far better — paste
+`speechSynthesis.getVoices().filter(v=>v.lang.toLowerCase().startsWith('bn'))` in Edge's
+Console (run it twice; the list loads asynchronously). If it returns voices, the kiosk will
+prefer them automatically with no configuration. This is unverified — worth 30 seconds.
 
 ---
 

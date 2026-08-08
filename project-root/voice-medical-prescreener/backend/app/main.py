@@ -16,6 +16,7 @@ from fastapi.staticfiles import StaticFiles
 
 from backend.app.api.routes_assistant import router as assistant_router
 from backend.app.api.routes_config import router as config_router
+from backend.app.api.routes_tts import router as tts_router
 from backend.app.api.routes_documents import router as documents_router
 from backend.app.api.routes_dashboard import router as dashboard_router
 from backend.app.api.routes_followup import router as followup_router
@@ -73,6 +74,7 @@ app.include_router(report_router)
 app.include_router(prescription_router)
 app.include_router(assistant_router)
 app.include_router(config_router)
+app.include_router(tts_router)
 
 
 @app.get("/health", tags=["meta"])
@@ -80,22 +82,47 @@ def health() -> dict[str, str]:
     return {"status": "ok"}
 
 
+class RevalidatedStaticFiles(StaticFiles):
+    """StaticFiles that forces the browser to revalidate every asset.
+
+    Starlette sends only ETag/Last-Modified with no Cache-Control, so Chrome applies
+    *heuristic freshness* and may serve a cached .js without ever asking the server.
+    That bit us for real: after `currentLang()` was added to shared.js, Chrome kept the
+    old copy, so the kiosk silently fell back to the wrong TTS language.
+
+    On a clinic kiosk the same staleness would silently disable Bangla audio after an
+    update — a failure nobody would see. `no-cache` still allows a cheap 304 via the
+    existing ETag, so this costs a conditional request, not a re-download.
+    """
+
+    def file_response(self, *args, **kwargs):  # type: ignore[override]
+        response = super().file_response(*args, **kwargs)
+        response.headers["Cache-Control"] = "no-cache, must-revalidate"
+        return response
+
+
 # Staff portals + shared assets are mounted BEFORE the catch-all patient mount.
 if FRONTEND_SHARED_DIR.is_dir():
-    app.mount("/shared", StaticFiles(directory=FRONTEND_SHARED_DIR), name="shared")
+    app.mount("/shared", RevalidatedStaticFiles(directory=FRONTEND_SHARED_DIR), name="shared")
 if FRONTEND_MEDIC_DIR.is_dir():
-    app.mount("/medic", StaticFiles(directory=FRONTEND_MEDIC_DIR, html=True), name="medic")
+    app.mount(
+        "/medic", RevalidatedStaticFiles(directory=FRONTEND_MEDIC_DIR, html=True), name="medic"
+    )
 if FRONTEND_DOCTOR_DIR.is_dir():
-    app.mount("/doctor", StaticFiles(directory=FRONTEND_DOCTOR_DIR, html=True), name="doctor")
+    app.mount(
+        "/doctor", RevalidatedStaticFiles(directory=FRONTEND_DOCTOR_DIR, html=True), name="doctor"
+    )
 
 # Legacy Phase-0 transcript demo — isolated at /legacy/ (STRUCT-1). Kept fully
 # working (its /api routes are unchanged); only its home moved off the root.
 if FRONTEND_LEGACY_DIR.is_dir():
-    app.mount("/legacy", StaticFiles(directory=FRONTEND_LEGACY_DIR, html=True), name="legacy")
+    app.mount(
+        "/legacy", RevalidatedStaticFiles(directory=FRONTEND_LEGACY_DIR, html=True), name="legacy"
+    )
 
 # Serve the frontend if it has been built (Step 5); otherwise a friendly placeholder.
 if FRONTEND_DIR.is_dir():
-    app.mount("/", StaticFiles(directory=FRONTEND_DIR, html=True), name="frontend")
+    app.mount("/", RevalidatedStaticFiles(directory=FRONTEND_DIR, html=True), name="frontend")
 else:
 
     @app.get("/", response_class=HTMLResponse, tags=["meta"])

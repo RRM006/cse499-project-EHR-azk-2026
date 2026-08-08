@@ -12,6 +12,7 @@ from fastapi import APIRouter
 
 from backend.app.core.config import get_settings
 from backend.app.schemas.kiosk_config import KioskConfigOut
+from backend.app.services.tts import server_tts_available
 
 router = APIRouter(prefix="/api", tags=["meta"])
 
@@ -25,4 +26,6 @@ def kiosk_config() -> KioskConfigOut:
         tts_guard_ms=settings.voice_tts_guard_ms,
         no_speech_ms=settings.voice_no_speech_ms,
         max_answer_ms=settings.voice_max_answer_ms,
+        # Capability, not configuration: reports whether the engine is really installed.
+        server_tts=server_tts_available(),
     )

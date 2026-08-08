@@ -35,6 +35,12 @@
     .mic-btn { width: 68px; height: 68px; border-radius: 50%; background: var(--secondary-color); border: none; color: #fff; font-size: 1.6rem; cursor: pointer; box-shadow: var(--shadow-md); }
     .mic-btn.listening { background: var(--danger-color); }
     .fallback-row { display: none; gap: 10px; width: 100%; max-width: 540px; }
+    /* S4 (ADR-0048): the CONFIRMATION countdown. Deliberately large and high-contrast —
+       the target patient is elderly or non-technical and must be able to see, at a
+       glance, that the answer is about to be sent and that speaking again stops it. */
+    .countdown { display: none; flex-direction: column; align-items: center; gap: 2px; }
+    .countdown-digit { font-size: 2.2rem; font-weight: 700; line-height: 1.1; color: var(--danger-color); }
+    .countdown-caption { font-size: .85rem; font-weight: 600; color: var(--text-muted); text-align: center; }
     /* S2 (ADR-0048): input-mode switch. VOICE is the primary/default path; the Type
        control is ALWAYS visible so a patient is never blocked by a mic/noise/
        recognition problem. The active mode is always obvious (filled + aria-pressed). */
@@ -155,6 +161,12 @@
              data-bn="⚠ এই যন্ত্রে কোনো বাংলা ভয়েস ইনস্টল করা নেই — প্রশ্ন শোনা যাবে না, তবে সবসময় পর্দায় লেখা থাকবে।">⚠ No Bangla voice is installed on this device — questions will not play as audio, but they always appear as text on screen.</div>
         <div class="dock-transcript" id="dock-transcript"
              data-en="Your speech will appear here as you talk..." data-bn="আপনি বলার সাথে সাথে এখানে দেখা যাবে...">Your speech will appear here as you talk...</div>
+        <!-- S4: shown only while a turn is being confirmed; speaking again cancels it. -->
+        <div class="countdown" id="dock-countdown">
+          <span class="countdown-digit" id="dock-countdown-digit"></span>
+          <span class="countdown-caption" id="dock-countdown-caption"
+                data-en="Sending your answer — keep speaking to continue" data-bn="আপনার উত্তর পাঠানো হচ্ছে — বলা চালিয়ে গেলে থেমে যাবে">Sending your answer — keep speaking to continue</span>
+        </div>
         <div class="dock-row">
           <button class="btn btn-secondary" onclick="repeatQuestion()" data-en="🔊 Repeat question" data-bn="🔊 প্রশ্নটি আবার শুনুন">🔊 Repeat question</button>
           <button class="mic-btn" id="mic-btn" onclick="toggleListening()">🎤</button>
@@ -201,6 +213,12 @@
           <button class="bubble-speak" type="button" onclick="repeatResumeQuestion()" title="🔊">🔊</button>
         </div>
         <div class="dock-transcript" id="resume-transcript"></div>
+        <!-- S4: the resume dock gets the SAME countdown (one endpointer, both docks). -->
+        <div class="countdown" id="resume-countdown">
+          <span class="countdown-digit" id="resume-countdown-digit"></span>
+          <span class="countdown-caption" id="resume-countdown-caption"
+                data-en="Sending your answer — keep speaking to continue" data-bn="আপনার উত্তর পাঠানো হচ্ছে — বলা চালিয়ে গেলে থেমে যাবে">Sending your answer — keep speaking to continue</span>
+        </div>
         <div class="dock-row">
           <span id="resume-hint" style="font-size:.85rem; color:var(--text-muted);"
                 data-en="Tap the mic when you are ready to speak" data-bn="বলতে প্রস্তুত হলে মাইকে চাপ দিন">Tap the mic when you are ready to speak</span>

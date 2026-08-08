@@ -21,6 +21,11 @@ DEFAULT_DOCUMENTS_DIR = BACKEND_DIR / "data" / "documents"
 # "manual" = the original tap-to-talk path, never deleted.
 VOICE_LOOP_MODES = ("auto", "manual")
 
+# Server-side TTS providers (services/tts). "browser" = no server provider at all, the
+# pre-existing ADR-0027 behaviour; "espeak" = local espeak-ng, which is the same engine
+# ADR-0040 already accepted for Bangla on Arch.
+TTS_PROVIDERS = ("browser", "espeak")
+
 
 class Settings(BaseSettings):
     model_config = SettingsConfigDict(
@@ -101,6 +106,22 @@ class Settings(BaseSettings):
     # Hard cap on a single answer -> submit whatever was captured (runaway guard).
     voice_max_answer_ms: int = 120000
 
+    # --- Bangla TTS fallback (services/tts) ---
+    # Windows ships NO Bengali voice at all (verified against Microsoft's supported-voices
+    # list), so on Windows the browser can never speak Bangla no matter what the patient
+    # or the clinic does. TTS_PROVIDER names the SERVER-SIDE fallback used only when the
+    # browser has no bn* voice of its own:
+    #   browser — none; behave exactly as before (text stays the fallback, ADR-0028).
+    #   espeak  — local espeak-ng, offline, no key, no patient text leaves the machine.
+    # Leave tts_espeak_path empty to find espeak-ng on PATH.
+    tts_provider: str = "espeak"
+    tts_espeak_path: str = ""
+    # espeak-ng voice per UI language. Bangla is what this whole seam exists for.
+    tts_voice_bn: str = "bn"
+    tts_voice_en: str = "en-us"
+    # Words per minute. espeak's default (175) is too fast for an unwell patient.
+    tts_speed_wpm: int = 140
+
     # --- patient identification (kiosk phone + OTP; ADR-0030 + P4-1 ADR-0045) ---
     # OTP_CHANNEL picks the delivery seam (services/otp):
     #   dev     — DevLogSender: code printed to the server log, no SMS.
@@ -138,6 +159,14 @@ class Settings(BaseSettings):
         startup on a .env typo (same spirit as `resolved_database_url`)."""
         mode = (self.voice_loop or "").strip().lower()
         return mode if mode in VOICE_LOOP_MODES else "auto"
+
+    @property
+    def resolved_tts_provider(self) -> str:
+        """The validated server-side TTS provider. Same forgiving contract as
+        `resolved_voice_loop`: an unrecognized .env value degrades to "browser" (i.e.
+        the pre-existing behaviour) instead of breaking startup."""
+        name = (self.tts_provider or "").strip().lower()
+        return name if name in TTS_PROVIDERS else "browser"
 
     @property
     def resolved_database_url(self) -> str:

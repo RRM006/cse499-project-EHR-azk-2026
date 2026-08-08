@@ -30,3 +30,8 @@ class KioskConfigOut(BaseModel):
     no_speech_ms: int
     # Hard cap on a single answer before what was captured is submitted.
     max_answer_ms: int
+    # True when GET /api/tts can actually produce audio (a provider is configured AND
+    # its engine is installed). Lets the kiosk fall back to server audio only when a
+    # fallback really exists, and lets the "no Bangla voice" banner tell the truth.
+    # A boolean capability — deliberately NOT the provider's name, per the rule above.
+    server_tts: bool

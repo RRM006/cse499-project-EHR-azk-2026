@@ -932,3 +932,135 @@
   for machines where `onend` never fires. **192 → 234 tests pass** (+19 S1, +11 S2, +12 S3, zero
   regressions). **Steps S4–S7 are NOT built** — each needs its own "go", and S4–S6 can only be proven
   by the human's live Chrome run with a real microphone.
+  **UPDATE (S29): Step S4 is implemented AND its live run PASSED** — silence detection, the visible
+  3-2-1 confirmation countdown driven by `countdown_ms`, barge-in cancel on every `onresult` tick, and
+  a flush-before-submit (`recognition.stop()` → submit from `onend`, else a 600 ms grace) so the tail
+  Chrome had not yet marked `isFinal` is not dropped (rule #1). **234 → 247 tests.** S5–S7 remain.
+
+## ADR-0049 — 2026-08-08 — Bangla TTS: add a server-side provider seam with local espeak-ng; supersedes ADR-0040's rejection of server-side TTS (on Windows only the browser path is impossible)
+- Context: after the S4 live run passed, the remaining defect was that the patient could not **hear**
+  Bangla questions on Windows. **Verified root cause, not a guess:** Bengali is **absent from
+  Microsoft's entire Windows TTS voice list** (checked against Microsoft's own "supported languages and
+  voices" appendix — no `bn-BD`, no `bn-IN`, in neither the classic nor the Natural-voices table), and
+  the dev machine confirms it: only `Microsoft David/Zira (en-US)`, no `bn` token in either the
+  `Speech\Voices\Tokens` or the `Speech_OneCore\Voices\Tokens` hive, and no Bengali language pack.
+  **So ADR-0040's "Windows path is unchanged (Settings → Speech → add a Bengali voice)" documents a
+  step that cannot succeed**, and `human_live_run_guide.md` PART 1 was instructing the human to do the
+  impossible. The Arch path (ADR-0040: speech-dispatcher + espeak-ng) remains correct and untouched.
+- Decision: introduce a **server-side TTS provider seam** (`backend/app/services/tts/`, deliberately
+  mirroring the ADR-0045 OTP sender seam: `base.py` ABC + provider module + `service.py` selector) with
+  **`EspeakNgProvider`** as the first provider, exposed by a new public **`GET /api/tts?text=&lang=`**
+  returning `audio/wav`. The frontend keeps ONE entry point — `speak(text, {onend})` in `tts.js` — which
+  now walks a chain: **(1) a real browser voice for the active UI language → (2) `GET /api/tts` →
+  (3) return `false`.** `TTS_PROVIDER=browser` restores the exact pre-ADR-0049 behaviour without
+  deleting anything.
+- Why espeak-ng and not something better-sounding:
+  1. **It is not a new engine for this project.** ADR-0040 already accepted espeak-ng's Bengali on Arch
+     (TC-V2 audio PASS), so Bangla now sounds the same on both dev machines.
+  2. **No question text leaves the machine.** M7 questions are derived from what the patient said, so a
+     cloud TTS would export patient-derived content to a third party (rule #4). This does not.
+  3. **Zero new Python dependencies** — stdlib `subprocess`, so "one `requirements.txt`, all pure-Python
+     wheels" is intact. Text is passed via **stdin** (`--stdin`), never argv, so Bangla never goes
+     through Windows argv encoding, and `shell=False` leaves no injection surface.
+  4. Robotic quality is already an accepted trade-off: ADR-0028 makes the on-screen text the primary
+     channel, and ADR-0040 accepted exactly this voice.
+- **Failure is loud, never silent.** The old `speak()` returned `true` whenever `speechSynthesis` merely
+  *existed*, so a Bangla question with no Bangla voice was read by an en-US voice — audible nonsense
+  that looked like success. Now Bangla demands a matching voice; a missing engine is a **503** (not a
+  silent 200), `speak()` returns **false**, and the KIOSK-2 banner keeps telling the patient the truth.
+  `/api/config` gained **`server_tts: bool`** — a *capability*, reflecting whether the engine is really
+  installed, never the provider's name or path (that file's own no-disclosure rule).
+- **The rule #1 trap this created, and the fix.** Server audio plays through an `<audio>` element, and
+  `speechSynthesis.speaking` is **false** the entire time it does — including while the request is still
+  in flight. Left alone, S3's echo guard would have opened the microphone while the AI was audible and
+  transcribed the AI's own question into the patient's verbatim record. Fixed by adding **`ttsSpeaking()`**
+  (true for either provider, and true from the moment the request is created) and swapping that **one
+  predicate** in `openMicWhenQuiet()`; `toggleListening()` likewise calls **`ttsCancel()`** instead of
+  `speechSynthesis.cancel()` so a deliberate tap silences server audio too. **No S4 countdown, silence
+  or barge-in logic was touched.**
+- Also fixed, because it was actively breaking verification: Starlette's `StaticFiles` sends no
+  `Cache-Control`, so Chrome applied heuristic freshness and served a **stale `shared.js`** — which
+  silently sent every question down the wrong language path. Static mounts now use
+  `RevalidatedStaticFiles` (`no-cache, must-revalidate`; the existing ETag keeps it a cheap 304). On a
+  clinic kiosk that staleness would silently disable Bangla audio after an update. For the same reason
+  `tts.js` reads the active language from the **`lang` localStorage key shared.js already owns** rather
+  than from a shared.js helper — no cross-file version skew.
+- Rejected, each on verified grounds: **Piper** (checked `VOICES.md` — **no Bengali voice at all**);
+  **`facebook/mms-tts-ben`** (real bn VITS model, but needs torch+transformers and is **CC-BY-NC-4.0**,
+  i.e. non-commercial — parked as the natural fit for faculty **Requirement 2**, the quantized on-device
+  model, which drops into this seam as one subclass); **edge-tts** (genuine bn-BD neural voices
+  `NabanitaNeural`/`PradeepNeural`, free and key-less, but pulls the binary `aiohttp` dependency and
+  ships question text to Microsoft — kept as a documented future provider for clinics that want
+  naturalness over locality); **a Windows Settings Bengali voice** (impossible, see Context);
+  **switching the kiosk to Edge** (may expose bn-BD online voices with zero code, worth trying, but it
+  is per-machine host setup that helps neither Chrome nor a reproducible demo, and this seam makes an
+  installed browser voice win automatically anyway).
+- Status: **Accepted and implemented; audio pipeline VERIFIED end to end, human audibility still
+  outstanding.** 247 → **277 tests pass, 0 skipped** (+30). espeak-ng 1.52.0 was installed on the
+  Windows box via winget and **does carry a Bengali voice** (`bn`, `inc\bn`).
+  Objectively measured, in this order:
+  1. Engine: a Bangla question renders **exit 0, 158,098 bytes, valid RIFF/WAVE, 22,050 Hz, 3.58 s**.
+  2. Endpoint: `GET /api/tts?lang=bn` → **200, `audio/wav`, 157,438 bytes, 3.57 s**,
+     `Cache-Control: private, max-age=300`; `/api/config` → **`"server_tts": true`**.
+  3. Kiosk: the KIOSK-2 "no Bangla voice" banner is now **hidden** (`banglaAudioAvailable() === true`)
+     even though `banglaVoiceAvailable()` is still false — i.e. the fallback, not a browser voice.
+  4. Playback really happens: `onend` fired at **3877 ms**, matching the 3.57 s clip — whereas the
+     error path was measured at **22 ms**, so this is completed playback, not a silent failure.
+  5. **The rule #1 integration proof:** with `toggleListening` spied, the mic opened **exactly once, at
+     4110 ms**. `ttsSpeaking()` was true at 509/1525/2553/3583 ms and the mic stayed **shut** the whole
+     time, opening only after audio ended plus `tts_guard_ms`. Without the predicate swap it would have
+     opened at ~400 ms, in the middle of the AI speaking.
+  6. English still speaks via the browser voice and delivers `onend`; `voice_loop=manual` and Type mode
+     are unaffected; **S4's countdown/silence/barge-in code was not touched**.
+  Also hardened during verification: `resolve_binary()` now falls back to the installers' well-known
+  paths after `shutil.which`, because the Windows MSI updates the **machine** PATH and any process
+  started before the install cannot see it — a clinic would otherwise get "not installed" forever.
+  **LIVE RUN VERDICT (human, end of S29) — the seam PASSED, the voice FAILED:**
+  ✅ **Mic timing PASS** (the echo guard holds against real audio) · ✅ **Countdown PASS** (S4 intact) ·
+  ✅ **Transcript clean — "Yes": ZERO AI words in the patient's verbatim record, so rule #1 holds
+  end-to-end with a server TTS provider** · ✅ **English PASS** · ❌ **Bangla voice: "Too robotic."**
+  Two defects reported, both filed as **TTS-1 / TTS-2** in `context fixed problem 3.0.md`:
+  (a) *"no gap when tts Bangla and English hear … sometimes 2 question hear at a same time"* — **root
+  caused to `services/followup.py:45`**, which forces every M7 question into ONE bilingual string
+  `"<Bangla> (<English>)"`, so TTS reads both halves in one breath. **Pre-existing since S25**, merely
+  exposed by ADR-0049 (espeak `-v bn` also applies Bengali phonetics to the English half). Not an
+  overlap bug — one utterance containing two questions.
+  (b) the robotic voice → **ADR-0050**.
+  So: **ADR-0049's architecture is retained and validated; only its first provider is rejected.**
+
+## ADR-0050 — 2026-08-08 — Bangla TTS naturalness: keep the ADR-0049 seam, REPLACE espeak-ng as the default provider (provider undecided)
+- Context: the S29 live run answered ADR-0049's one open question. Everything structural passed — mic
+  timing, the S4 countdown, English audio, and critically **transcript clean = zero AI words (rule #1)**.
+  The human's verdict on the voice itself was **"Too robotic"**, with the explicit goal *"i want make it
+  like human not too robotic"*. espeak-ng is a **formant synthesizer**, so this is **inherent, not
+  tunable**: `TTS_SPEED_WPM` and voice variants change speed and pitch, never naturalness. No amount of
+  configuration will satisfy this requirement.
+- Decision (**the part that is settled**): the **provider seam introduced by ADR-0049 stays exactly as
+  built** — it is doing its job, and this is the swap it was designed for. Replacing the voice is **one
+  new `TtsProvider` subclass plus a `TTS_PROVIDERS` entry**: no route change, no frontend change, no
+  schema change, and no risk to S1–S4. **espeak-ng is demoted, not deleted** — it remains the offline,
+  zero-dependency, no-network fallback (and the Arch path, ADR-0040), which is worth keeping precisely
+  because it is the only option that never sends patient-derived text anywhere.
+- **DEFERRED — the provider itself is NOT chosen. Do not assume one.** Researched in S29:
+  1. **edge-tts** — real `bn-BD` neural voices (`NabanitaNeural` female / `PradeepNeural` male), free,
+     no API key, natural Dhaka accent. Costs: a binary `aiohttp` dependency (breaking the "all
+     pure-Python wheels" property), an internet dependency at the kiosk, and **it sends the question
+     text to Microsoft**.
+  2. **`facebook/mms-tts-ben`** — real neural VITS, fully local. Costs: torch + transformers (heavy on a
+     CPU-only box) and **CC-BY-NC-4.0**, i.e. non-commercial only — acceptable for a thesis, not for a
+     deployed clinic.
+  3. **Microsoft Edge as the kiosk browser** — may expose Microsoft's online `bn-BD` voices with zero
+     code, and the seam already prefers a browser voice automatically. **Unverified**; per-machine host
+     setup; helps neither Chrome nor a reproducible demo.
+- ⚠ **The rule #4 trade-off must be decided consciously, not slipped in.** M7 questions are DERIVED from
+  what the patient said, which is exactly why ADR-0049 chose a local engine. Options 1 and 3 export
+  patient-derived text to a third party. Choosing naturalness over locality is a legitimate call for a
+  research prototype on synthetic data — but it is the **human's** call and must be recorded here, and it
+  changes what may be said about privacy in the thesis.
+- ⚠ **Overlaps faculty Requirement 2** (quantized on-device Bangla STT/TTS), which is the principled
+  long-term answer and now has a seam waiting for it. Next session must decide whether this is a 3.0
+  quick win (edge-tts) or folds into Req 2.
+- Status: **Proposed — needs the human's provider choice and an explicit privacy decision before any
+  code.** Nothing implemented. ADR-0049 remains **Accepted** (its seam, its 503-not-silence contract,
+  its `ttsSpeaking()` echo guard and its static-asset `no-cache` fix all stand); only its default
+  provider is superseded once this ADR is accepted.

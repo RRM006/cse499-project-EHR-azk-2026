@@ -1,6 +1,8 @@
-/* Patient kiosk (FE-1). Voice-only clinical input (ADR-0027): STT = Web Speech API
-   bn-BD; every follow-up question is SHOWN and SPOKEN together (ADR-0028); the typed
-   box is a mic-failure fallback only. RAW text goes to the backend verbatim (rule #1).
+/* Patient kiosk (FE-1). VOICE-FIRST clinical input with typing always available
+   (ADR-0048, which supersedes ADR-0027's voice-only rule — do not re-apply it): STT =
+   Web Speech API bn-BD; every follow-up question is SHOWN and SPOKEN together
+   (ADR-0028). Both modes feed ONE pipeline, differing only in `source` (mic|manual).
+   RAW text goes to the backend verbatim (rule #1).
 
    Flow: phone -> stub OTP -> open conversation (intake after first answer, then the
    M7-M9 loop) -> 10-field summary -> Confirm & Submit -> auto-logout reset. */
@@ -33,6 +35,7 @@ const VOICE_DEFAULTS = {
   tts_guard_ms: 400,       // silence after TTS before the mic may open (echo guard)
   no_speech_ms: 10000,     // S5 (not used yet)
   max_answer_ms: 120000,   // S5 (not used yet)
+  server_tts: false,       // ADR-0049: is GET /api/tts able to speak? assume not
 };
 let voiceConfig = { ...VOICE_DEFAULTS };
 
@@ -42,6 +45,10 @@ async function loadKioskConfig() {
   } catch (e) {
     voiceConfig = { ...VOICE_DEFAULTS };  // server unreachable -> safe voice-first defaults
   }
+  // ADR-0049: hand the TTS helper its provider chain, then re-evaluate the banner —
+  // the server fallback may have just made Bangla audible after all.
+  configureTts({ serverTts: voiceConfig.server_tts });
+  updateVoiceHint();
 }
 
 let state = null;
@@ -113,7 +120,12 @@ function addBubble(role, text, label, textPair = null) {
   } else {
     body.textContent = text; // verbatim — never rewritten
   }
-  speakBtn.onclick = () => speak(body.textContent); // replay what is displayed NOW
+  /* Replay what is displayed NOW. Plain speak() — reviewing an old turn must never
+     open the mic (S3). ADR-0049: a PATIENT bubble is pinned to Bangla because STT
+     captured it at lang='bn-BD'; an assistant bubble follows the UI language, which is
+     the language its text is currently displayed in. */
+  const replayLang = role === 'patient' ? 'bn-BD' : null;
+  speakBtn.onclick = () => speak(body.textContent, { lang: replayLang });
   div.appendChild(meta);
   div.appendChild(body);
   thread.appendChild(div);
@@ -136,8 +148,10 @@ function setBilingualText(id, en, bn) {
 function updateVoiceHint() {
   const hint = document.getElementById('voice-hint');
   if (!hint) return;
-  const noVoice = !window.speechSynthesis || !banglaVoiceAvailable();
-  hint.style.display = noVoice ? 'block' : 'none';
+  /* ADR-0049: the question is now "can the patient hear Bangla by ANY route?" — an
+     installed bn voice OR the server espeak-ng fallback. Windows has no Bengali voice
+     at all, so before the fallback existed this banner was permanent there. */
+  hint.style.display = banglaAudioAvailable() ? 'none' : 'block';
 }
 if (window.speechSynthesis) {
   // Chrome loads voices asynchronously; tts.js already listens — chain, don't replace.
@@ -248,11 +262,13 @@ const DOCKS = {
     transcript: 'dock-transcript', mic: 'mic-btn', hint: 'listening-hint',
     fallback: 'fallback-row', input: 'fallback-input',
     voiceBtn: 'mode-voice-btn', typeBtn: 'mode-type-btn',
+    countdown: 'dock-countdown', countdownDigit: 'dock-countdown-digit',
   },
   resume: {
     transcript: 'resume-transcript', mic: 'resume-mic-btn', hint: 'resume-hint',
     fallback: 'resume-fallback-row', input: 'resume-fallback-input',
     voiceBtn: 'resume-mode-voice-btn', typeBtn: 'resume-mode-type-btn',
+    countdown: 'resume-countdown', countdownDigit: 'resume-countdown-digit',
   },
 };
 
@@ -269,7 +285,18 @@ const ARMING_HINT = {
   bn: 'একটু অপেক্ষা করুন — মাইক নিজেই চালু হবে',
 };
 
+/* S4: in auto mode the patient is not asked to tap to FINISH either — the turn ends on
+   silence. The tap still works (it submits immediately), it is just no longer required,
+   so telling an elderly patient to "tap again" would be asking for a needless action. */
+const LISTENING_HINT = {
+  auto: { en: 'Listening... just stop speaking when you are finished',
+          bn: 'শুনছি... বলা শেষ হলে থেমে যান' },
+  manual: { en: 'Listening... tap again when done', bn: 'শুনছি... বলা শেষে আবার চাপুন' },
+};
+
 function modeHint() { return MODE_HINTS[(state && state.inputMode) || 'voice']; }
+
+function listeningHint() { return LISTENING_HINT[autoVoiceMode() ? 'auto' : 'manual']; }
 
 /* --- S3 (ADR-0048): auto-listen. The AI finishes speaking -> the mic opens itself.
    The patient still taps ONCE to finish an answer; auto-endpointing is S4. --- */
@@ -311,11 +338,14 @@ function askAloud(text) {
 
 /* The echo guard (rule #1). The mic must never open while the AI is still audible,
    or the browser transcribes the AI's own question into the patient's verbatim
-   record. Poll until synthesis is silent, then wait tts_guard_ms more. */
+   record. Poll until ALL TTS is silent, then wait tts_guard_ms more.
+   ⚠ ADR-0049: this MUST ask ttsSpeaking(), not speechSynthesis.speaking —
+   `speechSynthesis.speaking` is false while the server-TTS <audio> element plays (and
+   while its request is still in flight), which would reopen exactly this echo hole. */
 function openMicWhenQuiet(token) {
   if (token !== armToken) return;   // superseded — a newer question or a manual action won
   clearTimeout(armTimer);
-  if (window.speechSynthesis && window.speechSynthesis.speaking) {
+  if (ttsSpeaking()) {
     armTimer = setTimeout(() => openMicWhenQuiet(token), 120);
     return;
   }
@@ -325,6 +355,74 @@ function openMicWhenQuiet(token) {
     if (!autoVoiceMode() || listening || state.busy) return;
     toggleListening();   // the SAME path a tap takes — one code path, not two
   }, voiceConfig.tts_guard_ms);
+}
+
+/* --- S4 (ADR-0048): the endpointer. A turn now ends on SILENCE instead of on a tap.
+   The 3-2-1 window is a CONFIRMATION window, never a hard cutoff: EVERY recognition
+   result — interim or final — restarts it, so a mid-sentence pause, a cough or "উম্…"
+   can never clip an answer. A clipped answer is a rule #1 defect, not a UX nit. --- */
+
+/* How long to let Chrome flush its last final chunk after we stop the engine. Not a
+   tunable: it is an engine-latency allowance, not a clinical preference. */
+const FLUSH_GRACE_MS = 600;
+
+let countdownTicker = null;
+let countdownDeadline = 0;
+let heardSpeech = false;   // the window arms only AFTER real words have been captured
+let endingTurn = false;    // flush in progress — waiting for Chrome's last final chunk
+let flushTimer = null;
+
+/* Both docks are updated together, exactly like setInputMode() — the patient may be in
+   the conversation dock or the KIOSK-7 resume dock, and one endpointer serves both. */
+function showCountdown(show, secondsLeft) {
+  Object.values(DOCKS).forEach((dock) => {
+    const box = document.getElementById(dock.countdown);
+    if (box) box.style.display = show ? 'flex' : 'none';
+    const digit = document.getElementById(dock.countdownDigit);
+    if (digit) digit.textContent = show ? t(String(secondsLeft), bnDigits(secondsLeft)) : '';
+  });
+}
+
+function cancelCountdown() {
+  clearInterval(countdownTicker);
+  countdownTicker = null;
+  countdownDeadline = 0;
+  showCountdown(false);
+}
+
+/* Called on EVERY recognition result. Restarting on interim results IS the safeguard —
+   it keeps the patient, not the timer, in control of when their turn ends. */
+function restartSilenceWindow() {
+  cancelCountdown();
+  if (!autoVoiceMode() || !listening || !heardSpeech || endingTurn) return;
+  countdownDeadline = Date.now() + voiceConfig.countdown_ms;
+  renderCountdown();
+  // Tick well under 1 s so the digit is never visibly stale, and so a clinic that tunes
+  // countdown_ms to a non-round value still gets an honest count instead of a fake 3-2-1.
+  countdownTicker = setInterval(renderCountdown, 200);
+}
+
+function renderCountdown() {
+  const remaining = countdownDeadline - Date.now();
+  if (remaining <= 0) { endTurnOnSilence(); return; }
+  showCountdown(true, Math.ceil(remaining / 1000));
+}
+
+/* Zero. Stop the engine FIRST so Chrome finalizes whatever it has not yet marked
+   `isFinal`, and only then submit — reading finalBuffer immediately would silently drop
+   the tail of the answer (rule #1). Whoever reports back first wins: the engine's own
+   `onend`, or the grace timer if it never does. The submit happens exactly ONCE. */
+function endTurnOnSilence() {
+  cancelCountdown();
+  if (endingTurn) return;
+  endingTurn = true;
+  if (recognition) try { recognition.stop(); } catch (_) {}
+  flushTimer = setTimeout(finishFlushedTurn, FLUSH_GRACE_MS);
+}
+
+function finishFlushedTurn() {
+  if (!endingTurn) return;   // a tap or an error already submitted this turn
+  stopListening(true);       // clears the flush state; the SAME path a tap takes
 }
 
 /* S2: switch the patient between speaking and typing.
@@ -378,8 +476,21 @@ function initRecognition() {
     el.dataset.en = live;
     el.dataset.bn = live;
     el.textContent = live;
+    /* S4: the patient is still talking, so the confirmation window restarts from zero.
+       Coughs and filler sounds arrive here too — deliberately, since erring toward NOT
+       cutting the patient off is the safe direction (rule #1). A blank/noise-only tick
+       cancels a running countdown but can never arm one. */
+    if (live.trim()) heardSpeech = true;
+    restartSilenceWindow();
   };
-  r.onend = () => { if (listening) r.start(); }; // brief pauses keep going
+  r.onend = () => {
+    // S4: arbitrate between "we are ending this turn" and "Chrome stopped on its own".
+    if (endingTurn) { finishFlushedTurn(); return; }   // the flush completed -> submit
+    // Brief pauses keep going. Restart even mid-countdown, so resumed speech is still
+    // heard and can still cancel it; `listening` is false after a submit, which is what
+    // stops the engine coming back afterwards.
+    if (listening) try { r.start(); } catch (_) {}
+  };
   r.onerror = (e) => {
     if (e.error === 'not-allowed' || e.error === 'audio-capture') {
       showError(t('Microphone unavailable — you can type instead.', 'মাইক্রোফোন পাওয়া যায়নি — টাইপ করতে পারেন।'));
@@ -401,13 +512,22 @@ function toggleListening() {
   }
   finalBuffer = '';
   listening = true;
+  heardSpeech = false;   // S4: a fresh turn has captured nothing yet, so nothing to confirm
   document.getElementById(activeDock().mic).classList.add('listening');
-  setBilingualText(activeDock().hint, 'Listening... tap again when done', 'শুনছি... বলা শেষে আবার চাপুন');
-  window.speechSynthesis && window.speechSynthesis.cancel();
-  recognition.start();
+  setBilingualText(activeDock().hint, listeningHint().en, listeningHint().bn);   // S4: mode-aware
+  ttsCancel();   // ADR-0049: silences server audio too, not just speechSynthesis
+  try { recognition.start(); } catch (_) {}   // already-started engine throws InvalidStateError
 }
 
 function stopListening(sendTurn) {
+  /* S4: this is the single exit of a listening turn, so it is where the endpointer is
+     torn down — no countdown may outlive its turn, and no pending flush may fire a
+     second submit behind a tap that already sent the answer. */
+  cancelCountdown();
+  endingTurn = false;
+  clearTimeout(flushTimer);
+  flushTimer = null;
+  heardSpeech = false;
   listening = false;
   document.getElementById(activeDock().mic).classList.remove('listening');
   setBilingualText(activeDock().hint, modeHint().en, modeHint().bn);   // S2: mode-aware
@@ -677,6 +797,7 @@ async function confirmSubmit() {
       modal.style.display = 'none';
       resetState();               // kiosk reset is purely frontend state (ADR-0030 d)
       cancelPendingMic();         // S3: nothing from this visit may open the next patient's mic
+      cancelCountdown();          // S4: nor may a stale countdown submit into the next visit
       setInputMode('voice', { focus: false });  // S2: the next patient starts voice-first
       showScreen('screen-phone');
     }
