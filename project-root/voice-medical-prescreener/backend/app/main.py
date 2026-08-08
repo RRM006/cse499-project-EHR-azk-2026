@@ -15,6 +15,7 @@ from fastapi.responses import HTMLResponse
 from fastapi.staticfiles import StaticFiles
 
 from backend.app.api.routes_assistant import router as assistant_router
+from backend.app.api.routes_config import router as config_router
 from backend.app.api.routes_documents import router as documents_router
 from backend.app.api.routes_dashboard import router as dashboard_router
 from backend.app.api.routes_followup import router as followup_router
@@ -71,6 +72,7 @@ app.include_router(dashboard_router)
 app.include_router(report_router)
 app.include_router(prescription_router)
 app.include_router(assistant_router)
+app.include_router(config_router)
 
 
 @app.get("/health", tags=["meta"])

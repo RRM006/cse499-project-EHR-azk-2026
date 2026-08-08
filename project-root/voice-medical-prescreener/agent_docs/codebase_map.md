@@ -89,11 +89,27 @@ voice-medical-prescreener/
 │   │   │   ├── routes_report.py  # NEW: report (M12) · review (M14) · feedback (M15)
 │   │   │   ├── routes_prescription.py # S13: GET .../prescription/context (letterhead prefill, DOCTOR-4/5, ADR-0038) +
 │   │   │   │                      #   POST .../prescription (DOCTOR-6 save row + render .docx, ADR-0039)
-│   │   │   └── routes_assistant.py # S23 (P3-3, ADR-0044): POST /api/visits/{uuid}/assistant/drug-info — M16,
-│   │   │                          #   visit-scoped, 404 guard before any LLM call, LLMCallError → 502
+│   │   │   ├── routes_assistant.py # S23 (P3-3, ADR-0044): POST /api/visits/{uuid}/assistant/drug-info — M16,
+│   │   │   │                      #   visit-scoped, 404 guard before any LLM call, LLMCallError → 502
+│   │   │   └── routes_config.py   # NEW S28 (Req 3 step S1, ADR-0048): GET /api/config — PUBLIC, no DB/auth.
+│   │   │                          #   Kiosk voice-loop mode + timings so a clinic tunes them from .env,
+│   │   │                          #   not JS. Built field-by-field so a Settings secret can never leak.
 │   │   ├── schemas/              # transcript, document (existing) + visit (S23: +submitted_at), patient, profile,
 │   │   │                          #   followup, risk, dashboard (S23: +submitted_at), prescription (S13: no diagnosis
-│   │   │                          #   field, rule #2), assistant (S23: disclaimer fields REQUIRED in the contract)
+│   │   │                          #   field, rule #2), assistant (S23: disclaimer fields REQUIRED in the contract);
+│   │   │                          #   S28: kiosk_config.py (NEW, behavioural knobs only) + followup.py AnswerRequest
+│   │   │                          #   gains a non-blank raw_text guard that returns the value UNCHANGED (rule #1)
+│   │   │  ── frontend/kiosk.{html,js}: S28 step S2 (ADR-0048) adds the [🎤 Speak][⌨ Type] mode switch
+│   │   │     to BOTH docks — state.inputMode + DOCKS map + MODE_HINTS + setInputMode() (updates both
+│   │   │     docks at once, hides the mic in Type mode, Enter-to-send, mic error -> typing). The old
+│   │   │     "Microphone issue? Type instead" reveal link is REMOVED.
+│   │   │  ── S28 step S3 (auto-listen): kiosk.js gains VOICE_DEFAULTS + loadKioskConfig() (first
+│   │   │     consumer of GET /api/config), askAloud() at the 3 question sites (assistantSays,
+│   │   │     setResumeMode, repeatQuestion — the per-bubble 🔊 stays plain speak()), openMicWhenQuiet()
+│   │   │     = the ECHO GUARD, and cancelPendingMic() on every deliberate action. frontend_shared/
+│   │   │     tts.js speak() gains a GENERATION TOKEN + onerror->onend bridge so a cancelled
+│   │   │     utterance's callback can never open the mic during the next question (rule #1).
+│   │   │     Patient still taps once to finish — the countdown is S4.
 │   │   ├── services/
 │   │   │   ├── correction/       # (existing) reused as M2
 │   │   │   ├── documents/        # (existing) DocxWriter + storage; S9 + visit_docx.py (visit-grain

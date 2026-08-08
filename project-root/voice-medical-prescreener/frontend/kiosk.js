@@ -23,6 +23,27 @@ const FIELD_LABELS = {
   current_concern:          { en: '10. Current Concern / Question', bn: '১০. মূল উদ্বেগ / প্রশ্ন' },
 };
 
+/* S1/S3 (ADR-0048): the kiosk's voice-loop behaviour is served by GET /api/config so a
+   clinic can tune it from backend/.env without editing this file. These defaults mirror
+   core/config.py and are used verbatim if the fetch fails — configuration must never be
+   what stops a patient from being screened. */
+const VOICE_DEFAULTS = {
+  voice_loop: 'auto',      // 'auto' = the mic opens itself after TTS; 'manual' = tap-to-talk
+  countdown_ms: 3000,      // S4 (not used yet)
+  tts_guard_ms: 400,       // silence after TTS before the mic may open (echo guard)
+  no_speech_ms: 10000,     // S5 (not used yet)
+  max_answer_ms: 120000,   // S5 (not used yet)
+};
+let voiceConfig = { ...VOICE_DEFAULTS };
+
+async function loadKioskConfig() {
+  try {
+    voiceConfig = { ...VOICE_DEFAULTS, ...(await api('GET', '/api/config')) };
+  } catch (e) {
+    voiceConfig = { ...VOICE_DEFAULTS };  // server unreachable -> safe voice-first defaults
+  }
+}
+
 let state = null;
 
 function resetState() {
@@ -38,6 +59,7 @@ function resetState() {
     lastProfile: null,      // KIOSK-6: kept so the summary re-renders on language toggle
     resumeQuestion: null,   // KIOSK-7: open resume-loop question on the summary screen
     resumeActive: false,
+    inputMode: 'voice',     // S2 (ADR-0048): 'voice' (primary/default) | 'type' (always available)
   };
   document.getElementById('chat-thread').innerHTML = '';
   document.getElementById('phone-input').value = '';
@@ -135,7 +157,7 @@ async function assistantSays(msg, { record = true } = {}) {
   const text = pair ? t(pair.en, pair.bn) : msg;
   state.lastQuestionText = text;
   addBubble('ai', text, { en: 'Assistant', bn: 'সহকারী' }, pair);
-  speak(text);
+  askAloud(text);   // S3: shown as text AND spoken (ADR-0028); in auto mode the mic follows
   if (record && state.visitUuid) {
     try {
       await api('POST', `/api/visits/${state.visitUuid}/utterances`,
@@ -144,7 +166,13 @@ async function assistantSays(msg, { record = true } = {}) {
   }
 }
 
-function repeatQuestion() { speak(state.lastQuestionText); }
+/* S3: repeating re-arms the mic too, so a patient who missed the question is not left
+   waiting for a tap they were never told to make.
+   ⚠ Known gap, deliberately left for S5: tapping Repeat while the mic is ALREADY open
+   plays TTS into a live recognizer. Closing it means deciding what happens to the
+   half-spoken answer in the buffer, and discarding a patient's words is a rule #1
+   decision — not something to slip into this step. Pre-existing since S25. */
+function repeatQuestion() { askAloud(state.lastQuestionText); }
 
 /* --- screens 1-2: identification --- */
 
@@ -210,9 +238,123 @@ let finalBuffer = '';
 /* KIOSK-7: the ONE recognition engine serves two docks — the conversation screen
    and the summary-screen resume dock. This picks the active one's elements. */
 function activeDock() {
-  return state.resumeActive
-    ? { transcript: 'resume-transcript', mic: 'resume-mic-btn', hint: 'resume-hint', fallback: 'resume-fallback-row' }
-    : { transcript: 'dock-transcript', mic: 'mic-btn', hint: 'listening-hint', fallback: 'fallback-row' };
+  return state.resumeActive ? DOCKS.resume : DOCKS.conversation;
+}
+
+/* S2 (ADR-0048): both docks, so an input-mode switch applies to the conversation
+   screen AND the KIOSK-7 resume dock at once — the patient picks once, not twice. */
+const DOCKS = {
+  conversation: {
+    transcript: 'dock-transcript', mic: 'mic-btn', hint: 'listening-hint',
+    fallback: 'fallback-row', input: 'fallback-input',
+    voiceBtn: 'mode-voice-btn', typeBtn: 'mode-type-btn',
+  },
+  resume: {
+    transcript: 'resume-transcript', mic: 'resume-mic-btn', hint: 'resume-hint',
+    fallback: 'resume-fallback-row', input: 'resume-fallback-input',
+    voiceBtn: 'resume-mode-voice-btn', typeBtn: 'resume-mode-type-btn',
+  },
+};
+
+/* Mode-aware dock hint. Voice wording still says "tap" — S2 changes WHO can answer
+   how, not the turn-taking; auto-listen arrives in S3. */
+const MODE_HINTS = {
+  voice: { en: 'Tap the mic when you are ready to speak', bn: 'বলতে প্রস্তুত হলে মাইকে চাপ দিন' },
+  type: { en: 'Type your answer, then press Send', bn: 'উত্তর টাইপ করে "পাঠান" চাপুন' },
+};
+
+/* S3: in auto mode the patient is not asked to tap to START, so the hint must say so. */
+const ARMING_HINT = {
+  en: 'Please wait — the microphone will start by itself',
+  bn: 'একটু অপেক্ষা করুন — মাইক নিজেই চালু হবে',
+};
+
+function modeHint() { return MODE_HINTS[(state && state.inputMode) || 'voice']; }
+
+/* --- S3 (ADR-0048): auto-listen. The AI finishes speaking -> the mic opens itself.
+   The patient still taps ONCE to finish an answer; auto-endpointing is S4. --- */
+
+let armToken = 0;      // invalidates a pending arm (new question, mode switch, manual tap)
+let armTimer = null;
+
+/** Auto-listen applies only when the deployment asked for it AND the patient is in
+ *  voice mode. In 'manual' the kiosk behaves exactly as it did in the passed S25 run. */
+function autoVoiceMode() {
+  return voiceConfig.voice_loop === 'auto' && state && state.inputMode === 'voice';
+}
+
+function cancelPendingMic() {
+  clearTimeout(armTimer);
+  armTimer = null;
+  armToken += 1;   // anything already scheduled now belongs to a stale token
+}
+
+/* Speak a question and, in auto mode, arm the microphone to open when it ends.
+   Used for every question the patient is expected to ANSWER. The per-bubble 🔊 replay
+   button deliberately still calls plain speak() — reviewing an old turn must not open
+   the mic. */
+function askAloud(text) {
+  cancelPendingMic();
+  const token = armToken;
+  if (!autoVoiceMode()) { speak(text); return; }
+  setBilingualText(activeDock().hint, ARMING_HINT.en, ARMING_HINT.bn);
+  const spoken = speak(text, { onend: () => openMicWhenQuiet(token) });
+  /* Safety net. With no installed voice (or a silently degraded engine) `onend` may
+     NEVER fire — the kiosk would then sit forever with the mic shut. Give TTS a
+     generous window based on the question length, then open the mic regardless. If
+     speechSynthesis is missing entirely, there is nothing to wait for. */
+  armTimer = setTimeout(
+    () => openMicWhenQuiet(token),
+    spoken ? Math.max(3000, text.length * 80) : 0,
+  );
+}
+
+/* The echo guard (rule #1). The mic must never open while the AI is still audible,
+   or the browser transcribes the AI's own question into the patient's verbatim
+   record. Poll until synthesis is silent, then wait tts_guard_ms more. */
+function openMicWhenQuiet(token) {
+  if (token !== armToken) return;   // superseded — a newer question or a manual action won
+  clearTimeout(armTimer);
+  if (window.speechSynthesis && window.speechSynthesis.speaking) {
+    armTimer = setTimeout(() => openMicWhenQuiet(token), 120);
+    return;
+  }
+  armTimer = setTimeout(() => {
+    if (token !== armToken) return;
+    armToken += 1;   // consume: `onend` and the safety net can never both open the mic
+    if (!autoVoiceMode() || listening || state.busy) return;
+    toggleListening();   // the SAME path a tap takes — one code path, not two
+  }, voiceConfig.tts_guard_ms);
+}
+
+/* S2: switch the patient between speaking and typing.
+   - VOICE is the primary path and the default at every reset (ADR-0048).
+   - TYPING is always reachable — a failed mic, a noisy room, poor recognition or
+     simple preference must never block a patient.
+   - Both modes feed the SAME endpoints; only `source` ('mic' | 'manual') differs.
+   - Switching to typing DISCARDS any un-submitted speech buffer instead of
+     pre-filling the box: a typed edit on top of STT text would be stored as one
+     utterance whose source/stt_provider provenance is false (ADR-0048, rule #1). */
+function setInputMode(mode, { focus = true } = {}) {
+  const typing = mode === 'type';
+  cancelPendingMic();   // S3: choosing a mode cancels any mic the AI was about to open
+  if (typing && listening) stopListening(false);   // mic off, buffer dropped, nothing sent
+  state.inputMode = typing ? 'type' : 'voice';
+  Object.values(DOCKS).forEach((dock) => {
+    const mic = document.getElementById(dock.mic);
+    if (mic) mic.style.display = typing ? 'none' : '';   // hidden so it cannot be tapped by accident
+    const row = document.getElementById(dock.fallback);
+    if (row) row.style.display = typing ? 'flex' : 'none';
+    const voiceBtn = document.getElementById(dock.voiceBtn);
+    const typeBtn = document.getElementById(dock.typeBtn);
+    if (voiceBtn) voiceBtn.setAttribute('aria-pressed', String(!typing));
+    if (typeBtn) typeBtn.setAttribute('aria-pressed', String(typing));
+    setBilingualText(dock.hint, modeHint().en, modeHint().bn);
+  });
+  if (typing && focus) {
+    const input = document.getElementById(activeDock().input);
+    if (input) input.focus();
+  }
 }
 
 function initRecognition() {
@@ -241,19 +383,20 @@ function initRecognition() {
   r.onerror = (e) => {
     if (e.error === 'not-allowed' || e.error === 'audio-capture') {
       showError(t('Microphone unavailable — you can type instead.', 'মাইক্রোফোন পাওয়া যায়নি — টাইপ করতে পারেন।'));
-      document.getElementById(activeDock().fallback).style.display = 'flex';
       stopListening(false);
+      setInputMode('type');   // S2: never leave the patient stranded on a dead mic
     }
   };
   return r;
 }
 
 function toggleListening() {
+  cancelPendingMic();   // S3: a deliberate tap always beats a pending auto-open
   if (listening) { stopListening(true); return; }
   recognition = recognition || initRecognition();
   if (!recognition) {
     showError(t('Speech recognition needs Chrome/Edge — use the typed fallback.', 'স্পিচ রিকগনিশনের জন্য Chrome/Edge দরকার — টাইপ করুন।'));
-    document.getElementById(activeDock().fallback).style.display = 'flex';
+    setInputMode('type');   // S2: an unsupported browser switches the patient over, not out
     return;
   }
   finalBuffer = '';
@@ -267,7 +410,7 @@ function toggleListening() {
 function stopListening(sendTurn) {
   listening = false;
   document.getElementById(activeDock().mic).classList.remove('listening');
-  setBilingualText(activeDock().hint, 'Tap the mic when you are ready to speak', 'বলতে প্রস্তুত হলে মাইকে চাপ দিন');
+  setBilingualText(activeDock().hint, modeHint().en, modeHint().bn);   // S2: mode-aware
   if (recognition) try { recognition.stop(); } catch (_) {}
   const text = finalBuffer.trim();
   setBilingualText(activeDock().transcript, '', '');   // P1-2: clear dataset too
@@ -343,6 +486,7 @@ async function submitFinalTurn(rawText) {
 async function finishConversation() {
   if (state.finishing) return;  // P1-1: ignore double-clicks while finishing
   state.finishing = true;
+  cancelPendingMic();   // S3: "Done" ends the conversation — no mic may open behind it
   try {
     /* P1-1: clicking "Done — see summary" while the mic was live used to abandon the
        in-progress speech and require a second mic tap. Now: stop the mic, submit the
@@ -453,7 +597,9 @@ function setResumeMode(question) {
   document.getElementById('confirm-submit-btn').style.display = question ? 'none' : '';
   if (question) {
     document.getElementById('resume-question').textContent = question.question_text;
-    speak(question.question_text);   // ADR-0028: shown as text AND spoken together
+    askAloud(question.question_text);   // ADR-0028 + S3: spoken, then the mic arms itself
+  } else {
+    cancelPendingMic();   // loop finished — nothing should open the mic behind the summary
   }
 }
 
@@ -530,6 +676,8 @@ async function confirmSubmit() {
       clearInterval(timer);
       modal.style.display = 'none';
       resetState();               // kiosk reset is purely frontend state (ADR-0030 d)
+      cancelPendingMic();         // S3: nothing from this visit may open the next patient's mic
+      setInputMode('voice', { focus: false });  // S2: the next patient starts voice-first
       showScreen('screen-phone');
     }
   }, 1000);
@@ -548,4 +696,24 @@ function onLanguageChange() {
   document.querySelectorAll('.bubble-speak[data-title-en]').forEach((b) => {
     b.title = t(b.dataset.titleEn, b.dataset.titleBn);
   });
+  // S2: the dock hint is written by JS, so re-render it in the new language too.
+  Object.values(DOCKS).forEach((dock) => setBilingualText(dock.hint, modeHint().en, modeHint().bn));
 }
+
+/* S2 init — runs LAST, after `listening` is declared, so setInputMode may inspect it.
+   Enter sends a typed answer (UX priority: fewer taps), and the kiosk always opens in
+   VOICE mode because voice is the primary interaction, not an option (ADR-0048). */
+function initTypedInputs() {
+  const wire = (inputId, send) => {
+    const input = document.getElementById(inputId);
+    if (!input) return;
+    input.addEventListener('keydown', (e) => {
+      if (e.key === 'Enter') { e.preventDefault(); send(); }
+    });
+  };
+  wire(DOCKS.conversation.input, sendTypedFallback);
+  wire(DOCKS.resume.input, sendResumeTyped);
+}
+initTypedInputs();
+setInputMode('voice', { focus: false });
+loadKioskConfig();   // S1/S3: voice_loop + timings from backend/.env; defaults if it fails

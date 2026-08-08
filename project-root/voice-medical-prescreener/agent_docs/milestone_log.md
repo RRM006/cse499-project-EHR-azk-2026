@@ -6,7 +6,16 @@
 
 **Status keys:** ⬜ Not started · 🟨 In progress · 🟦 Blocked · ✅ Done · ⛔ Retired
 
-**Last updated:** 2026-08-08 (Session 27 — docs-only: **faculty Requirement 3 filed** (fully
+**Last updated:** 2026-08-08 (Session 28 — faculty **Requirement 3 EXPANDED to §3b: a VOICE-FIRST
+Patient Portal with typing always available as the fallback** (**ADR-0048, Accepted**; supersedes
+ADR-0027's voice-only rule, and `CLAUDE.md` was amended accordingly). Full 7-step GO-gated plan +
+12-point live checklist in `faculty_future_features.md` §A–K. **Step S1 of 7 is DONE** — backend
+only, zero UX change: `voice_loop` + 4 timings in `.env`, the new public `GET /api/config`, and a
+server-side non-blank `raw_text` guard. **Step S2 of 7 is DONE too** — the `[🎤 Speak] [⌨ Type]`
+switch in both kiosk docks, and **Step S3 is DONE** — auto-listen: the mic opens itself after the
+question is spoken, behind an echo guard, with the patient still tapping once to finish
+→ **234 tests pass** (was 192). **No module status and no phase changed; Alembic stays at head
+0012.** S4–S7 not built. Prior: Session 27 — docs-only: **faculty Requirement 3 filed** (fully
 voice-driven follow-up loop, **ADR-0047**) in `faculty_future_features.md`, plus 5 cross-reference
 fixes. **No module status and no phase changed**; 192 tests unchanged and not re-run — no code was
 touched. Prior: Session 25 — **the HUMAN LIVE REAL-MIC RUN PASSED on Windows 11**:
@@ -44,6 +53,43 @@ open menu: (1) rotate the 3 API keys before any public demo (`human_live_run_gui
 recommended); (2) paste manual-testing bugs/UX findings into `context fixed problem 3.0.md`;
 (3) faculty future features (`faculty_future_features.md`); (4) formal WER/precision-recall or the
 TextBee real-SMS demo; (5) anything else. No status/phase changed in S26 (docs-only).
+**Session 28 (no status change — a NEW cycle is planned but NOT started):** inspection + planning
+only, no code. The human **expanded faculty Requirement 3** from "remove the mic clicks" to **"every
+patient interaction after phone login must support BOTH voice and typing, switchable at will"** —
+filed as **§3b** in `faculty_future_features.md` with the full plan in §A–K (**ADR-0048, Proposed**).
+Findings from reading the code: voice and typing **already share one pipeline** (`source: mic|manual`,
+same endpoint) so nothing needs un-duplicating — typing is merely *framed* as a failure fallback;
+**no JS test infrastructure exists** (all 192 tests are pytest) so the countdown/barge-in/echo guard
+**cannot be unit-tested**; `speak()`'s `onend` **may never fire** with no installed voice (would freeze
+an auto-listen kiosk); the Web Speech API opens its own stream so `echoCancellation` **cannot** be set;
+and `raw_text` currently has **no minimum length**. ⚠ **Requirement 3b supersedes ADR-0027's
+"patient input is VOICE ONLY" clinical-input rule** — recorded in ADR-0048, but `CLAUDE.md`'s rule text
+**has now been edited** (the human approved): VOICE INTERACTION RULES = **voice-first + typing always
+available**. The human also answered the three blocking questions — the **3 s visible countdown IS
+the silence window** (cancelled by any resumed speech), frontend tests = **static-source assertions
+only** (no vitest/jsdom), and yes to the `CLAUDE.md` amendment — and set the standing priority:
+**voice is the main goal and primary UX, not an optional feature**; typing exists so no patient is
+ever blocked. Build order = 7 GO-gated steps. **Step S1 SHIPPED** (backend only, zero UX change):
+`voice_loop` + `voice_countdown_ms/tts_guard_ms/no_speech_ms/max_answer_ms` in `core/config.py` with
+a `resolved_voice_loop` normalizer, the new public **`GET /api/config`**
+(`routes_config.py` + `schemas/kiosk_config.py`, secret-free by construction), and a non-blank
+`raw_text` guard on `AnswerRequest` that returns the value **unchanged** (rule #1).
+**Step S2 SHIPPED too** (kiosk UI, turn-taking unchanged): a bilingual **`[🎤 Speak] [⌨ Type]`**
+switch in **both** docks with one shared mode, the mic hidden in Type mode, Enter-to-send, and mic
+failure / unsupported browser now switching the patient **to** typing; the old "Microphone issue?
+Type instead" link is gone. Voice→Type **discards** the un-submitted STT buffer (false provenance
+would otherwise be stored — rule #1). **Step S3 SHIPPED as well (auto-listen):** the mic now opens
+itself after a question is spoken — `askAloud()` at the 3 question sites, an **echo guard** that waits
+for `speechSynthesis.speaking` to clear plus `tts_guard_ms`, a **generation token in `tts.js`** so a
+cancelled question's `onend` can never open the mic during the next one (the rule #1 echo case), a
+`max(3 s, len×80 ms)` safety net for machines where `onend` never fires, and `cancelPendingMic()` on
+every deliberate action. `/api/config` is now consumed. **The patient still taps once to finish**;
+`voice_loop=manual` reproduces S25 exactly. **192 → 234 tests pass (+19 S1, +11 S2, +12 S3)**; S2 and
+S3 were also browser-verified in Chrome (S3 with an instrumented spy: one mic-open per question at
+926 ms with TTS already silent; **two questions 200 ms apart → exactly one open, after the second**;
+zero opens in manual mode / after a mode switch; mic still opens with `speechSynthesis` removed).
+**S4–S7 (countdown, safeguards, resume-dock re-verify, live run) are NOT built** — each needs its own
+"go", and S4–S6 can only be proven by the human's real-Chrome run with a mic.
 **Session 27 (no status change):** docs-only. The faculty's **third** future requirement — a fully
 voice-driven follow-up conversation (AI speaks → mic auto-opens → answer auto-captured → next
 question, no screen contact mid-conversation) — was filed as **Requirement 3** in

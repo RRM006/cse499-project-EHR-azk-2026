@@ -97,6 +97,89 @@ transcribed by hand (the "ground truth"). Record the model + machine each time.
   recall on ~50 samples remains the recommended thesis-evidence follow-up. No app code changed.
   Still pending (not build): **rotate the 3 API keys** (guide PART 3) before any public demo.
 
+## 2026-08-08 — Session 28 — Requirement 3 step S1 (voice-loop config seam): suite 192 → 211, all offline
+- Setup: Python 3.14 on Windows; `pytest backend/tests/` with `PYTHONIOENCODING=utf-8`. No DB, no
+  network, no LLM — S1 is pure config + schema. Settings swapped per-test with the established
+  `monkeypatch.setattr("<module>.get_settings", lambda: fake)` pattern from `test_otp.py`.
+- Metric(s): test pass/fail; endpoint contract; rule #1 verbatim preservation.
+- Result:
+  * `pytest backend/tests/` → **211 passed** (was 192; +19, zero regressions, 15.8 s).
+  * **`test_kiosk_config.py` (8)** — voice-first defaults (`voice_loop="auto"`, countdown 3000 ms,
+    guard 400 ms, no-speech 10000 ms, cap 120000 ms) · `.env` override reaches the kiosk (a clinic
+    lengthens the countdown for elderly patients without touching JS) · `manual` still selectable
+    (ADR-0045 pattern) · 4 normalization cases (`AUTO`, padded, typo, blank → safe `auto`, never a
+    startup crash) · **a secret-leak guard**: the payload's key set must be exactly the 5 behavioural
+    knobs, and no value may contain `key/token/secret/url/password/sqlite/otp`.
+  * **`test_answer_raw_text_guard.py` (11)** — 6 blank forms (`""`, spaces, `\t`, `\n`, mixed)
+    rejected · **padding preserved byte-for-byte** (`"  আমার মাথা ব্যথা করছে  "` survives the
+    validator untouched — rule #1: `.strip()` tests emptiness only, it never rewrites) · a 1-char
+    answer (`"না"`) is accepted (the guard rejects EMPTY, not SHORT) · voice and typing share one
+    contract · unknown `source` rejected · `mic` is the default (voice-first).
+- Caveat (honest): S1 is backend-only and **proves nothing about the voice UX** — no mic, TTS,
+  countdown or barge-in behaviour exists yet, and per the human's decision (2) those will be covered
+  only by static-source assertions plus the **12-point live Chrome checklist**
+  (`faculty_future_features.md` §K). Nothing reads `/api/config` yet; kiosk behaviour is unchanged.
+
+## 2026-08-08 — Session 28 — Requirement 3 step S3 (auto-listen): suite 222 → 234, plus a real-browser timing check
+- Setup: `pytest backend/tests/` (static-source assertions over `/kiosk.js` and `/shared/tts.js`)
+  **plus** an instrumented Chrome check via the in-app preview: `toggleListening` was replaced with a
+  spy so the arming logic could be timed **without touching a microphone**. Default (non-Bangla)
+  system voice; `banglaVoiceAvailable() === false`, 3 voices installed.
+- Metric(s): number of mic-opens per question; delay from question start → mic open; whether TTS was
+  still audible at that instant (`speechSynthesis.speaking`).
+- Result:
+  * `pytest backend/tests/` → **234 passed** (was 222; +12 in `test_kiosk_auto_listen.py`, zero
+    regressions, 13.4 s).
+  * **`/api/config` is really consumed:** the kiosk loaded
+    `{voice_loop: auto, countdown_ms: 3000, tts_guard_ms: 400, no_speech_ms: 10000,
+    max_answer_ms: 120000}` from the server at page load.
+  * **Normal question:** exactly **1** mic-open, at **926 ms**, with `speaking === false` — TTS ended
+    (~526 ms) and the 400 ms guard elapsed. The length-based safety net (which would have fired at
+    3680 ms) correctly did **not** double-fire: the token was already consumed.
+  * **🔴 The echo case — the one that matters for rule #1.** Two questions 200 ms apart (the second
+    cancels the first): **exactly 1** mic-open, at **1057 ms**, i.e. after the SECOND question
+    finished. The cancelled utterance's `onend` — which Chrome does fire on `cancel()` — did **not**
+    open the mic during question 2. Without the generation token in `tts.js` this is precisely how
+    the AI's own voice would have been transcribed into a `patient` utterance.
+  * **Mode switch cancels a pending arm:** `setInputMode('type')` 150 ms after a question → **0**
+    mic-opens.
+  * **`voice_loop=manual` is untouched behaviour:** **0** mic-opens, hint stays "Tap the mic when you
+    are ready to speak" — identical to the passed S25 run.
+  * **No TTS at all** (`window.speechSynthesis` deleted → `speak()` returns false): mic opened at
+    **416 ms**. The kiosk cannot freeze when speech synthesis is missing or silently degraded.
+  * **Zero browser-console errors and zero server errors** across the whole session.
+- Caveat (honest): the microphone itself was **never opened** — `toggleListening` was a spy, so this
+  measures *when the kiosk decides to listen*, not that recognition starts, that Bangla is recognized,
+  or that no echo is captured by a real microphone in a real room. Echo was disproven only at the
+  *scheduling* level. Live-run items 1, 7 and 8 (§K) remain the real gate, and the machine used here
+  has **no Bangla voice installed**, so the Bangla TTS path is still unexercised.
+
+## 2026-08-08 — Session 28 — Requirement 3 step S2 (voice/typing mode switch): suite 211 → 222, plus a browser check
+- Setup: `pytest backend/tests/` (static-source assertions over the served `kiosk.html` / `kiosk.js`,
+  the `test_routes_static.py` pattern) **plus** a real Chrome render check via the in-app preview
+  against a local uvicorn on port 8001. **No microphone was used and none was needed** — S2 changes
+  which input the patient may choose, not the turn-taking.
+- Metric(s): test pass/fail; rendered state of both docks; console/server errors.
+- Result:
+  * `pytest backend/tests/` → **222 passed** (was 211; +11 in `test_kiosk_input_modes.py`, zero
+    regressions, 13.7 s). Asserted: both docks carry the two controls · `aria-pressed` on each ·
+    bilingual `data-en`/`data-bn` labels · the old "Microphone issue? Type instead" link is **gone** ·
+    both typed inputs + send handlers survive · voice is the default at load and after logout ·
+    Voice→Type **discards** the un-submitted buffer · a dead mic switches the patient to typing ·
+    one switch updates both docks · voice and typing still share one pipeline (`mic`/`manual`).
+  * **Browser check (Chrome, 1280×720):** voice default → "🎤 Speak" filled teal, mic button shown,
+    typed row hidden, hint "Tap the mic when you are ready to speak". Clicking "⌨ Type" →
+    `inputMode='type'`, mic `display:none`, typed row `flex`, **input auto-focused**
+    (`activeElement=fallback-input`), hint "Type your answer, then press Send", **and the resume dock
+    switched with it** (`resume-mic-btn` hidden, `resume-fallback-row` flex). Switching back restored
+    voice. EN→BN toggle re-rendered both labels ("🎤 বলুন" / "⌨ টাইপ করুন") and the hint.
+    **Zero browser-console errors and zero server errors.**
+- Caveat (honest): this is a **rendering + wiring** check, not a clinical-flow check — no visit was
+  created, no answer submitted, no LLM called, and the mode switch was exercised on a screen forced
+  open with `showScreen()`. The end-to-end typed-answer path (Type → Send → M8 merge → next question)
+  is still only covered by the pre-existing backend tests, and the real mic/TTS behaviour remains
+  entirely unproven until the 12-point live run (§K).
+
 ## 2026-07-11 — Session 24 — P4-1 real OTP: suite 177 → 192, all offline; live end-to-end verified on the dev server
 - Setup: Python 3.14 on Windows; in-memory SQLite via dependency override; the OTP sender replaced
   by a recording fake (no SMS, no network); TextBee HTTP layer mocked (`httpx.post` monkeypatched).

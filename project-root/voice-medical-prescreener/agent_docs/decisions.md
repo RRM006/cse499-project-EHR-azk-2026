@@ -851,4 +851,84 @@
   with full-duplex noted as its final step once Req 2's streaming STT provides real VAD.
   (c) **Start building it now** — out of scope for a documentation-only session and it needs the
   human's "go" plus its own plan (CLAUDE.md workflow).
-- Status: Accepted
+- Status: Accepted (scope EXTENDED by ADR-0048 — Req 3 now also covers dual voice/typing input)
+
+## ADR-0048 — 2026-08-08 — Requirement 3b: dual input (voice AND typing, patient-switchable) — supersedes ADR-0027's "voice-only" clinical-input rule
+- Decision: Extend faculty Requirement 3 from "remove the two mic taps" to **"every patient
+  interaction in the Patient Portal after phone login supports BOTH voice and typing, switchable at
+  will"** (`faculty_future_features.md` §3b). Specifically: (a) a persistent, always-visible
+  `[🎤 Voice] [⌨ Type]` mode control in **both** kiosk docks, with the active mode always obvious;
+  (b) the ~3-second silence window is a **visible CONFIRMATION countdown, not a hard cutoff** — any
+  resumed speech cancels it and listening continues; (c) the mic never opens while
+  `speechSynthesis.speaking`, guarded by a delay **plus** a fallback timer for the case where `onend`
+  never fires (no installed voice); (d) **one** answer pipeline — voice and typing keep using the
+  existing `POST /followup/answer` with `source: mic|manual`, no duplicated flow; (e) it ships behind
+  the `voice_loop = manual | auto` switch of ADR-0047, with timings (`silence_ms`, `countdown_ms`,
+  `no_speech_ms`, `tts_guard_ms`, `max_answer_ms`) served to the kiosk by a **new public
+  `GET /api/config`** so a clinic can tune them for elderly patients without editing JS;
+  (f) `AnswerRequest.raw_text` gains a non-blank minimum so "never silently submit an empty answer" is
+  enforced **server-side**, not only in the browser. **No schema change — stays at Alembic head 0012.**
+  Built in 7 individually GO-gated steps (§J of `faculty_future_features.md`).
+- **Supersedes:** the clinical-input half of **ADR-0027** ("Patient input is voice only … the manual
+  text box remains ONLY as a developer/accessibility fallback") and the corresponding
+  `CLAUDE.md` VOICE INTERACTION RULES line, as narrowed by **ADR-0030** (typing allowed only for
+  phone/OTP). Typing becomes a **first-class patient input for clinical answers**. ADR-0027's TTS half
+  and **ADR-0028** (questions shown as text AND spoken) are **unaffected**.
+- Why: The human's explicit expansion — patients must not be forced into one modality. Inspection
+  showed the hard part is already done: voice and typing **already** converge on one endpoint
+  (`sendTypedFallback()` → `submitPatientTurn(text,'manual')`), so "one common pipeline" costs nothing
+  to honor; what is wrong is only the *framing* — typing hides behind a "Microphone issue?" link.
+  Making the countdown a confirmation window (not a cutoff) is the direct mitigation for the R1
+  rule-#1 hazard recorded in ADR-0047: a clipped answer corrupts the verbatim record. Serving the
+  timings from `.env` follows ADR-0045 and keeps tap-to-talk selectable as the comparison baseline.
+- Rejected: (a) **Reinterpreting ADR-0027 silently** — a locked governing rule must be superseded on
+  the record, and `CLAUDE.md`'s rule text edited, not quietly re-read. (b) **A separate typing flow**
+  — would duplicate the M7–M9 logic for no gain. (c) **Pre-filling the text box with the captured STT
+  buffer on a Voice→Type switch** — a typed edit on top of STT text would be stored as one utterance
+  whose `source`/`stt_provider` provenance is false; switching clears the buffer instead (offered to
+  the human as an option, not chosen). (d) **Passing `echoCancellation` constraints** — impossible:
+  the Web Speech API opens its own audio stream, so echo protection is structural gating only.
+  (e) **Adding vitest + jsdom for the timer logic** — real coverage, but it breaks the
+  "one requirements.txt + a venv" cross-platform constraint; deferred to the human's choice.
+- **RESOLVED by the human, same session (S28):** (1) **The 3-second visible countdown IS the silence
+  window itself** — speech stops → 3 → 2 → 1 → submit if still silent; **any** resumed speech cancels
+  it immediately and listening continues. Chosen for clear feedback with minimum delay; the rejected
+  alternative was a separate quiet-detect phase before the countdown (≈4.2–6 s). (2) **Frontend tests =
+  (a) static-source assertions via the existing `TestClient` pattern** — no vitest/jsdom, keeping the
+  "one requirements.txt + a venv" constraint intact; the real mic/TTS/silence/countdown/barge-in
+  behaviour is proven **only** by the live Chrome run (§K). (3) **`CLAUDE.md` updated — YES.**
+- **Project priority recorded by the human (S28):** *voice is the main goal and primary UX, not an
+  optional feature.* The portal must actively guide patients toward speaking, automating the voice
+  interaction wherever possible; typing exists so that a patient is **never blocked** by recognition
+  failure, mic/environment problems, or personal preference. UX priority = **minimize clicks, waiting
+  and complexity** for elderly/non-technical patients. Ideal flow: **AI speaks → mic opens
+  automatically → patient speaks → 3-second visible countdown → submit → AI speaks the next question
+  → repeat.**
+- **Implementation decisions taken during S2/S3 (recorded here rather than as separate ADRs — they
+  implement this ADR, they do not choose a different architecture):**
+  1. **The stale-callback guard lives in `tts.js`, at the single TTS entry point — not in
+     `kiosk.js`.** Discovered while building S3: **Chrome fires `onend` for an utterance that
+     `speechSynthesis.cancel()` killed**, so a cancelled question's callback would open the mic while
+     the NEXT question is still audible — the AI's own voice into a `patient` utterance. A generation
+     token in `speak()` drops superseded callbacks, and `onerror` is bridged to the same handler so a
+     failed utterance cannot strand a caller waiting to listen. Putting it at the seam means every
+     current and future caller inherits the protection. **Measured**: two questions 200 ms apart →
+     exactly one mic-open, after the second.
+  2. **Auto-open calls the same `toggleListening()` a tap calls.** One code path, so the automatic
+     and manual routes can never drift apart in behaviour.
+  3. **A mode switch is a first-class cancel.** `cancelPendingMic()` runs on a tap, a mode switch,
+     "Done", and the logout reset — a deliberate human action always beats a pending auto-open.
+  4. **Switching Voice→Type discards the un-submitted STT buffer** rather than pre-filling the text
+     box (rejected option (c) above), so no stored utterance ever carries false `source`/
+     `stt_provider` provenance.
+  5. **The per-bubble 🔊 replay stays plain `speak()`** — reviewing an earlier turn must never open
+     the microphone.
+- Status: **Accepted.** **Step S1 implemented in S28** (backend only, zero UX change): `voice_loop` +
+  the four timings in `core/config.py` with `resolved_voice_loop` normalization, the new public
+  `GET /api/config` (`routes_config.py` + `schemas/kiosk_config.py`, secret-free by construction and
+  test-asserted), and the non-blank `raw_text` guard on `AnswerRequest` that returns the value
+  **unchanged** (rule #1). **Steps S2 and S3 also implemented in S28** — the `[🎤 Speak] [⌨ Type]`
+  switch in both docks, then auto-listen with the echo guard and the `max(3 s, len×80 ms)` safety net
+  for machines where `onend` never fires. **192 → 234 tests pass** (+19 S1, +11 S2, +12 S3, zero
+  regressions). **Steps S4–S7 are NOT built** — each needs its own "go", and S4–S6 can only be proven
+  by the human's live Chrome run with a real microphone.

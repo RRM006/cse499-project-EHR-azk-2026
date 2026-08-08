@@ -32,6 +32,18 @@ live run was qualitative). Future issues from manual testing go in
 `agent_docs/context fixed problem 3.0.md`; the **three** faculty future requirements (quantized
 summary model, quantized STT/TTS, and — added 2026-08-08 — a fully voice-driven follow-up loop) in
 `agent_docs/faculty_future_features.md`.
+**Session 28 (2026-08-08) STARTED the faculty Requirement 3 + 3b build** — a **voice-first Patient
+Portal** (mic opens itself after TTS → visible 3-2-1 confirmation countdown → auto-submit → next
+question) **with typing always available as the fallback** (ADR-0048, which supersedes ADR-0027's
+voice-only rule). Plan + 12-point live checklist: `faculty_future_features.md` §A–K. **Step S1 is
+DONE** (backend only, no UX change): `voice_loop` + timings in `.env`, the new public
+`GET /api/config`, and a server-side non-blank `raw_text` guard. **Step S2 is DONE** (kiosk UI, turn-
+taking unchanged): a bilingual **`[🎤 Speak] [⌨ Type]`** switch in both docks, one shared mode, mic
+hidden in Type mode, Enter-to-send, mic failure → typing. **Step S3 is DONE** (auto-listen): the mic
+opens itself after the question is spoken, behind an echo guard (wait for `speechSynthesis.speaking`
+to clear + `tts_guard_ms`) and a TTS generation token so a cancelled question can never open the mic
+during the next one; **the patient still taps once to finish**. → **234 tests pass**. **Steps S4–S7
+are NOT built yet** and each needs its own "go".
 
 ## NON-NEGOTIABLE RULES (never break these)
 
@@ -91,10 +103,20 @@ Spread load across **three independent daily buckets** so no single quota is the
 - M1 STT, M9 completion check, M13/M14/M15 = **LOCAL / NO-API**.
 - ⚠ Free tiers may train on inputs → synthetic/consented data only (rule #4).
 
-## VOICE INTERACTION RULES (CONFIRMED CHANGE 2 — ADR-0027/0028)
+## VOICE INTERACTION RULES (ADR-0027/0028, amended by ADR-0048)
 
-- **Patient input is VOICE ONLY** (no keyboard for the patient). A manual text box
-  stays only as a developer/accessibility **fallback** when the mic fails (rule: Module 1 fallback).
+- **VOICE IS THE PRIMARY / DEFAULT patient interaction — voice-first is the goal, not an
+  option.** The portal should actively guide the patient toward speaking: AI speaks → mic
+  opens itself → patient speaks → visible 3-2-1 countdown → submit → next question.
+  **Typing is ALWAYS available** as the fallback/alternative so a patient is never blocked
+  by a failed mic, a noisy room, poor recognition, or personal preference.
+  ⚠ **This supersedes the old "patient input is VOICE ONLY / keyboard is a mic-failure
+  fallback only" rule** (ADR-0027, as narrowed by ADR-0030). Do not re-apply the old rule.
+- **One pipeline for both modes:** spoken and typed answers use the SAME endpoint and flow,
+  differing only in `source` (`mic` | `manual`). Never build a second question/answer path.
+- **UX priority: minimize clicks, waiting and complexity** — the target user is elderly or
+  non-technical. The 3-second countdown is a **CONFIRMATION window, never a hard cutoff**:
+  any resumed speech cancels it. A clipped answer is a **rule #1 defect**, not a UX nit.
 - **M7 follow-up questions display as TEXT on screen AND play as AUDIO (TTS) simultaneously.**
 - STT: `webkitSpeechRecognition`, `lang='bn-BD'`, `continuous=true`, `interimResults=true`.
 - TTS: `speechSynthesis.speak(new SpeechSynthesisUtterance(text))`, `lang='bn-BD'`

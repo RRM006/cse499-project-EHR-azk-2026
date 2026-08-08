@@ -35,6 +35,13 @@
     .mic-btn { width: 68px; height: 68px; border-radius: 50%; background: var(--secondary-color); border: none; color: #fff; font-size: 1.6rem; cursor: pointer; box-shadow: var(--shadow-md); }
     .mic-btn.listening { background: var(--danger-color); }
     .fallback-row { display: none; gap: 10px; width: 100%; max-width: 540px; }
+    /* S2 (ADR-0048): input-mode switch. VOICE is the primary/default path; the Type
+       control is ALWAYS visible so a patient is never blocked by a mic/noise/
+       recognition problem. The active mode is always obvious (filled + aria-pressed). */
+    .mode-switch { display: inline-flex; border: 1px solid var(--border-color); border-radius: var(--radius); overflow: hidden; background: var(--bg-white); }
+    .mode-btn { border: none; background: none; cursor: pointer; font-family: inherit; font-size: .85rem; font-weight: 600; padding: 8px 18px; color: var(--text-muted); }
+    .mode-btn[aria-pressed="true"] { background: var(--primary-color); color: #fff; }
+    .mode-btn:not([aria-pressed="true"]):hover { background: #ECF5F3; }
 
     /* summary (KIOSK-5: one card per field; P1-6: Teal Medical tints, ADR-0043) */
     .summary-layout { flex: 1; padding: 24px 28px; display: flex; flex-direction: column; gap: 16px; max-width: 980px; margin: 0 auto; width: 100%; overflow-y: auto; }
@@ -156,9 +163,13 @@
         <div style="font-size:.82rem; font-weight:600; color:var(--text-muted);" id="listening-hint"
              data-en="Tap the mic when you are ready to speak" data-bn="বলতে প্রস্তুত হলে মাইকে চাপ দিন">Tap the mic when you are ready to speak</div>
         <div style="text-align:center;">
-          <button style="background:none;border:none;color:var(--secondary-color);text-decoration:underline;cursor:pointer;font-size:.82rem;"
-                  onclick="document.getElementById('fallback-row').style.display='flex'"
-                  data-en="Microphone issue? Type instead" data-bn="মাইকের সমস্যা? টাইপ করুন">Microphone issue? Type instead</button>
+          <!-- S2 (ADR-0048): voice is the default; typing is always one tap away. -->
+          <div class="mode-switch" role="group" aria-label="Answer using voice or typing">
+            <button type="button" class="mode-btn" id="mode-voice-btn" aria-pressed="true"
+                    onclick="setInputMode('voice')" data-en="🎤 Speak" data-bn="🎤 বলুন">🎤 Speak</button>
+            <button type="button" class="mode-btn" id="mode-type-btn" aria-pressed="false"
+                    onclick="setInputMode('type')" data-en="⌨ Type" data-bn="⌨ টাইপ করুন">⌨ Type</button>
+          </div>
           <div class="fallback-row" id="fallback-row" style="margin-top:8px;">
             <input type="text" class="input-field" id="fallback-input" placeholder="Describe in Bangla or English..."
                    data-en-placeholder="Describe in Bangla or English..." data-bn-placeholder="বাংলা বা ইংরেজিতে লিখুন...">
@@ -194,6 +205,16 @@
           <span id="resume-hint" style="font-size:.85rem; color:var(--text-muted);"
                 data-en="Tap the mic when you are ready to speak" data-bn="বলতে প্রস্তুত হলে মাইকে চাপ দিন">Tap the mic when you are ready to speak</span>
           <button class="mic-btn" id="resume-mic-btn" onclick="toggleListening()">🎤</button>
+        </div>
+        <!-- S2: the resume dock offers the SAME choice; the mode is shared with the
+             conversation screen so the patient never has to re-pick it. -->
+        <div style="text-align:center;">
+          <div class="mode-switch" role="group" aria-label="Answer using voice or typing">
+            <button type="button" class="mode-btn" id="resume-mode-voice-btn" aria-pressed="true"
+                    onclick="setInputMode('voice')" data-en="🎤 Speak" data-bn="🎤 বলুন">🎤 Speak</button>
+            <button type="button" class="mode-btn" id="resume-mode-type-btn" aria-pressed="false"
+                    onclick="setInputMode('type')" data-en="⌨ Type" data-bn="⌨ টাইপ করুন">⌨ Type</button>
+          </div>
         </div>
         <div class="fallback-row" id="resume-fallback-row" style="max-width:none;">
           <input type="text" class="input-field" id="resume-fallback-input" placeholder="Describe in Bangla or English..."

@@ -17,6 +17,10 @@ ENV_FILE = BACKEND_DIR / ".env"
 DEFAULT_SQLITE_PATH = BACKEND_DIR / "prescreener.db"
 DEFAULT_DOCUMENTS_DIR = BACKEND_DIR / "data" / "documents"
 
+# Kiosk turn-taking modes (ADR-0047/0048). "auto" = voice-first hands-free loop;
+# "manual" = the original tap-to-talk path, never deleted.
+VOICE_LOOP_MODES = ("auto", "manual")
+
 
 class Settings(BaseSettings):
     model_config = SettingsConfigDict(
@@ -69,6 +73,34 @@ class Settings(BaseSettings):
     followup_max_questions: int = 5
     completeness_threshold: float = 0.7
 
+    # --- patient voice loop (faculty Requirement 3 + 3b; ADR-0047 + ADR-0048) ---
+    # VOICE IS THE PRIMARY patient interaction; typing is ALWAYS available as the
+    # fallback/accessibility route (ADR-0048 supersedes ADR-0027's voice-only rule).
+    # VOICE_LOOP picks the kiosk's turn-taking behaviour:
+    #   auto   — voice-first (default): the mic opens itself once TTS finishes and a
+    #            VISIBLE 3-2-1 countdown submits the answer.
+    #   manual — the S25-era tap-to-talk path, kept selectable for noisy rooms and as
+    #            the like-for-like comparison baseline (ADR-0045 pattern: the old path
+    #            is never deleted). An unrecognized value falls back to "auto" —
+    #            see `resolved_voice_loop`.
+    # The timings below are served to the browser by GET /api/config so a clinic can
+    # tune them for elderly patients WITHOUT editing JavaScript. They are read at
+    # startup only, so a .env change needs a server RESTART.
+    voice_loop: str = "auto"
+    # The visible 3-2-1 countdown IS the silence window itself (human's S28 decision):
+    # speech stops -> the countdown shows -> silence to zero submits. Any resumed
+    # speech CANCELS it and listening continues — it is a confirmation window, never a
+    # hard cutoff (a clipped answer would be a rule #1 defect, not a UX nit).
+    voice_countdown_ms: int = 3000
+    # Wait this long after TTS ends before opening the mic, so the browser can never
+    # transcribe the AI's own question into the patient's verbatim record (echo guard).
+    voice_tts_guard_ms: int = 400
+    # Mic open this long with no speech at all -> repeat the question once, then offer
+    # typing. Never an infinite wait, never a silent empty submit.
+    voice_no_speech_ms: int = 10000
+    # Hard cap on a single answer -> submit whatever was captured (runaway guard).
+    voice_max_answer_ms: int = 120000
+
     # --- patient identification (kiosk phone + OTP; ADR-0030 + P4-1 ADR-0045) ---
     # OTP_CHANNEL picks the delivery seam (services/otp):
     #   dev     — DevLogSender: code printed to the server log, no SMS.
@@ -98,6 +130,14 @@ class Settings(BaseSettings):
     documents_dir: str = Field(
         "", validation_alias=AliasChoices("document_output_path", "documents_dir")
     )
+
+    @property
+    def resolved_voice_loop(self) -> str:
+        """The validated kiosk turn-taking mode. Case-insensitive; anything
+        unrecognized falls back to the safe voice-first default rather than breaking
+        startup on a .env typo (same spirit as `resolved_database_url`)."""
+        mode = (self.voice_loop or "").strip().lower()
+        return mode if mode in VOICE_LOOP_MODES else "auto"
 
     @property
     def resolved_database_url(self) -> str:

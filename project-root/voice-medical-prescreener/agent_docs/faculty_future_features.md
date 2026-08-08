@@ -12,6 +12,12 @@
 > faculty's own pasted text; **3 was relayed by the human as a spoken clarification** and is written
 > here in the same formal register — treat its wording as faithful, not literally verbatim.
 >
+> **Requirement 3 EXPANDED 2026-08-08 (S28)** — the human broadened it from "remove the mic clicks"
+> to **"every patient interaction after login must support BOTH voice and typing, switchable at
+> will"** (§3b below). The original §3 text is kept byte-identical above it; §3b is the human's own
+> written expansion. **ADR-0048** scopes the expansion and records the governing-rule conflict it
+> creates with ADR-0027 (see below) — that conflict is **not yet resolved**; it needs the human's GO.
+>
 > **Status: ⬜ NOT STARTED — research track.** Do not begin any of the three items without the
 > human's "go" and a session-planned approach (CLAUDE.md workflow). When work starts, turn this into
 > a numbered tracker like `context fixed problem 2.0.md` and log decisions as ADRs in `decisions.md`.
@@ -72,6 +78,65 @@ As a future faculty requirement, the entire follow-up conversation must become *
 8. The structured medical summary is then generated.
 
 During the follow-up conversation the patient should **not** need to click buttons, press "Next", select questions, or touch the screen. Only **starting** or **ending** the session may require interaction. The goal is a natural spoken conversation between the AI and the patient.
+
+---
+
+### **3b. EXPANSION (human, 2026-08-08 / S28): dual input — Voice AND Typing, the patient's choice**
+
+> Scope grew here. Requirement 3 is no longer only "remove the mic clicks"; it now governs **the
+> whole Patient Portal interaction after phone login**. Recorded as **ADR-0048**.
+
+**GOAL.** After the patient logs in with their phone number and enters the Patient Portal, ALL
+patient questions/interactions must support **both** VOICE MODE and TYPING MODE. The patient must
+**not** be forced into one or the other, and must be able to switch between them naturally.
+
+**VOICE MODE**
+- The microphone becomes ready **automatically after TTS finishes** — never while TTS is speaking.
+- The patient answers naturally; ~**3 seconds of continuous silence** is taken as "probably finished".
+- At that point a **visible countdown** is shown ("Submitting in 3… 2… 1…"), large and legible enough
+  for elderly / non-technical patients.
+- **If the patient starts speaking again during the countdown, the countdown is CANCELLED and
+  listening continues.** A short pause must never cut the answer off.
+- TTS/audio echo must never enter the patient's transcript.
+- RAW transcript preserved exactly as captured; the corrected transcript stays a separate field.
+
+**TYPING MODE**
+- A text input is **always visible** — typing is a first-class choice, not only a failure fallback.
+- Voice → typing (when STT fails or the patient prefers it) and typing → voice must both work
+  mid-conversation.
+- Typed answers follow the **same** question/follow-up flow; **no separate pipeline**. The backend
+  receives one common format regardless of origin.
+
+**PATIENT CONTROL / SAFETY**
+- Hands-free must never mean loss of control: keep a clear **Stop/Cancel**, keep the existing
+  **Done / See Summary**, allow interrupt + retry of a question.
+- Silence must not wait forever: after a reasonable timeout, repeat the question **once**; if still
+  no answer, surface the typing option.
+- **Never silently submit an empty answer.**
+
+**SAFETY/UX RULE (explicit).** Do **not** assume 3 seconds of silence always means the patient has
+finished. The 3-second window is a **CONFIRMATION WINDOW, not an aggressive hard cutoff.**
+
+**Desired shape**
+
+```
+AI: "আপনার কী সমস্যা হচ্ছে?"   → AI finishes speaking
+    → microphone becomes active
+    → patient: "আমার মাথা ব্যথা করছে..."   → patient stops
+    → silence detected:  "Submitting in 3... 2... 1..."
+        · still silent      → submit answer
+        · speaks again      → cancel countdown, keep listening
+
+    [🎤 Speak]  [⌨ Type]        ← the active method is always obvious
+```
+
+**Real-life cases the design must answer** (the human's list, kept in full): elderly patients who
+pause; slow speakers; coughing / throat-clearing; background noise; family talking nearby;
+Bengali/Banglish speech; browser mic-permission problems; mic disconnected; TTS voice unavailable;
+speech recognition ending unexpectedly; changing their mind during the countdown; accidental screen
+touches; wanting to type after starting voice; wanting to speak after starting typing; very long
+answers; completely silent patients; repeated "I don't know" / unclear answers; accidental empty
+submissions; network/API delays; the browser tab losing microphone permission.
 
 ---
 
@@ -210,13 +275,166 @@ Log in `test_log.md` next to the other metrics — this makes a clean thesis tab
   shared device.
 - The natural stepping stone toward the faculty's full-duplex end-state under Requirements 1 & 2.
 
-#### Suggested implementation order (Requirement 3, internal)
+#### Suggested implementation order (Requirement 3, internal — S27 original, superseded by the S28 plan below)
 1. **Auto-listen on `speak()`'s `onend`** — mic opens itself after the question; the patient still
    taps once to finish. Removes half the taps with no endpointing risk.
 2. **Silence-based auto-endpointing** behind the `voice_loop` switch; tap-to-finish stays available.
 3. **Echo / barge-in handling + the bounded no-speech re-prompt** (the correctness work).
 4. **Apply to the KIOSK-7 resume dock** and re-verify the `scope=fields` loop.
 5. **Revisit as true full-duplex** once Requirement 2's streaming STT gives real VAD.
+
+---
+
+## S28 inspection + plan for Requirement 3 + 3b (2026-08-08 — PLAN ONLY, awaiting the human's GO)
+
+> Written after a full re-read of `kiosk.js`, `kiosk.html`, `tts.js`, `shared.js`,
+> `routes_followup.py`, `schemas/followup.py`, `core/config.py` and `backend/tests/`.
+> **No code was changed.** Every step below is GO-gated individually.
+
+### A. What ALREADY works (do not rebuild)
+- **The server loop is already autonomous** — `POST /followup/answer` returns `next_question` in the
+  same response; `submitPatientTurn()` chains it into `assistantSays()`. Faculty steps 4–8 work today.
+- **Voice and typing ALREADY share one pipeline.** `AnswerRequest.source: Literal["mic","manual"]`;
+  `sendTypedFallback()` → `submitPatientTurn(text,'manual')` and `sendResumeTyped()` →
+  `submitResumeAnswer(text,'manual')` hit the **same endpoint**. 3b's "do not duplicate the
+  question/answer logic" is **already satisfied** — there is no duplicate flow to remove.
+- `speak(text,{onend})` exists (ignored at all 3 call sites); `interimResults=true` already supplies
+  the silence ticks; `activeDock()` means the KIOSK-7 resume dock inherits any change for free;
+  `stopListening()` already refuses to submit empty text; the loop is bounded server-side (cap 5).
+
+### B. What must change
+1. **Typing is second-class** — hidden behind the *"Microphone issue? Type instead"* link. 3b makes
+   it co-equal and always visible.
+2. Mic never opens itself (the three `speak()` call sites drop the callback).
+3. `kiosk.js` `r.onend = () => { if (listening) r.start(); }` **deliberately never ends a turn** —
+   this is the line the endpointer replaces.
+4. No countdown UI exists in `kiosk.html` (neither dock).
+5. No echo guard — nothing stops `recognition.start()` while TTS is audible.
+6. No no-speech timeout / re-prompt — an auto-opened mic with a silent patient hangs forever.
+7. `AnswerRequest.raw_text: str` has **no minimum length** — an empty answer is storable today.
+
+### C. ⚠ GOVERNING-RULE CONFLICT — unresolved, needs the human's explicit GO
+`CLAUDE.md` ("VOICE INTERACTION RULES") and **ADR-0027** state: *"Patient input is VOICE ONLY (no
+keyboard for the patient). The manual text box remains ONLY as a developer/accessibility fallback."*
+**ADR-0030** narrowed it further (typing allowed for phone/OTP identification, never clinical input).
+**Requirement 3b directly supersedes this.** It must be an explicit, recorded decision — see
+**ADR-0048** — and `CLAUDE.md`'s rule text must be edited as part of the build, not silently
+reinterpreted.
+
+### D. Recommended UX
+- **Persistent segmented control in BOTH docks — `[🎤 Voice] [⌨ Type]`** — always visible, the active
+  mode filled teal + `aria-pressed`, so the patient always knows which input is live.
+- **Voice:** question shown + spoken → TTS `onend` → **400 ms guard** → mic opens itself, hint
+  "শুনছি… / Listening…" → speech stops → **visible 3-2-1 confirmation window** (ring + large digit +
+  "৩ সেকেন্ডে জমা হচ্ছে…") → **any** new interim result cancels it and listening continues → 0 submits.
+- **⚠ OPEN QUESTION for the human — the 3 seconds.** 3b says both "detect ~3 s of continuous silence"
+  *and* "then show a 3-2-1 countdown", which read literally is 3 + 3 = **6 s** before submit.
+  **Recommendation: the 3 s silence window IS the visible countdown** (one window, ≈3 s + engine lag)
+  — it satisfies both sentences and avoids 6 s of dead air reading as "broken".
+  Alternative for noisy rooms: 1.2 s quiet-detect **then** a 3 s countdown (≈4.2 s). **Not yet chosen.**
+- **Typing:** mic fully **off** (not merely ignored — no bystander capture), input focused, Enter or
+  Send submits. TTS still speaks the questions (output channel, unchanged).
+- **Mode switch mid-answer:** Voice→Type **clears** the un-submitted voice buffer rather than
+  pre-filling it. Reason: a typed edit on top of STT text would be stored as ONE utterance whose
+  `source`/`stt_provider` provenance is false. (Option B — pre-fill and store `source='manual'` —
+  available if the human prefers; **not chosen**.)
+- **Always reachable:** `⏸ Stop` (drop out of auto-listening back to manual), `🔊 Repeat question`,
+  and the existing `Done — see summary`.
+
+### E. Real-life safeguards (answers 3b's list)
+| Situation | Behavior |
+|---|---|
+| Elderly / slow / pausing | 3 s window; **any** interim result cancels the countdown. Never a hard cutoff |
+| Cough / throat-clear / "উম্…" | Non-final chunks never enter `finalBuffer` but **do** cancel the countdown — errs toward not cutting the patient off |
+| Background noise, family nearby | Mic open **only** during an active turn — never during API calls, never on the summary screen unless a resume question is open. Visible red listening state |
+| Bengali / Banglish | Unchanged (`lang='bn-BD'`); the timing logic is language-agnostic |
+| Mic permission denied / disconnected | Existing `onerror` `not-allowed`/`audio-capture` path survives untouched → auto-switch to Type mode + explain why |
+| **TTS voice unavailable** | 🚨 `onend` may **never fire** → frozen kiosk. `max(3 s, len×80 ms)` fallback timer opens the mic anyway. KIOSK-2 hint banner already covers the no-voice case |
+| Chrome ends recognition on its own | Keep the restart, gated: only while `listening && !countingDown && !submitting` |
+| Mind changed during countdown | Speaking cancels it; `⏸ Stop` cancels it; a screen touch cancels it |
+| Accidental screen touch | Only the mode toggle / Stop / Done are hit targets in the dock — a stray tap cannot submit |
+| Very long answers | 120 s hard cap → auto-submit what was captured (prevents runaway + memory growth) |
+| Completely silent patient | 10 s → repeat the question **once** → another 10 s → auto-switch to Type mode, input focused. Never an infinite wait, never an empty submit |
+| Repeated "জানি না" / unclear | Already handled server-side — `scope=fields` counts it answered and will not re-ask; the cap ends the loop |
+| Network / API delay | `state.busy` already blocks re-entry; add a visible "thinking" state; mic stays shut until the next question finishes speaking |
+| Tab hidden / loses permission | `visibilitychange` → pause the auto-loop, show "Tap to resume". A user gesture is genuinely required to re-acquire the mic — this cannot be automated away |
+
+### F. Backend changes (minimal — **no schema change, stays at Alembic head 0012**)
+1. **`GET /api/config`** (public, no auth) → `{voice_loop, silence_ms, countdown_ms, no_speech_ms,
+   tts_guard_ms, max_answer_ms}`. **There is no config endpoint today** (verified). This is what lets
+   a clinic tune the 3 s for elderly patients without editing JS.
+2. `voice_loop: str = "auto"` + those timings in `core/config.py`, `.env`-overridable
+   (**ADR-0045 pattern: switch in `.env`, the old manual path is never deleted**).
+3. `AnswerRequest.raw_text` gains `min_length=1` + a non-blank validator — server-side enforcement of
+   "never silently submit an empty answer".
+- **Unchanged:** `/followup/answer`, `/followup/next`, the `source: mic|manual` contract, the
+  profile/merge pipeline.
+
+### G. Frontend changes
+- `frontend_shared/tts.js` — `speak()` gains an `onerror`→`onend` bridge and returns a handle so a
+  **cancelled** utterance cannot fire a stale "open the mic" callback.
+- `frontend/kiosk.html` — mode toggle (both docks), countdown element (both docks), `⏸ Stop`; the
+  typed row becomes permanent instead of `display:none`.
+- `frontend/kiosk.js` — the bulk: `inputMode` state, auto-listen chaining, silence timer + countdown +
+  barge-in cancel, no-speech re-prompt, visibility handling, `activeDock()` extended with the new ids.
+- All new strings bilingual via `data-en`/`data-bn` (P1-2 rule).
+
+### H. Tests — and an honest limit
+**There is no JavaScript test infrastructure in this repo** (no `package.json`, no Node; all 192 tests
+are pytest/backend). **The countdown, the barge-in cancel and the echo guard cannot be unit-tested as
+things stand.**
+- **Existing tests over this area:** `test_followup_loop.py`, `test_followup_min_questions.py`,
+  `test_resume_loop.py`, `test_raw_immutable.py`, `test_routes_visits.py`, `test_routes_static.py`.
+- **New backend tests (~8, real coverage):** config endpoint shape + `.env` override; `source='manual'`
+  stores verbatim with `stt_provider=null`; empty/whitespace `raw_text` → 422; typed and spoken answers
+  produce an identical profile merge; raw-immutability re-asserted on the manual path.
+- **Frontend, three options — (a) RECOMMENDED:** static-source assertions via `TestClient`, the
+  pattern `test_routes_static.py` already uses; catches deletion of the toggle / countdown element /
+  guard constants but **does not prove behavior**. **(b)** add vitest + jsdom (real state-machine
+  tests, but breaks "one requirements.txt + a venv" and adds a Node toolchain to both machines).
+  **(c)** no frontend tests, rely on the live run. **Not yet chosen.**
+
+### I. Risks
+| # | Risk | Severity |
+|---|---|---|
+| R1 | **Endpointer clips an answer** → truncated verbatim = **rule #1 defect, not a UX nit** | 🔴 highest |
+| R2 | **TTS echo inside a `patient` utterance.** Note: the Web Speech API opens its **own** audio stream, so `echoCancellation` constraints **cannot** be passed — mitigation is structural gating only (never start while `speechSynthesis.speaking`, + guard delay) | 🔴 high |
+| R3 | ADR-0027 "voice-only" conflict (§C) — needs an explicit supersede | 🟠 governance |
+| R4 | Core behavior unprovable by unit tests → the human live run is the only real gate | 🟠 |
+| R5 | Chrome's own auto-stop racing the JS silence timer | 🟠 |
+| R6 | A continuously-open mic on a shared kiosk captures **bystanders** into a medical record | 🟠 privacy |
+| R7 | TTS `onend` never fires (no voice installed) → frozen kiosk | 🟡 mitigated (§E) |
+
+### J. Step-by-step plan — each step is its own GO
+| Step | What | Risk |
+|---|---|---|
+| **S1** | `voice_loop` + timing config, `GET /api/config`, `raw_text` min-length, + tests. **Backend only, zero UX change** | none |
+| **S2** | `[🎤 Voice][⌨ Type]` toggle in both docks; typing promoted to first-class. **No auto behavior yet** | none to rule #1 |
+| **S3** | Auto-listen after TTS (`onend` + speaking-guard + fallback timer). Patient still taps to finish | low |
+| **S4** | **Silence detection + visible 3-2-1 countdown + barge-in cancel** ← the heart | 🔴 R1/R2 live here |
+| **S5** | No-speech re-prompt, empty-submit guard, 120 s cap, permission/visibility recovery | medium |
+| **S6** | KIOSK-7 resume dock + re-verify the `scope=fields` loop | low |
+| **S7** | Docs + the human's live Chrome run (§K) | — |
+
+### K. LIVE TEST CHECKLIST (real Chrome + real mic — the only true proof)
+**Steps S3–S6 cannot be verified from this side: no mic, no TTS, no browser session.** As in S25, the
+human's live run is the gate. Record results in `test_log.md`.
+1. **Voice-only completion** — login → finish the whole conversation → summary, **zero screen touches**
+2. **Typing-only completion** — never touch the mic; same 10-field summary results
+3. **Voice → typing** mid-conversation (switch, answer, loop continues correctly)
+4. **Typing → voice** mid-conversation
+5. **3-second countdown** appears, is legible, and counts down visibly
+6. **Countdown cancellation** — speak again during it; it must cancel and keep listening
+7. **No TTS echo in RAW** — inspect the stored `patient` utterances: **zero** AI words. Target: 0
+8. **Slow / elderly-style speech** with long mid-sentence pauses — answer must NOT be clipped
+9. **Background noise** / a second person talking nearby
+10. **Microphone / browser failure** — deny permission, unplug the mic: clean fall back to typing
+11. **No-answer fallback** — stay silent: question repeats once, then the typing option appears
+12. **Final Done / Summary flow** still works, including the KIOSK-7 resume dock
+
+**Metrics worth logging** (thesis table): zero-touch completion rate · echo-contamination rate
+(target 0) · false-endpoint vs missed-endpoint rate · turn-taking latency vs the ≈2 s of S25 · WER and
+extraction precision/recall **unchanged** vs tap-to-talk on the same synthetic set.
 
 ### Suggested build order (when this starts)
 1. Requirement 1 first (pure config-level provider swap, lowest risk, no UX change).
