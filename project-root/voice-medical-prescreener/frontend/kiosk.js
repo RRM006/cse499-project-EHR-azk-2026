@@ -123,9 +123,14 @@ function addBubble(role, text, label, textPair = null) {
   /* Replay what is displayed NOW. Plain speak() — reviewing an old turn must never
      open the mic (S3). ADR-0049: a PATIENT bubble is pinned to Bangla because STT
      captured it at lang='bn-BD'; an assistant bubble follows the UI language, which is
-     the language its text is currently displayed in. */
+     the language its text is currently displayed in.
+     TTS-1: an ASSISTANT bubble is a bilingual M7 question, so replay speaks the half
+     matching the UI language — the same thing the patient heard the first time. A
+     PATIENT bubble is `verbatim`: those are the patient's own captured words, and
+     "hear your own words again" must read back all of them. */
   const replayLang = role === 'patient' ? 'bn-BD' : null;
-  speakBtn.onclick = () => speak(body.textContent, { lang: replayLang });
+  speakBtn.onclick = () =>
+    speak(body.textContent, { lang: replayLang, verbatim: role === 'patient' });
   div.appendChild(meta);
   div.appendChild(body);
   thread.appendChild(div);

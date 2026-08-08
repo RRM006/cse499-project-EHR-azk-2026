@@ -17,7 +17,7 @@ at the UI, which would hide a broken kiosk from the clinic.
 from fastapi import APIRouter, HTTPException, Query, Response
 
 from backend.app.services.tts import TtsUnavailable, synthesize
-from backend.app.services.tts.espeak import MAX_TEXT_CHARS
+from backend.app.services.tts.base import MAX_TEXT_CHARS
 from backend.app.services.tts.service import SUPPORTED_LANGS
 
 router = APIRouter(prefix="/api", tags=["meta"])

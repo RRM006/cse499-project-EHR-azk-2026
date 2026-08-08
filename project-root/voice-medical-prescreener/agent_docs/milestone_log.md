@@ -6,7 +6,63 @@
 
 **Status keys:** ⬜ Not started · 🟨 In progress · 🟦 Blocked · ✅ Done · ⛔ Retired
 
-**Last updated:** 2026-08-08 (**Session 29** — **Step S4 of 7 is DONE and its live run PASSED**:
+**Last updated:** 2026-08-08 (**Session 30, closed after an EDGE COMPATIBILITY VERIFICATION —
+INSPECTION ONLY, no code changed.** The human will demo in **Microsoft Edge**, so browser support was
+checked before the live test. **Real Edge 151.0.4129.72** was probed (Claude's own browser is
+Electron/Chromium 148, so a separate read-only probe page was used; it never called `start()` or
+`getUserMedia()`, so it covers everything **except audio**). **Verified TRUE:** the STT is the browser's
+**native Web Speech API** (`kiosk.js:464`, no library/no server STT); Edge exposes **both**
+`SpeechRecognition` and `webkitSpeechRecognition`; a recognizer **constructed** and **accepted**
+`lang='bn-BD'`, `continuous`, `interimResults`; mic permission is **`"prompt"`**, not blocked;
+`canPlayType('audio/mpeg')` = `"probably"`; **no Chrome-only APIs** in the STT path. ⚠ **API surface
+verified ≠ actual Bangla STT service verified — nothing here claims Edge STT works end-to-end**; whether
+Edge's backend transcribes `bn-BD` is **UNPROVEN** and needs a human at a real mic. **Key finding: Edge
+has NO Bengali browser TTS voice** (26 voices, 21 languages, `bnVoices: []`), which **disproves
+ADR-0050's option 3** and confirms the design — in Edge the chain falls to provider 2, so the
+**server-side TTS-2 `edge-tts` path remains the Bangla route**, same as Chrome. **ONE REAL DEFECT FOUND
+AND DELIBERATELY NOT FIXED:** `kiosk.js:499` handles only 2 of 8 Web Speech error codes, so
+`language-not-supported` (exactly what Edge emits if it rejects `bn-BD`), `network` and
+`service-not-allowed` leave `listening === true` and `kiosk.js:491` restarts forever —
+**`start → error → end → start`**, with no error shown, no switch to typing and no countdown (S5, which
+would catch it, is not built). The minimal fix (split terminal vs transient errors; `no-speech`/`aborted`
+**must** keep restarting or Chrome regresses) is **PROPOSED, NOT IMPLEMENTED** — it is the recommended
+next step. **`FLUSH_GRACE_MS = 600` on Edge is recorded as UNVERIFIED, not as a bug.** ⚠ **The human
+end-to-end test has still NOT happened** — nobody has heard TTS-1 or TTS-2, and nobody has run STT in
+Edge. **No module status and no phase changed; Alembic stays 0012; 318 tests / 1 skipped unchanged.**
+Earlier the same session — **BOTH 3.0 items are now SHIPPED: TTS-1 (ADR-0051) and
+TTS-2 (ADR-0050, moved Proposed → ACCEPTED).** TTS-2 replaced the robotic espeak-ng default with
+**edge-tts**, Microsoft's neural `bn-BD` voice. **The ADR-0049 seam held exactly as designed** — one
+`TtsProvider` subclass (`services/tts/edge.py`) + one registry entry + `.env` settings, with **no route,
+frontend, schema or Alembic change**, and MP3-instead-of-WAV needed nothing extra because the ABC already
+carries `media_type` per provider. **The inspection overturned a documented "fact":** edge-tts is
+**LGPL-3.0** (no copyleft on our code, no non-commercial clause), while `facebook/mms-tts-ben` is
+**CC-BY-NC-4.0** — so the option previously described as the safe local choice is the more restrictive
+one on licensing. ⚠ **The rule #4 cost was accepted explicitly by the human:** M7 questions are derived
+from patient speech and now go to Microsoft; what tipped it is that the Web Speech API already sends the
+patient's *actual audio* to Google. **This limits what the thesis may claim about privacy**, and
+`TTS_PROVIDER=espeak` remains the one-value private/offline escape hatch. On failure the chain falls back
+to espeak-ng (a robotic question beats a silent kiosk) and still 503s — never a silent 200 — if both fail.
+**297 → 318 tests pass, 1 skipped** (opt-in `TTS_LIVE=1` network test, which passed). Measured live:
+`bn`/`en` both `audio/mpeg` in **~0.8 s**, playback complete at **3013 ms**, and **`ttsSpeaking()` true
+throughout — S3's echo guard still holds against a NETWORK provider's latency (rule #1)**; `<audio>` was
+seen requesting **only the Bangla half**, so TTS-1 and TTS-2 compose. ⚠ **Naturalness is NOT proven** —
+that is the human's pending live listen, which will cover TTS-1 and TTS-2 together. **No module status
+and no phase changed; Alembic stays 0012; S5–S7 still NOT built.** Prior in the same session:
+**TTS-1 is FIXED and CLOSED (ADR-0051, Accepted)**, the
+first item of the 3.0 cycle. The human chose **option (a): speak only the half matching the active UI
+language**; option (b) — both halves with a pause — was rejected as ~1 s per question against ADR-0048's
+"minimize waiting" priority. Frontend only: `spokenHalf()` + a conservative `BILINGUAL_QUESTION` regex
+applied **once** inside `speak()`, and **both** providers get the split half (splitting only the browser
+path would have left the defect alive on Windows, where the server route is the ONLY Bangla path —
+ADR-0049). The patient's own 🔊 replay opts out via `verbatim`. **The stored `system` utterance, the
+on-screen bilingual bubble and the M7 prompt are all unchanged and test-pinned** — this changed what is
+SPOKEN, never what is stored or displayed. **277 → 297 tests pass, 0 skipped**; the new
+`test_tts_bilingual_split.py` extracts the shipped regex literal from the served `tts.js` and RUNS it,
+and Chrome's own engine was cross-checked case-for-case. Two pre-existing static assertions were updated
+to the new strings with their intent kept. ⚠ **Not yet HEARD by a human** — tests prove which string
+reaches each provider, not that it sounds right. **No module status and no phase changed; Alembic stays
+at 0012. TTS-2 is untouched (ADR-0050 still Proposed — provider and the rule #4 privacy trade-off
+undecided) and S5–S7 are still NOT built.** Prior: Session 29 — **Step S4 of 7 is DONE and its live run PASSED**:
 silence detection, the visible 3-2-1 confirmation countdown in both docks, barge-in cancel on every
 `onresult` tick, and a flush-before-submit so the tail Chrome had not yet finalized is not dropped
 (rule #1). Then **Bangla TTS was solved architecturally — ADR-0049**: a server-side TTS provider seam
@@ -73,10 +129,11 @@ save** (step 19, ADR-0039: `POST …/prescription` saves a `prescriptions` row +
 structurally un-AI-fillable). **S14 = step 20 (final):** 150-test gate re-confirmed; all
 `context_fixed_problem` markers flipped to ✅ (KIOSK-4/5/6/7 + MEDIC-1/2/3/5 from S11,
 DOCTOR-3/4/5/6/7 from S13); doc sweep. **150 tests pass.**
-**Module in focus (S29):** **M7 (follow-up question presentation)** — its audio half is the active work:
-Bangla is audible at last, but the voice is too robotic (TTS-2) and one question is spoken as two
-(TTS-1). Board status unchanged (M7 stays ✅ — the loop itself works; these are audio-delivery defects
-tracked in the 3.0 cycle, not module regressions). Prior note: the fix/feature build is closed AND the
+**Module in focus (S30):** **M7 (follow-up question presentation)** — its audio half was the whole
+session's work and is now **code-complete**: one question is spoken in one language (TTS-1) in a natural
+neural voice (TTS-2). What remains is **not build work** — it is the human's combined live listen. Board
+status unchanged (M7 stays ✅ — the loop itself always worked; these were audio-delivery defects tracked
+in the 3.0 cycle, not module regressions). Prior note: the fix/feature build is closed AND the
 human live-voice gate is now CLEARED. **Modules 1–14 are ✅** (as of S25, on the passed live run); **M15 stays 🟨** (future
 retrain/regression pipeline). **Next real work = the HUMAN's choice** (S26 standing note) from an
 open menu: (1) rotate the 3 API keys before any public demo (`human_live_run_guide.md` PART 3,

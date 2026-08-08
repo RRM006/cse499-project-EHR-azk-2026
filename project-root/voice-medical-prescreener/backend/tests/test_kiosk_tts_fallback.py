@@ -82,7 +82,9 @@ def test_the_server_is_only_used_when_it_can_actually_speak():
     js = tts_js()
     assert "if (_serverTts) {" in js
     assert "/api/tts?lang=" in js
-    assert "encodeURIComponent(text)" in js   # Bangla + '&' safe in the query
+    # Bangla + '&' safe in the query. TTS-1 made the argument the SPLIT half (`speech`)
+    # rather than the raw bilingual string — see test_tts_bilingual_split.py.
+    assert "encodeURIComponent(speech)" in js
 
 
 def test_nothing_available_returns_false_instead_of_faking_audio():

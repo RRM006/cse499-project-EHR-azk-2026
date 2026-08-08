@@ -36,9 +36,11 @@ def test_every_question_the_patient_must_answer_goes_through_askaloud():
 
 def test_replaying_an_old_bubble_does_not_open_the_microphone():
     """The per-message 🔊 button is for review — it must stay plain speak(), never
-    askAloud(). (ADR-0049 added an explicit replay language; the rule is unchanged.)"""
+    askAloud(). (ADR-0049 added an explicit replay language and TTS-1 added the
+    `verbatim` opt-out for patient bubbles; the rule itself is unchanged.)"""
     js = kiosk_js()
-    assert "speakBtn.onclick = () => speak(body.textContent, { lang: replayLang });" in js
+    assert "speakBtn.onclick = () =>" in js
+    assert "speak(body.textContent, { lang: replayLang" in js
     assert "askAloud(body.textContent" not in js
 
 

@@ -23,6 +23,40 @@ rewritten around a provider chain (browser voice → `/api/tts` → `false`) + `
 That single line is the root cause of the TTS-1 "two questions, no gap" defect, and
 `followup.py:145` is where that same string is stored verbatim as a `system` utterance (so a TTS-only
 fix must not touch either). Also: `agent_docs/context fixed problem 3.0.md` is now 🟢 OPEN with TTS-1/TTS-2.
+**2026-08-08, Session 30 (part 3) — Edge compatibility verification: NO FILES ADDED, MOVED OR CHANGED.**
+Inspection only. The map-relevant output is three **POINTERS** for the next session:
+- **`frontend/kiosk.js:499`** — `r.onerror`, which handles only `not-allowed` / `audio-capture`. This is
+  **the single place the proposed Edge terminal-error fix touches** (`language-not-supported`,
+  `network`, `service-not-allowed`). **NOT IMPLEMENTED.**
+- **`frontend/kiosk.js:491`** — `r.onend`'s `if (listening) r.start()`, the other half of the infinite
+  `start → error → end → start` loop. Nothing here changes; it stops looping once `onerror` calls
+  `stopListening(false)`.
+- **`frontend/kiosk.js:372`** — `FLUSH_GRACE_MS = 600`, Chrome-calibrated by its own comment.
+  **UNVERIFIED on Edge — a suspicion, not a bug.** Do not change it blindly.
+Also noted, deliberately NOT edited: **`agent_docs/human_live_run_guide.md:19`** ("use Chrome, not
+Edge") and **`:72`** (the now-disproven "Edge may expose `bn-BD` voices") are both stale.
+Prior: **2026-08-08, Session 30 (part 2) — TTS-2 shipped (ADR-0050 Accepted): the natural neural Bangla voice.**
+**NEW FILE `backend/app/services/tts/edge.py`** — `EdgeTtsProvider` (Microsoft neural `bn-BD` via
+edge-tts; `media_type = "audio/mpeg"`, i.e. MP3 not WAV). `service.py` rewritten around a
+**`PROVIDER_FACTORIES`** registry (`espeak` | `edge`) + **`get_fallback_provider()`** and a fallback
+chain in `synthesize()` (primary → espeak-ng → raise). `base.py` gained **`MAX_TEXT_CHARS`** (moved out
+of `espeak.py`, which now re-exports it) and **`TtsProvider.available()`** (default True; espeak
+overrides it via `resolve_binary`); `routes_tts.py` now imports the cap from `base`. `core/config.py`:
+`TTS_PROVIDERS += "edge"`, **`tts_provider` default flipped `espeak` → `edge`**, plus
+`tts_edge_voice_bn` / `tts_edge_voice_en` / `tts_edge_rate` / `tts_edge_timeout_s` /
+`tts_local_fallback`. `requirements.txt` += **`edge-tts==7.2.8`** (LGPL-3.0; pulls aiohttp).
+`.env.example` documents all three providers + the privacy warning. New test file
+`backend/tests/test_tts_edge_provider.py` (21, offline by default; `TTS_LIVE=1` opts into the network)
+→ suite **318, 1 skipped**. **No route, frontend, schema or Alembic change — the ADR-0049 seam held.**
+Prior: **2026-08-08, Session 30 (part 1) — TTS-1 fixed (ADR-0051), no files added or moved except one test.**
+`frontend_shared/tts.js` gains the `BILINGUAL_QUESTION` regex constant + **`spokenHalf(text, short)`**,
+applied ONCE inside `speak()` (`const speech = verbatim ? text : spokenHalf(text, short);`) so BOTH
+providers — `new SpeechSynthesisUtterance(speech)` and `encodeURIComponent(speech)` — receive the same
+split half; `speak()` gains a **`verbatim`** option. `frontend/kiosk.js` changes ONE call site: the
+per-bubble 🔊 passes `verbatim: role === 'patient'`. **Neither `followup.py` line above was touched** —
+the stored `system` utterance and the on-screen bubble keep the full bilingual string. New test file
+`backend/tests/test_tts_bilingual_split.py` (20) → suite **297**. Two pre-existing static assertions in
+`test_kiosk_auto_listen.py` / `test_kiosk_tts_fallback.py` updated to the new strings.
 Prior: 2026-07-11, Session 24 — **P4-1 real OTP (ADR-0045): new package
 `backend/app/services/otp/`** — `base.py` (`OtpSender` ABC + `OtpSendError`), `dev_log.py`
 (`DevLogSender`: code → server log via `uvicorn.error`), `textbee.py` (`TextBeeSender`: real SMS
@@ -193,7 +227,12 @@ voice-medical-prescreener/
 │                                  #   test_migration_0011 (S23) · test_doctor_sees_medic_edits (S23, P3-2) ·
 │                                  #   test_assistant (S23, M16) · test_otp (S24, 13: hash-only + expiry +
 │                                  #   single-use + bypass matrix + lockout + throttle + sender seam) ·
-│                                  #   test_migration_0012 (S24)  (192 total)
+│                                  #   test_migration_0012 (S24) ·
+│                                  #   test_kiosk_config / test_kiosk_input_modes / test_kiosk_auto_listen /
+│                                  #   test_kiosk_countdown / test_answer_raw_text_guard (S28-S29, Req 3 S1-S4) ·
+│                                  #   test_tts_provider + test_kiosk_tts_fallback (S29, ADR-0049 seam) ·
+│                                  #   test_tts_bilingual_split (S30, ADR-0051: runs the shipped
+│                                  #   BILINGUAL_QUESTION regex extracted from the served tts.js)  (297 total)
 ├── frontend/                     # patient side (served at /)
 │   ├── index.html                # NEW (S9): landing page linking the 4 entry points (ADR-0031)
 │   ├── kiosk.html · kiosk.js     # patient kiosk (at /kiosk.html): phone→OTP (auto-advance/Backspace/paste, S10

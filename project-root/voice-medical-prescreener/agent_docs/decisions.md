@@ -1060,7 +1060,121 @@
 - ⚠ **Overlaps faculty Requirement 2** (quantized on-device Bangla STT/TTS), which is the principled
   long-term answer and now has a seam waiting for it. Next session must decide whether this is a 3.0
   quick win (edge-tts) or folds into Req 2.
-- Status: **Proposed — needs the human's provider choice and an explicit privacy decision before any
-  code.** Nothing implemented. ADR-0049 remains **Accepted** (its seam, its 503-not-silence contract,
-  its `ttsSpeaking()` echo guard and its static-asset `no-cache` fix all stand); only its default
-  provider is superseded once this ADR is accepted.
+- Status: ~~Proposed~~ → **ACCEPTED and IMPLEMENTED (S30, 2026-08-08).** ADR-0049 remains **Accepted**
+  (its seam, its 503-not-silence contract, its `ttsSpeaking()` echo guard and its static-asset
+  `no-cache` fix all stand); only its default provider is superseded.
+
+### S30 resolution — the human chose **edge-tts**, and a **local fallback**
+- **⚠ One fact above was WRONG and it changed the comparison.** This ADR framed edge-tts's cost as a
+  *"binary `aiohttp` dependency"* and never checked its license. Verified in S30 from PyPI metadata:
+  **edge-tts 7.2.8 is LGPL-3.0** — used as an ordinary pip-installed library that imposes **no
+  copyleft on this project's own code and carries no non-commercial clause**. Meanwhile
+  `facebook/mms-tts-ben` is **CC-BY-NC-4.0** (confirmed on the HF model card): non-commercial only,
+  which bars a real clinic deployment. **On licensing, the option this ADR described as the safe local
+  choice is the more restrictive one.** Also: `requirements.txt` already ships a binary dependency
+  (`ddgs` → `primp`, documented in the file), so "all pure-Python wheels" was already qualified and
+  `aiohttp` breaks no property that was still intact.
+- **Provider decision: `edge` (Microsoft neural `bn-BD`) is now the DEFAULT**, with espeak-ng
+  **demoted, not deleted** — still selectable via `TTS_PROVIDER=espeak` and still the automatic
+  fallback. Rejected: `facebook/mms-tts-ben` (CC-BY-NC-4.0 + torch/transformers ≈ 2–3 GB on two
+  CPU-only boxes) and gTTS (MIT and pure-Python, but an unofficial endpoint and the same privacy cost
+  for a less natural voice).
+- **⚠ RULE #4 DECISION, MADE EXPLICITLY BY THE HUMAN — this is the part that matters for the thesis.**
+  M7 questions are **derived from what the patient said**, and this provider **sends that text to
+  Microsoft**. That cost was accepted knowingly for a research prototype running on synthetic data.
+  The reasoning that tipped it: the system **already** sends the patient's *actual audio* to Google via
+  the Web Speech API (rule #4 says so itself), so this adds a second processor of **strictly less
+  sensitive, derived text** rather than crossing a new boundary. **It still limits what the thesis may
+  claim about privacy, and that claim must be written accordingly.** A deployment that cannot accept it
+  has a one-value escape hatch: `TTS_PROVIDER=espeak`.
+- **Failure behaviour (also the human's choice): fall back to espeak-ng, don't go silent.** A network
+  voice can fail at the worst moment, and for a clinic kiosk a robotic question beats a silent one. The
+  chain is primary → local → `TtsUnavailable`. If BOTH fail the error **names both providers** (a clinic
+  debugging silence must not be told only about the fallback), the route still returns **503, never a
+  silent 200**, and the fallback is logged at **WARNING** — a clinic quietly running on the robotic
+  voice for a week is exactly the silent degradation this project keeps refusing to ship.
+  `TTS_LOCAL_FALLBACK=false` restores ADR-0049's original bare-503 contract.
+- **The seam held.** Adding the provider was one `TtsProvider` subclass (`services/tts/edge.py`) + one
+  `PROVIDER_FACTORIES` entry + `.env` settings — **no route change, no frontend change, no schema
+  change, no Alembic migration.** Microsoft returns **MP3, not WAV**, and that needed nothing extra
+  because the ABC already carries `media_type` per provider through to the `Response`, and `<audio>`
+  plays MP3 natively. Two small generalisations were needed and are worth noting: `MAX_TEXT_CHARS`
+  moved from `espeak.py` to `base.py` (it is the *endpoint's* contract — importing it from a specific
+  engine made a local binary's constant the API's limit by accident), and availability became
+  `TtsProvider.available()` (default True) instead of a duck-typed `resolve_binary` probe, because
+  "is the engine present?" is only answerable for a *local* engine. `available()` deliberately does
+  **not** touch the network: it runs on every kiosk page load.
+- Verified in S30: **318 tests pass, 1 skipped** (was 297). The new `test_tts_edge_provider.py` (21) is
+  **offline by default** — every network call is monkeypatched, because a suite that needs the internet
+  fails in a lab with no wifi; the single real network test is opt-in via `TTS_LIVE=1` and passed.
+  Live through the running server: `bn` and `en` both return `audio/mpeg` in **~0.8 s**, playback
+  completed at **3013 ms**, and `ttsSpeaking()` was **true throughout** — so the S3 echo guard still
+  holds against the new provider's network latency (rule #1). The `<audio>` element was observed
+  requesting **only the Bangla half** (`/api/tts?lang=bn&text=আপনার জ্বর কত দিন ধরে?`), i.e. ADR-0051
+  and this ADR compose correctly.
+- ⚠ **Still unproven: naturalness.** Bytes, MIME type, latency and completed playback are measured;
+  whether the voice sounds human to a Bangladeshi patient is the human's live listen, still pending.
+- Faculty **Requirement 2** (quantized on-device Bangla STT/TTS) is unchanged and still the principled
+  long-term answer; `facebook/mms-tts-ben` remains its natural candidate, and it now drops into this
+  same seam as one more subclass.
+
+#### Amendment (S30, later the same day) — **option 3 is now DISPROVEN, and it strengthens this ADR**
+Option 3 above ("Microsoft Edge as the kiosk browser — may expose Microsoft's online `bn-BD` voices
+with zero code; **unverified**") was tested against **real Microsoft Edge 151.0.4129.72** and is
+**FALSE**. Edge exposes **26 voices across 21 languages and NOT ONE Bengali voice** (`bnVoices: []`;
+languages present: de, en×5, es×2, fr×2, it, ja, ko, nl, pl, pt-BR, ru, tr, zh×3). Microsoft's
+**browser** ships no Bengali voice even though Microsoft's **edge-tts service** — which this ADR's
+chosen provider calls — has `bn-BD-NabanitaNeural` and `bn-BD-PradeepNeural`. Same vendor, different
+surface. **Consequence:** in Edge, `_pickVoice('bn')` returns null and the ADR-0049 chain falls through
+to provider 2, so **the server-side `edge-tts` provider is the Bangla route in Edge exactly as it is in
+Chrome** — there is no browser-dependent divergence to design around, and "switch the clinic to Edge"
+was never a real alternative to this ADR. Edge also reports `canPlayType('audio/mpeg') = "probably"`,
+so it plays this provider's MP3 output. Recorded in `test_log.md` (2026-08-08, Edge compatibility
+probe). ⚠ This amendment concerns **TTS only**; whether Edge's **STT** backend supports `bn-BD` is a
+separate, still-**unproven** question tracked in `current_task.md`.
+
+## ADR-0051 — 2026-08-08 — TTS-1: speak ONE language (the active UI language), display BOTH
+- Context: the S29 live listen reported *"there are no gap when tts Bangla and English hear . some
+  time 2 question hear at a same time this is confusing"*. **Root-caused, not guessed:** the M7 prompt
+  in `backend/app/services/followup.py` asks the model for
+  `"question": "<Bangla question> (<English question>)"`, so **every question is a SINGLE string
+  containing both languages**. A synthesizer reads it in one breath. This is not an overlap bug and not
+  caused by ADR-0049 — it has existed since S25; espeak-ng merely exposed it, because `-v bn` also
+  applies Bengali phonetics to the English half.
+- Decision (**the human chose option (a)**): **speech gets only the half matching the active UI
+  language.** Option (b) — both halves separated by a real pause — was rejected: it adds ~1 s per
+  question, and the target user is elderly or non-technical, so it works against ADR-0048's explicit
+  "minimize clicks, waiting and complexity" priority.
+- **The fix is TTS-ONLY, and that boundary is the point of this ADR.** The stored `system` utterance
+  and the on-screen bubble keep the **full bilingual string, unchanged**: `followup.py` stores
+  `question_text` verbatim, and ADR-0028 makes the on-screen text the fallback for anyone who cannot
+  hear the audio — so it must never shrink to whatever happened to be spoken. `followup.py` itself was
+  deliberately NOT touched; returning the halves as separate server fields would change the M7 contract
+  and what the medic/doctor portals display — a much larger change nobody asked for.
+- Implementation, and why it is shaped this way:
+  1. **One entry point.** `spokenHalf(text, short)` is applied inside `speak()` in
+     `frontend_shared/tts.js`, not in `askAloud()`. Doing it at the call site would have missed the
+     resume-question path and the assistant replay button.
+  2. **Both providers get the split half** — `new SpeechSynthesisUtterance(speech)` AND
+     `encodeURIComponent(speech)`. Splitting only the browser path would leave the defect fully alive
+     on Windows, where the server path is the ONLY Bangla route (ADR-0049).
+  3. **Conservative pattern, deliberately.** It matches only a Bangla-script head followed by a
+     TRAILING parenthesised Latin-script tail. A monolingual parenthetical ("fever (above 100F)"), a
+     Bangla parenthetical, nested parentheses, or a `(...)` that is not at the very end all fail to
+     match and are spoken **whole**. The failure mode of a splitter is speaking LESS than the question,
+     so when it is unsure it loses seconds, never words.
+  4. **`verbatim: true` opts out**, and the per-bubble 🔊 on a PATIENT bubble uses it: those are the
+     patient's own captured words, and reading back only part of what someone said would be a rule #1
+     defect in spirit, even though nothing stored changes.
+- Consequences: the patient hears a shorter, single-language question; the screen still shows both
+  languages, so a bilingual reader loses nothing and the cannot-hear-the-audio fallback is intact. A
+  question the pattern cannot confidently split is spoken exactly as before — the old behaviour is the
+  safe default, not an error state.
+- Verification: **297 tests pass, 0 skipped** (was 277). `backend/tests/test_tts_bilingual_split.py`
+  (20 tests) **extracts the shipped regex literal from the served `tts.js` and runs it**, so the rule is
+  exercised rather than asserted about, and separately pins that the stored text, the on-screen bubble
+  and the M7 prompt are unchanged. Cross-checked in a real JS engine: Chrome's own `spokenHalf` agrees
+  case-for-case on 8 inputs, and `/api/tts` was observed receiving only the Bangla half.
+- Status: **Accepted (code shipped). ⚠ The human has NOT yet heard it** — the tests prove which string
+  reaches each provider, not that it sounds right. Independent of ADR-0050 (TTS-2, voice naturalness),
+  which remains **Proposed** and unstarted.

@@ -19,7 +19,9 @@ import subprocess
 import tempfile
 from pathlib import Path
 
-from .base import TtsProvider, TtsUnavailable
+from .base import MAX_TEXT_CHARS, TtsProvider, TtsUnavailable
+
+__all__ = ["EspeakNgProvider", "MAX_TEXT_CHARS", "WELL_KNOWN_BINARIES"]
 
 # Where the official installers put it, checked after PATH. The Windows MSI updates the
 # MACHINE PATH, which processes started before the install do not see — so a clinic that
@@ -31,9 +33,8 @@ WELL_KNOWN_BINARIES = (
     "/usr/local/bin/espeak-ng",
 )
 
-# A single question, not an audiobook. The endpoint is unauthenticated, so this also
-# bounds how much CPU one caller can ask for.
-MAX_TEXT_CHARS = 600
+# MAX_TEXT_CHARS now lives in base.py (it is the endpoint's contract, not espeak's) and
+# is re-exported above so existing importers keep working.
 # espeak-ng renders far faster than real time; this only catches a hung process.
 RENDER_TIMEOUT_S = 20
 
@@ -67,6 +68,10 @@ class EspeakNgProvider(TtsProvider):
         if found:
             return found
         return next((p for p in WELL_KNOWN_BINARIES if Path(p).is_file()), None)
+
+    def available(self) -> bool:
+        """The engine is a local binary, so presence IS knowable without synthesizing."""
+        return self.resolve_binary() is not None
 
     def synthesize(self, text: str, lang: str) -> bytes:
         if not text or not text.strip():

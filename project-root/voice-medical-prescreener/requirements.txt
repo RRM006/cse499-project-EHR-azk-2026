@@ -14,6 +14,12 @@ ddgs==9.14.4              # P3-3 free no-key DuckDuckGo web search for the M16 d
                           # (dep 'primp' ships binary wheels for Windows x64 + manylinux — both dev boxes OK)
 httpx==0.28.1             # P4-1 TextBee OTP sender HTTP calls (was already installed transitively
                           # via the openai client — pinned here because it is now a direct dependency)
+edge-tts==7.2.8           # TTS-2/ADR-0050: natural Microsoft neural bn-BD voice for M7 audio.
+                          # LGPL-3.0 (library use only — no copyleft on this project's code, no
+                          # non-commercial clause). Pulls aiohttp, which ships binary wheels for
+                          # Windows x64 + manylinux — both dev boxes OK, same situation as ddgs/primp.
+                          # ⚠ Sends the question text to Microsoft — a deliberate rule #4 trade-off
+                          # (ADR-0050). Set TTS_PROVIDER=espeak for a fully offline/local voice.
 
 # --- dev / test ---
 pytest==8.3.4             # raw-immutability guard + future tests

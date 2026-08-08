@@ -20,7 +20,9 @@ from fastapi.testclient import TestClient
 from backend.app.core.config import Settings, get_settings
 from backend.app.main import app
 from backend.app.services.tts import TtsUnavailable, server_tts_available, synthesize
-from backend.app.services.tts.espeak import MAX_TEXT_CHARS, EspeakNgProvider
+from backend.app.services.tts.base import MAX_TEXT_CHARS
+from backend.app.services.tts.edge import EdgeTtsProvider
+from backend.app.services.tts.espeak import EspeakNgProvider
 from backend.app.services.tts.service import get_provider
 
 client = TestClient(app)
@@ -44,8 +46,17 @@ def _use(monkeypatch, **env):
 
 # --------------------------- provider selection ---------------------------
 
-def test_espeak_is_the_default_provider():
-    assert Settings().resolved_tts_provider == "espeak"
+def test_edge_is_the_default_provider_since_adr_0050():
+    """TTS-2: naturalness was the whole point, so the neural voice is the default and
+    espeak-ng became the offline/private option + the automatic fallback."""
+    assert Settings().resolved_tts_provider == "edge"
+    assert isinstance(get_provider(), EdgeTtsProvider)
+
+
+def test_espeak_is_still_selectable_for_an_offline_or_private_deployment(monkeypatch):
+    """ADR-0050 DEMOTED espeak-ng; it must not have been deleted — it is the only
+    provider that keeps patient-derived question text on the machine (rule #4)."""
+    _use(monkeypatch, tts_provider="espeak")
     assert isinstance(get_provider(), EspeakNgProvider)
 
 
@@ -167,10 +178,15 @@ def _engine_installed() -> bool:
     return EspeakNgProvider().resolve_binary() is not None
 
 
+# ADR-0050 note: these pin espeak-ng EXPLICITLY. They used to rely on it being the
+# default; now that `edge` is, an unpinned call would go to the network and return MP3.
+# Keeping them espeak-specific is the point — this is the offline path's own proof.
+
 @pytest.mark.skipif(not _engine_installed(), reason="espeak-ng is not installed here")
-def test_bangla_renders_a_valid_non_empty_wav():
+def test_bangla_renders_a_valid_non_empty_wav(monkeypatch):
     """Runs only where the engine exists. Proves the bytes are a real RIFF/WAVE with a
     non-zero duration — it does NOT prove the Bangla is intelligible."""
+    _use(monkeypatch, tts_provider="espeak")
     audio, media_type = synthesize(BANGLA_QUESTION, "bn")
     assert media_type == "audio/wav"
     assert audio.startswith(b"RIFF")
@@ -179,13 +195,15 @@ def test_bangla_renders_a_valid_non_empty_wav():
 
 
 @pytest.mark.skipif(not _engine_installed(), reason="espeak-ng is not installed here")
-def test_english_renders_too_so_the_en_ui_keeps_audio():
+def test_english_renders_too_so_the_en_ui_keeps_audio(monkeypatch):
+    _use(monkeypatch, tts_provider="espeak")
     audio, _ = synthesize("How long have you had this problem?", "en")
     assert audio.startswith(b"RIFF") and len(audio) > 1000
 
 
 @pytest.mark.skipif(not _engine_installed(), reason="espeak-ng is not installed here")
-def test_the_endpoint_serves_playable_audio_with_a_private_cache():
+def test_the_endpoint_serves_playable_audio_with_a_private_cache(monkeypatch):
+    _use(monkeypatch, tts_provider="espeak")
     resp = client.get("/api/tts", params={"text": BANGLA_QUESTION, "lang": "bn"})
     assert resp.status_code == 200
     assert resp.headers["content-type"].startswith("audio/")

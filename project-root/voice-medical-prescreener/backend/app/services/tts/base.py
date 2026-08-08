@@ -19,6 +19,13 @@ from __future__ import annotations
 
 from abc import ABC, abstractmethod
 
+# A single question, not an audiobook. `/api/tts` is unauthenticated, so this also
+# bounds how much work one caller can ask for. It lives HERE, not in a provider
+# module, because the cap is a property of the endpoint's contract — every provider
+# and the route itself must agree on it (ADR-0050: it used to be imported from
+# espeak.py, which made a local engine's constant the API's limit by accident).
+MAX_TEXT_CHARS = 600
+
 
 class TtsUnavailable(RuntimeError):
     """No audio could be produced (engine missing, unsupported language, crash).
@@ -33,6 +40,15 @@ class TtsProvider(ABC):
     name: str = "abstract"
     #: MIME type of the bytes `synthesize` returns.
     media_type: str = "audio/wav"
+
+    def available(self) -> bool:
+        """Cheap, NON-network check that this provider could plausibly work.
+
+        Called on every page load via GET /api/config, so it must never synthesize
+        and never make a request. A provider that cannot know without trying (any
+        network provider) should report True and fail loudly at synthesize() time.
+        """
+        return True
 
     @abstractmethod
     def synthesize(self, text: str, lang: str) -> bytes:

@@ -24,7 +24,7 @@ VOICE_LOOP_MODES = ("auto", "manual")
 # Server-side TTS providers (services/tts). "browser" = no server provider at all, the
 # pre-existing ADR-0027 behaviour; "espeak" = local espeak-ng, which is the same engine
 # ADR-0040 already accepted for Bangla on Arch.
-TTS_PROVIDERS = ("browser", "espeak")
+TTS_PROVIDERS = ("browser", "espeak", "edge")
 
 
 class Settings(BaseSettings):
@@ -113,14 +113,32 @@ class Settings(BaseSettings):
     # browser has no bn* voice of its own:
     #   browser — none; behave exactly as before (text stays the fallback, ADR-0028).
     #   espeak  — local espeak-ng, offline, no key, no patient text leaves the machine.
-    # Leave tts_espeak_path empty to find espeak-ng on PATH.
-    tts_provider: str = "espeak"
+    #             Robotic (formant synthesis) — rejected on quality in the S29 live listen.
+    #   edge    — Microsoft neural bn-BD via edge-tts. Natural, free, no key. ⚠ sends the
+    #             question text to Microsoft (ADR-0050, an explicit rule #4 decision).
+    # DEFAULT = edge: naturalness was the whole point of TTS-2, and tts_local_fallback
+    # below means a kiosk with no internet still speaks (robotically) rather than falling
+    # silent. Set TTS_PROVIDER=espeak for a fully offline/private demo.
+    tts_provider: str = "edge"
     tts_espeak_path: str = ""
     # espeak-ng voice per UI language. Bangla is what this whole seam exists for.
     tts_voice_bn: str = "bn"
     tts_voice_en: str = "en-us"
     # Words per minute. espeak's default (175) is too fast for an unwell patient.
     tts_speed_wpm: int = 140
+    # edge-tts voices. bn-BD-NabanitaNeural (female) / bn-BD-PradeepNeural (male) are the
+    # two Bangladeshi voices; bn-IN-* exist but are Indian Bengali, a different accent.
+    tts_edge_voice_bn: str = "bn-BD-NabanitaNeural"
+    tts_edge_voice_en: str = "en-US-AriaNeural"
+    # Speaking rate as a percentage offset. Slightly slow: the patient may be unwell,
+    # elderly, or hearing the question for the first time.
+    tts_edge_rate: str = "-10%"
+    # Give up on the network and fall back to the local engine after this long.
+    tts_edge_timeout_s: int = 12
+    # When the configured provider fails (no internet, service down), render with local
+    # espeak-ng instead of returning nothing. A robotic question beats a silent kiosk.
+    # Set false to keep ADR-0049's original behaviour: any failure is a bare 503.
+    tts_local_fallback: bool = True
 
     # --- patient identification (kiosk phone + OTP; ADR-0030 + P4-1 ADR-0045) ---
     # OTP_CHANNEL picks the delivery seam (services/otp):

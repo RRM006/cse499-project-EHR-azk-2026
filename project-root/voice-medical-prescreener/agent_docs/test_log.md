@@ -72,6 +72,104 @@ transcribed by hand (the "ground truth"). Record the model + machine each time.
 
 ## Test entries (newest first)
 
+## 2026-08-08 — Session 30 — Module 1/7 — **Microsoft Edge 151 compatibility probe (non-audio)**
+- Setup: **real Microsoft Edge 151.0.4129.72** on Windows 11, launched at a throwaway local probe page
+  (`http://127.0.0.1:8799/`, read-only, server exited afterwards). Claude's own browser tools drive
+  Electron/**Chromium 148**, not Edge, which is why a separate probe was needed. The probe deliberately
+  did **NOT** call `recognition.start()` or `getUserMedia()` — either pops a permission dialog on the
+  human's desktop unprompted — so it measures **API surface + capability only, never audio**.
+- Metric(s): presence/type of the Web Speech constructors; whether the recognizer accepts this
+  project's exact config; `speechSynthesis` voice inventory; microphone permission state; media
+  `canPlayType`; secure-context status.
+- Result:
+  * `SpeechRecognition` = **function**, `webkitSpeechRecognition` = **function** (both present).
+  * Recognizer **constructed**; accepted `lang='bn-BD'`, `continuous=true`, `interimResults=true`.
+  * `speechSynthesis`: **26 voices across 21 languages**, **`bnVoices: []` — NO Bengali voice.**
+    Languages present: de, en(AU/CA/GB/IN/US), es(ES/MX), fr(CA/FR), it, ja, ko, nl, pl, pt-BR, ru, tr,
+    zh(CN/HK/TW).
+  * `navigator.permissions.query({name:'microphone'})` → **`"prompt"`** (not blocked/denied).
+  * `canPlayType('audio/mpeg')` → **`"probably"`**; `audio/wav` → `"maybe"` (normal without a codecs
+    parameter).
+  * `isSecureContext` → **true** on `127.0.0.1`.
+  * For contrast, the Chromium 148 browser on the same machine: **3 voices, all `en-US`, no `bn`** —
+    consistent with ADR-0049's finding that Windows registers no Bengali TTS voice (registry check:
+    only David/Zira/Mark, all en-US, in both the classic and `Speech_OneCore` hives).
+- Notes / interpretation — **read this before quoting the result:**
+  * ⚠ **API surface verified ≠ Bangla STT service verified.** Edge accepting the string `'bn-BD'`
+    proves the property setter took it, nothing more. Whether Edge's speech **backend transcribes
+    Bangla** is **UNPROVEN** and requires a human speaking into a real microphone. **This entry does
+    NOT establish that Edge STT works end-to-end.**
+  * The empty Bengali voice list **disproves ADR-0050's option 3** and confirms the TTS-2 design: in
+    Edge the browser path cannot speak Bangla, so the chain falls to the **server-side `edge-tts`
+    provider** — the same route as Chrome.
+  * This probe also surfaced a **real code defect by inspection** (not by measurement): `kiosk.js:499`
+    handles only 2 of 8 Web Speech error codes, so `language-not-supported` / `network` /
+    `service-not-allowed` leave `listening === true` and `kiosk.js:491` restarts forever. **Not fixed —
+    proposed only.** See `current_task.md`.
+  * **`FLUSH_GRACE_MS = 600` on Edge is UNVERIFIED**, recorded as a suspicion and **not** as a bug: it
+    is Chrome-calibrated, and whether Edge's finalisation is slower cannot be measured without audio.
+  * **No test suite run was required for this entry** — nothing executable changed; the 318/1 baseline
+    from the TTS-2 entry below still stands.
+
+## 2026-08-08 — Session 30 — Module 7 (TTS-2, ADR-0050 edge-tts): suite 297 → 318, live latency measured
+- Setup: Python 3.13.3 on Windows; `pytest backend/tests/` with `PYTHONIOENCODING=utf-8`. New dep
+  `edge-tts==7.2.8` (LGPL-3.0). Live checks against a real uvicorn on port 8001 in the in-app Chrome.
+  No DB writes, no schema change (**Alembic stays 0012**).
+- Metric(s): test pass/fail; audio bytes + MIME type + wall-clock latency per language; whether the S3
+  echo guard still holds while a NETWORK provider is in flight (rule #1); which text reaches the wire.
+- Result:
+  * **318 passed, 1 skipped** (was 297). New `test_tts_edge_provider.py` = **21 tests**, offline by
+    default; the 1 skip is the opt-in network test.
+  * **Opt-in live test** (`TTS_LIVE=1`) **passed** — real MP3 frame header, > 5 KB.
+  * **Direct provider latency:** `bn` **1.48 s / 20,016 bytes**, `en` **0.85 s / 17,424 bytes**, both
+    `audio/mpeg`. Bengali voices available from Microsoft: `bn-BD-NabanitaNeural`,
+    `bn-BD-PradeepNeural`, `bn-IN-BashkarNeural`, `bn-IN-TanishaaNeural` (bn-BD is the configured default).
+  * **Through the HTTP stack** (cache bypassed): `bn` **899 ms / 766 ms**, `en` **720 ms**, all
+    `audio/mpeg` → i.e. the neural provider, not the fallback.
+  * **Echo guard (rule #1) still holds:** `speak()` → `onend` at **3013 ms**, and `ttsSpeaking()` was
+    **true at 200 / 600 / 1200 / 2000 ms** — the mic cannot open during the ~0.8 s network wait or the
+    playback. This was the main regression risk of introducing a network provider.
+  * **TTS-1 + TTS-2 compose:** the `<audio>` element requested
+    `/api/tts?lang=bn&text=আপনার জ্বর কত দিন ধরে?` — **the Bangla half only**, no English in the URL.
+  * **Fallback chain** (unit-tested, monkeypatched): edge failure → espeak WAV; both failing → error
+    naming **both** providers → **503**, never a silent 200; `TTS_LOCAL_FALLBACK=false` → bare 503.
+  * **Non-regression:** full suite green, including all S1–S4 (auto-listen, countdown, input modes,
+    raw_text guard) and the TTS-1 split tests.
+- Notes: a 124 ms WAV response during live checking looked like an unwanted espeak fallback but was the
+  **browser cache** (`private, max-age=300`) from the earlier TTS-1 verification — re-fetched with
+  `cache: 'no-store'` it was `audio/mpeg`. Three espeak-specific tests were updated to pin
+  `TTS_PROVIDER=espeak`; they had relied on espeak being the default and would otherwise have asserted
+  `RIFF` against MP3. ⚠ **None of this measures NATURALNESS.** Bytes, MIME, latency and completed
+  playback are proven; whether the Bangla sounds human — the entire point of TTS-2 — is answerable only
+  by the human's live listen, still pending, and must not be described as validated until then.
+
+## 2026-08-08 — Session 30 — Module 7 (TTS-1 bilingual split): suite 277 → 297, plus a real-JS-engine cross-check
+- Setup: Python 3.13.3 on Windows; `pytest backend/tests/` with `PYTHONIOENCODING=utf-8`. No DB writes,
+  no network, no LLM — the change is frontend-only. Browser checks in the in-app Chrome against a real
+  uvicorn on port 8001.
+- Metric(s): test pass/fail; which exact string reaches each TTS provider; rule #1 / ADR-0028
+  preservation (stored + displayed text unchanged).
+- Result:
+  * **297 passed, 0 skipped** (was 277). New `test_tts_bilingual_split.py` = **20 tests**.
+  * **Split rule, exercised not asserted:** the tests extract the shipped `BILINGUAL_QUESTION` regex
+    literal out of the served `/shared/tts.js` and run it. `"আপনার জ্বর কত দিন ধরে? (How many days have
+    you had the fever?)"` → **bn half only** / **en half only**, with the other language absent.
+  * **Fail-safe cases all spoken WHOLE** (4/4): a monolingual English parenthetical, a `(...)` not at
+    the end, a Bangla parenthetical, and nested parentheses.
+  * **Real JS engine cross-check** (the pytest tests use Python's `re`): Chrome's own `spokenHalf`
+    agreed with all **8** cases, case-for-case.
+  * **End-to-end on the server path:** with `serverTts` on and the UI in Bangla, `/api/tts` was called
+    with `lang=bn` and `text=আপনার জ্বর কত দিন ধরে?` — English half absent. **0 console errors.**
+  * **Non-regression:** all **85** tests across the S1–S4 + TTS-seam files pass
+    (`test_kiosk_config` / `test_kiosk_input_modes` / `test_kiosk_auto_listen` / `test_kiosk_countdown` /
+    `test_answer_raw_text_guard` / `test_tts_provider` / `test_kiosk_tts_fallback`).
+- Notes: two pre-existing static-source assertions failed on the first full run because they pinned the
+  exact strings the fix changed (`encodeURIComponent(text)`, the replay-button one-liner); both were
+  updated to the new wiring with their original intent still asserted. ⚠ **This is not an audio-quality
+  measurement.** It proves which string reaches each provider — not that a patient hears one coherent
+  question, and not that the voice sounds acceptable (that is TTS-2, untouched). The human's live listen
+  is still pending.
+
 ## 2026-07-12 — Session 25 — HUMAN LIVE REAL-MIC RUN: TC-V1/V2/V3/F2/R1 all PASS (Windows 11)
 - Setup: **Human-driven live run** (the one thing that can't be automated). Windows 11, Google
   Chrome, real microphone, real dev server on port 8001 (real SQLite DB, Alembic head 0012).

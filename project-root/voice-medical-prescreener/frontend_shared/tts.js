@@ -101,6 +101,33 @@ function _uiLang() {
   }
 }
 
+/* TTS-1 (3.0 cycle). M7 returns every question as ONE bilingual string —
+   `"<Bangla question> (<English question>)"` — because the prompt in
+   services/followup.py asks the model for exactly that shape. Handed to a synthesizer
+   whole, it is read Bangla-then-English in a single breath, which the patient hears as
+   TWO questions with no gap between them.
+
+   So SPEECH gets only the half matching the UI language (the human's decision (a):
+   fewer seconds, less confusion). The stored `system` utterance and the on-screen text
+   keep the FULL bilingual string, untouched — followup.py stores `question_text`
+   verbatim and ADR-0028 makes the on-screen text the audio fallback. This changes what
+   is SPOKEN, never what is stored or displayed.
+
+   Deliberately conservative: the pattern matches ONLY a head containing Bangla script
+   followed by a TRAILING parenthesised Latin-script tail. A monolingual question, a
+   parenthetical aside ("fever (above 100F)"), a Bangla parenthetical, or nested
+   parentheses all FAIL to match and are spoken whole, exactly as before. When in doubt
+   it says everything — never less. */
+const BILINGUAL_QUESTION =
+  /^(.*[\u0980-\u09FF][^()]*)\(\s*([^()\u0980-\u09FF]*[A-Za-z][^()\u0980-\u09FF]*)\)\s*$/;
+
+function spokenHalf(text, short) {
+  const m = BILINGUAL_QUESTION.exec(String(text));
+  if (!m) return text;                        // not the bilingual shape — speak it whole
+  const half = (short === 'bn' ? m[1] : m[2]).trim();
+  return half || text;                        // never hand a provider an empty utterance
+}
+
 function _pickVoice(short) {
   if (!window.speechSynthesis) return null;
   if (short === 'bn') return _banglaVoice || _pickBanglaVoice();
@@ -113,10 +140,16 @@ function _pickVoice(short) {
  *  `onend` fires at most ONCE, never for a superseded utterance, and is bridged from
  *  every error path so a failed utterance can't strand a caller that is waiting to
  *  open the microphone.
- *  `lang` is normally omitted — it follows the UI language. */
-function speak(text, { lang = null, onend = null } = {}) {
+ *  `lang` is normally omitted — it follows the UI language.
+ *  `verbatim: true` disables the TTS-1 bilingual split: pass it when `text` is the
+ *  PATIENT's own captured words rather than an AI question, so their words are read
+ *  back whole no matter what punctuation the recognizer produced. */
+function speak(text, { lang = null, onend = null, verbatim = false } = {}) {
   if (!text) return false;
   const short = lang ? (String(lang).toLowerCase().startsWith('bn') ? 'bn' : 'en') : _uiLang();
+  /* TTS-1: speak one language, display both. `text` itself is never mutated — only this
+     local copy of what goes to a provider. */
+  const speech = verbatim ? text : spokenHalf(text, short);
   const generation = (_speechGeneration += 1);
   if (window.speechSynthesis) window.speechSynthesis.cancel(); // never overlap questions
   _releaseAudio();
@@ -138,7 +171,7 @@ function speak(text, { lang = null, onend = null } = {}) {
        English correctly, and accepting it also keeps audio working during Chrome's
        asynchronous getVoices() load, when the list is still momentarily empty. */
     if (voice || short === 'en') {
-      const u = new SpeechSynthesisUtterance(text);
+      const u = new SpeechSynthesisUtterance(speech);
       u.lang = short === 'bn' ? 'bn-BD' : 'en-US';
       if (voice) u.voice = voice;
       u.onend = finish;
@@ -150,7 +183,7 @@ function speak(text, { lang = null, onend = null } = {}) {
 
   // --- provider 2: server-side TTS (this is why Bangla is audible on Windows) ---
   if (_serverTts) {
-    const url = `/api/tts?lang=${short}&text=${encodeURIComponent(text)}`;
+    const url = `/api/tts?lang=${short}&text=${encodeURIComponent(speech)}`;
     const audio = new Audio(url);
     _audio = audio;
     audio.onended = finish;
