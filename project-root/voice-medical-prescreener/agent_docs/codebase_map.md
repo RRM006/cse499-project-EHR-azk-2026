@@ -4,7 +4,22 @@
 > re-exploring the whole project each session. Update it whenever you add or move
 > a folder/file. Keep each note to one line.
 
-**Last updated:** 2026-08-08 (**Session 29 — ADR-0049 Bangla TTS: new package
+**Last updated:** 2026-08-09 (**Session 31 — the Edge terminal-error fix: ONE production file changed,
+ONE test file added.** `frontend/kiosk.js` — three bilingual message constants (`MIC_UNAVAILABLE` /
+`STT_SERVICE_UNAVAILABLE` / `STT_LANGUAGE_UNSUPPORTED`) + the **`TERMINAL_STT_ERRORS`** map, declared
+immediately **above `initRecognition()`**; `r.onerror` became a 5-line map lookup. ⚠ **`r.onend` and
+`FLUSH_GRACE_MS` were NOT touched** — this therefore **supersedes the three S30 pointers below**:
+the `onerror` pointer is now DONE, the `onend` pointer is unchanged-by-design (the loop stops because
+`stopListening(false)` flips `listening`, not because the restart learned about errors), and
+`FLUSH_GRACE_MS` remains **UNVERIFIED on Edge**. New test file
+**`backend/tests/test_kiosk_stt_errors.py`** (6) → suite **318 → 324, 1 skipped**; it extracts the
+shipped `TERMINAL_STT_ERRORS` literal out of the served `kiosk.js` and compares the key set, the same
+"run the shipped literal" pattern S30 introduced. **No backend, schema, dependency or Alembic change;
+head stays 0012. No existing test file was edited.** One NEW pointer for future sessions:
+**`frontend/kiosk.js:576`** — `stopListening()`'s `if (sendTurn && text)`, i.e. where a **mid-turn**
+terminal error **discards the patient's captured `finalBuffer`**. Pre-existing, widened in reach by S31,
+and **an open rule #1 decision awaiting the human** — do not change it unilaterally.
+Prior: 2026-08-08 (**Session 29 — ADR-0049 Bangla TTS: new package
 `backend/app/services/tts/`** — `base.py` (`TtsProvider` ABC + `TtsUnavailable`), `espeak.py`
 (`EspeakNgProvider`: local espeak-ng via stdlib `subprocess`, text through **stdin** so Bangla never
 hits Windows argv encoding, `shell=False`, 600-char cap), `service.py` (`get_provider()` selector +
@@ -231,6 +246,10 @@ voice-medical-prescreener/
 │                                  #   test_kiosk_config / test_kiosk_input_modes / test_kiosk_auto_listen /
 │                                  #   test_kiosk_countdown / test_answer_raw_text_guard (S28-S29, Req 3 S1-S4) ·
 │                                  #   test_tts_provider + test_kiosk_tts_fallback (S29, ADR-0049 seam) ·
+│                                  #   test_kiosk_stt_errors (S31: the Web Speech terminal/transient
+│                                  #     split — extracts TERMINAL_STT_ERRORS from the served JS;
+│                                  #     2 of its 6 tests exist to keep no-speech/aborted TRANSIENT
+│                                  #     so Chrome's continuous listening never regresses) ·
 │                                  #   test_tts_bilingual_split (S30, ADR-0051: runs the shipped
 │                                  #   BILINGUAL_QUESTION regex extracted from the served tts.js)  (297 total)
 ├── frontend/                     # patient side (served at /)

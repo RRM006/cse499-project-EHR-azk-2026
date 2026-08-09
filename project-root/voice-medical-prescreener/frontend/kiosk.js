@@ -460,6 +460,42 @@ function setInputMode(mode, { focus = true } = {}) {
   }
 }
 
+/* The Web Speech API has 8 error codes and only SOME are fatal. This map is the
+   TERMINAL set: the engine will never produce text on its own, so the patient must be
+   told and moved to typing. Everything absent from it — above all `no-speech` and
+   `aborted` — is TRANSIENT and MUST fall through to `onend`, because that restart IS
+   what keeps continuous listening alive in Chrome (part of the passed S29 live run).
+   ⚠ Do not "simplify" this into stopping on every error: that would regress Chrome.
+
+   Before this map, only `not-allowed` and `audio-capture` were handled, so
+   `language-not-supported` (exactly what Edge emits if its backend rejects `bn-BD`),
+   `network` and `service-not-allowed` left `listening === true` and `onend` restarted
+   forever — start → error → end → start, with no message, no typing fallback and no
+   countdown (the countdown arms only after real words arrive). A silent dead end.
+
+   The wording separates a dead MIC from a dead SPEECH SERVICE: at a demo those need
+   different responses, and telling a patient the microphone failed when the recognizer
+   rejected the language is simply false. */
+const MIC_UNAVAILABLE = {
+  en: 'Microphone unavailable — you can type instead.',
+  bn: 'মাইক্রোফোন পাওয়া যায়নি — টাইপ করতে পারেন।',
+};
+const STT_SERVICE_UNAVAILABLE = {
+  en: 'Speech recognition is unavailable — you can type instead.',
+  bn: 'স্পিচ রিকগনিশন কাজ করছে না — টাইপ করতে পারেন।',
+};
+const STT_LANGUAGE_UNSUPPORTED = {
+  en: 'This browser cannot recognise Bangla speech — you can type instead.',
+  bn: 'এই ব্রাউজারে বাংলা স্পিচ রিকগনিশন কাজ করছে না — টাইপ করতে পারেন।',
+};
+const TERMINAL_STT_ERRORS = {
+  'not-allowed': MIC_UNAVAILABLE,
+  'audio-capture': MIC_UNAVAILABLE,
+  'network': STT_SERVICE_UNAVAILABLE,
+  'service-not-allowed': STT_SERVICE_UNAVAILABLE,
+  'language-not-supported': STT_LANGUAGE_UNSUPPORTED,
+};
+
 function initRecognition() {
   const SR = window.SpeechRecognition || window.webkitSpeechRecognition;
   if (!SR) return null;
@@ -497,11 +533,11 @@ function initRecognition() {
     if (listening) try { r.start(); } catch (_) {}
   };
   r.onerror = (e) => {
-    if (e.error === 'not-allowed' || e.error === 'audio-capture') {
-      showError(t('Microphone unavailable — you can type instead.', 'মাইক্রোফোন পাওয়া যায়নি — টাইপ করতে পারেন।'));
-      stopListening(false);
-      setInputMode('type');   // S2: never leave the patient stranded on a dead mic
-    }
+    const message = TERMINAL_STT_ERRORS[e.error];
+    if (!message) return;   // transient (no-speech / aborted): onend restarts, as before
+    showError(t(message.en, message.bn));
+    stopListening(false);   // sets listening = false — this is what breaks the restart loop
+    setInputMode('type');   // S2: never leave the patient stranded on a dead mic
   };
   return r;
 }

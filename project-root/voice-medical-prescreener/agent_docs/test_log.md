@@ -72,6 +72,50 @@ transcribed by hand (the "ground truth"). Record the model + machine each time.
 
 ## Test entries (newest first)
 
+## 2026-08-09 — Session 31 — Module 1/7 — **Web Speech terminal-error fix**: suite 318 → 324, plus a real-engine error-injection matrix
+- Setup: Windows 11, `.venv` Python 3.13.3, `pytest backend/tests/` with `PYTHONIOENCODING=utf-8`.
+  Live checks against the dev server on **port 8001** (`uvicorn backend.app.main:app --reload`), page
+  `http://localhost:8001/kiosk.html`, in Claude's in-app Chromium. **No microphone and no permission
+  prompt were involved** — the recognizer's `onerror` was invoked directly, which is the whole point:
+  this defect is reachable without audio, so it is testable without audio.
+- Metric(s): pass/fail count; and for each of the 8 Web Speech API error codes, the value of `listening`
+  after the handler runs (the true predicate — `listening === true` is what makes `onend` restart).
+- Result — **offline suite: 324 passed, 1 skipped** (was 318 + 1). The skip is the unchanged opt-in
+  `TTS_LIVE=1` network test. New file `backend/tests/test_kiosk_stt_errors.py` = **6 tests**, run in
+  1.87 s. **No pre-existing test was modified, weakened or deleted** (contrast S30, which had to update
+  two static assertions). Full-suite wall time 37.09 s.
+- Result — **real-engine error-injection matrix** (each row: fresh recognizer, `listening = true`, fire
+  the code, read `listening`):
+
+  | error fired | `listening` after | required behaviour |
+  |---|---|---|
+  | `no-speech` | **true** | transient — `onend` must restart ✅ |
+  | `aborted` | **true** | transient — fires on our OWN `stop()` every turn ✅ |
+  | `bad-grammar` | **true** | transient ✅ |
+  | `network` | **false** | terminal — loop broken ✅ |
+  | `service-not-allowed` | **false** | terminal ✅ |
+  | `not-allowed` | **false** | terminal (unchanged from before) ✅ |
+  | `audio-capture` | **false** | terminal (unchanged from before) ✅ |
+  | `language-not-supported` | **false** | terminal — **the Edge case** ✅ |
+
+  After a terminal error: `state.inputMode === 'type'` and `#error-banner` carried the matching bilingual
+  message with `display=block` (e.g. *"Speech recognition is unavailable — you can type instead."*).
+  `Object.keys(TERMINAL_STT_ERRORS)` in the live page returned exactly the 5 terminal codes, proving the
+  map is **valid JS** — the Python tests only parse it as text. Zero console errors on page load.
+- Notes: **the two tests that matter most are the negative ones.** `no-speech` fires constantly during a
+  normal pause and `aborted` fires on our own `stop()` at the end of every turn; if either were ever
+  added to the terminal map, Chrome would stop mid-answer and clip patients — a **rule #1 defect**, and
+  a much worse bug than the one being fixed. They are pinned from both directions (absent from the
+  extracted key set, and the early `return` must precede every side effect).
+  One **false alarm** chased and dismissed: a probe read `#error-banner` as `display:none`, which looked
+  like the message never rendering. It was `showError`'s **8-second auto-hide** (`shared.js:134`) — the
+  check had run two tool round-trips late. Re-run immediately, `display=block`. Not a defect.
+  ⚠ **What this does NOT measure, stated plainly:** whether **Edge actually emits
+  `language-not-supported` for `bn-BD`**, and whether Edge transcribes Bangla at all. Injecting an error
+  proves the *handler*; it cannot prove which error a real browser produces. That still needs a human at
+  a real mic in Edge, and it is still the pending end-to-end run — **nobody has heard TTS-1 or TTS-2
+  either.**
+
 ## 2026-08-08 — Session 30 — Module 1/7 — **Microsoft Edge 151 compatibility probe (non-audio)**
 - Setup: **real Microsoft Edge 151.0.4129.72** on Windows 11, launched at a throwaway local probe page
   (`http://127.0.0.1:8799/`, read-only, server exited afterwards). Claude's own browser tools drive

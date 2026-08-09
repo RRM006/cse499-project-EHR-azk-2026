@@ -16,6 +16,71 @@
 
 ---
 
+## Session 31 — 2026-08-09 — **The Edge STT terminal-error dead end is FIXED and CLOSED** — 318 → 324 tests
+- Did: implemented the one defect the S30 Edge verification found and deliberately left unfixed.
+  **`frontend/kiosk.js` only — ONE handler, one file, no backend/schema/Alembic change.**
+  `r.onerror` now looks up a **`TERMINAL_STT_ERRORS`** map instead of testing two codes by hand:
+  ```js
+  r.onerror = (e) => {
+    const message = TERMINAL_STT_ERRORS[e.error];
+    if (!message) return;   // transient (no-speech / aborted): onend restarts, as before
+    showError(t(message.en, message.bn));
+    stopListening(false);   // sets listening = false — this is what breaks the restart loop
+    setInputMode('type');
+  };
+  ```
+  Terminal set = `not-allowed`, `audio-capture`, **`network`**, **`service-not-allowed`**,
+  **`language-not-supported`** (the last is exactly what Edge emits if its backend rejects `bn-BD`).
+  Everything absent — above all `no-speech` and `aborted` — stays transient.
+  **`r.onend` is untouched:** the fix works by flipping `listening`, NOT by teaching the restart about
+  error codes, and a test now pins that so the two mechanisms cannot get tangled later.
+- Decided: **no new ADR, on purpose.** This is not an architectural decision — it *implements* what
+  **ADR-0048** already requires ("typing is ALWAYS available… a patient is never blocked by a failed
+  mic"). The `onerror` handler simply never covered the cases that could strand one. Creating an ADR
+  for a completed obligation would be documentation noise.
+- Decided (a small, deliberate deviation from the plan in `current_task.md`, flagged to the human and
+  **awaiting their word — they have not responded yet**): **three messages instead of one generic
+  string.** A dead speech SERVICE is not a dead MIC. `language-not-supported` → *"This browser cannot
+  recognise Bangla speech"*; `network` / `service-not-allowed` → *"Speech recognition is unavailable"*;
+  the mic pair keeps the original wording. All three bilingual (`MIC_UNAVAILABLE` /
+  `STT_SERVICE_UNAVAILABLE` / `STT_LANGUAGE_UNSUPPORTED`). Reason: at a faculty demo those need
+  different responses, and telling a patient the microphone failed when Edge rejected the *language* is
+  simply false. Reverting to one message is a 3-line change.
+- Verified: **324 pass, 1 skipped** (was 318; the skip is still the opt-in `TTS_LIVE=1` network test).
+  New `backend/tests/test_kiosk_stt_errors.py` (6). Following the S30 precedent it **extracts the
+  shipped `TERMINAL_STT_ERRORS` literal out of the served `kiosk.js` and compares the key set**, rather
+  than substring-matching a comment. **Two of the six exist only to guard the Chrome side** —
+  `no-speech`/`aborted` must stay OUT of the map, and the early `return` must precede every side effect.
+- **Then it was exercised in a REAL browser engine, with no mic and no permission prompt** (build a
+  recognizer, call `onerror` directly): `no-speech` → `listening` **true** ✅ · `aborted` → **true** ✅ ·
+  `bad-grammar` → **true** ✅ · `network` / `service-not-allowed` / `not-allowed` / `audio-capture` →
+  **false**, loop broken ✅. After a terminal error `state.inputMode` flipped to `'type'` and
+  `#error-banner` read *"Speech recognition is unavailable — you can type instead."* with
+  `display=block`. Zero console errors on load; the map also proved to be **valid JS** (the Python
+  tests only parse text).
+- Broke / problem: **nothing regressed** — no existing test was touched, weakened or deleted. One false
+  alarm chased down and dismissed: a probe read `#error-banner` as `display:none`, which looked like the
+  message never showing. It was `showError`'s own **8-second auto-hide** (`shared.js:134`); the check
+  had simply run two tool round-trips late. Not a defect.
+- ⚠ **Found and DELIBERATELY NOT FIXED — needs the human's call.** `stopListening(false)`
+  (`kiosk.js:576`) discards `finalBuffer`, so a terminal error landing **mid-turn** — a wifi blip giving
+  `network` after the patient has already spoken — **throws their captured words away instead of
+  submitting them.** Pre-existing (already true for `not-allowed`/`audio-capture`), but this change
+  widens the set of codes that reach it, and `network` is far more plausible mid-sentence than a
+  permission revocation. Left alone because deciding the fate of a half-spoken answer is the **rule #1
+  call** `current_task.md` already classes as "not a drive-by change" — same family as the deferred
+  repeat-while-listening item. Cheap fix if wanted: when `endingTurn` is true, submit instead of drop.
+- Deferred: the **combined Chrome + Edge live listen / STT run** (still nobody has HEARD TTS-1 or TTS-2,
+  and nobody has run STT in Edge). Steps **S5–S7** of Requirement 3. Rotating the 3 API keys. The stale
+  `human_live_run_guide.md` (lines 19, 72) and `CLAUDE.md` (S28/234-tests paragraph, the "no server, no
+  key" TTS line, Python 3.14 vs the venv's 3.13.3). Formal WER / the TextBee demo.
+- ⚠ **Honest gap, unchanged in kind:** whether Edge actually emits `language-not-supported` for `bn-BD`
+  is **still UNPROVEN**. This fix makes the failure **visible and recoverable**; it does not prove which
+  failure occurs. That still needs a human at a real mic.
+- Next: **the human's faculty-demo feature list.** They opened a feature-planning workflow (analyse and
+  classify each request → prioritised P0/P1/P2 plan → wait for "GO" → implement) but **the message
+  contained no features yet.** Nothing is to be assumed or built until they arrive.
+
 ## Session 30 — 2026-08-08 — **TTS-1 FIXED and CLOSED** (one question is now spoken in one language) — 277 → 297 tests
 - Did: implemented **TTS-1**, the first item of the 3.0 cycle, after the human chose **option (a):
   speak only the half matching the active UI language.** Frontend only — **4 files, ~50 lines, no

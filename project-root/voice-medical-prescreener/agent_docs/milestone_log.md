@@ -6,7 +6,29 @@
 
 **Status keys:** ⬜ Not started · 🟨 In progress · 🟦 Blocked · ✅ Done · ⛔ Retired
 
-**Last updated:** 2026-08-08 (**Session 30, closed after an EDGE COMPATIBILITY VERIFICATION —
+**Last updated:** 2026-08-09 (**Session 31 — the ONE real defect S30 found is now FIXED and CLOSED.**
+`frontend/kiosk.js` only, ONE handler: `r.onerror` looks up a **`TERMINAL_STT_ERRORS`** map
+(`not-allowed`, `audio-capture`, `network`, `service-not-allowed`, **`language-not-supported`**) →
+message + `stopListening(false)` + `setInputMode('type')`. That flips `listening` to false, which is what
+ends the **`start → error → end → start`** loop. ⚠ **`no-speech`, `aborted` and `bad-grammar` are
+deliberately ABSENT and must stay absent** — their restart via `onend` IS what keeps continuous listening
+alive in Chrome (part of the passed S29 run), so a blanket "stop on any error" would regress Chrome and
+clip patients mid-answer. **`r.onend` is untouched and test-pinned.** **318 → 324 tests pass, 1 skipped**
+(new `test_kiosk_stt_errors.py`, which extracts the shipped map out of the served JS and compares the key
+set; **no existing test touched or weakened**). **Live-verified in a real browser engine with no mic and
+no permission prompt** — transient codes kept `listening` true, all four terminal codes broke the loop and
+switched the patient to typing with the right bilingual banner. **No new ADR, on purpose:** this
+*implements* ADR-0048's existing "a patient is never blocked by a failed mic" requirement rather than
+deciding anything new. ⚠ **Still UNPROVEN and unchanged:** whether Edge's backend actually transcribes
+`bn-BD`. This makes a rejection **visible and recoverable**; it does not prove which failure occurs.
+🔴 **One rule #1 decision now WAITS FOR THE HUMAN:** `stopListening(false)` (`kiosk.js:576`) discards
+`finalBuffer`, so a terminal error landing **mid-turn** (a wifi blip → `network`) throws away words the
+patient already spoke. Pre-existing, but S31 widened the set of codes that reach it; deciding the fate of
+a half-spoken answer is not a drive-by change. **The human end-to-end test STILL has not happened** —
+nobody has heard TTS-1/TTS-2 or run STT in Edge. **No module status and no phase changed; Alembic stays
+0012; S5–S7 still NOT built.** The tree is now entering a **faculty-demo feature cycle**: the human
+opened a feature-planning workflow but **has not yet given the features** — nothing is to be assumed.
+Prior: **Session 30, closed after an EDGE COMPATIBILITY VERIFICATION —
 INSPECTION ONLY, no code changed.** The human will demo in **Microsoft Edge**, so browser support was
 checked before the live test. **Real Edge 151.0.4129.72** was probed (Claude's own browser is
 Electron/Chromium 148, so a separate read-only probe page was used; it never called `start()` or
