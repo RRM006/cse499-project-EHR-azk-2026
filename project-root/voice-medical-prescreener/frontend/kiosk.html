@@ -94,6 +94,13 @@
       font-weight: 600; font-size: .85rem;
     }
     .progress-chip.complete { background: #ECFDF5; color: var(--accent-color); border-color: #D1FAE5; }
+    /* F3: the "still required" notice. Warning-toned like the per-card "Needs info"
+       chip it corresponds to, and large enough for an elderly patient to read. */
+    .required-notice {
+      display: none; padding: 12px 18px; border-radius: var(--radius);
+      background: #FFFBEB; border: 1px solid var(--warning-color);
+      color: #B45309; font-weight: 600; font-size: .95rem; line-height: 1.5;
+    }
     .resume-dock { display: none; flex-direction: column; gap: 12px; border-left: 4px solid var(--secondary-color); }
     .resume-q-row { display: flex; align-items: flex-start; gap: 12px; }
     .resume-question { font-size: 1.02rem; line-height: 1.5; margin-top: 2px; }
@@ -240,6 +247,10 @@
           <button class="btn btn-primary" onclick="sendResumeTyped()" data-en="Send" data-bn="পাঠান">Send</button>
         </div>
       </div>
+      <!-- F3: what is still required, named in the patient's language. Written by JS
+           from the SERVER's readiness verdict, so it can never claim the case is ready
+           when the server would refuse the submit. -->
+      <div class="required-notice" id="required-notice"></div>
       <div class="summary-actions card" style="padding:16px 20px;">
         <span style="font-size:.85rem; color:var(--text-muted); margin-right:auto;"
               data-en="If anything is incorrect, tap Speak Again to correct." data-bn="কোনো তথ্য ভুল হলে, আবার বলুন চাপুন।">If anything is incorrect, tap Speak Again to correct.</span>

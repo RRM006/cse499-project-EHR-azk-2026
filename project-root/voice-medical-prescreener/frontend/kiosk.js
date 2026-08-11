@@ -12,6 +12,41 @@ const OPENING_QUESTION = {
   en: 'Please tell me, in your own words, what problem you are facing.',
 };
 
+/* F4: the scripted opening — AREA first, then name, then age, then the free
+   description. These three are REQUIRED (F3) but the M7 loop cannot be relied on to
+   ask for them: M7 targets clinical gaps in the 10 fields, not identity, and area is
+   deliberately not one of those fields (the human's decision: the 10-field contract
+   stays byte-identical).
+
+   Each is an ORDINARY turn — the question is stored as a `system` utterance and the
+   answer as a `patient` utterance — so the chronological conversation and the raw
+   transcript stay complete (requirement 8), and M3 sees them exactly like any other
+   speech. No second pipeline (ADR-0048).
+
+   Area comes FIRST because every later question is better for knowing it: it is the
+   context M7 keeps questions inside instead of wandering. */
+const INTAKE_SCRIPT = [
+  {
+    key: 'problem_area',
+    en: 'Which health problem would you like to talk about today? For example: stomach, chest, head, or skin.',
+    bn: 'আজ আপনি কোন সমস্যার বিষয়ে কথা বলতে চান? যেমন: পেট, বুক, মাথা বা ত্বক।',
+  },
+  {
+    key: 'patient_name',
+    en: 'What is your name?',
+    bn: 'আপনার নাম কী?',
+  },
+  {
+    key: 'patient_age',
+    en: 'How old are you?',
+    bn: 'আপনার বয়স কত?',
+  },
+  // Last: the free description. Answering THIS is what triggers intake + the M7 loop.
+  { key: 'main_problem', en: OPENING_QUESTION.en, bn: OPENING_QUESTION.bn },
+];
+
+function scriptEntry(key) { return INTAKE_SCRIPT.find((q) => q.key === key) || null; }
+
 const FIELD_LABELS = {
   main_problem:             { en: '1. Main Problem', bn: '১. প্রধান সমস্যা' },
   onset_duration:           { en: '2. When Started & Duration', bn: '২. শুরুর সময় ও স্থায়িত্ব' },
@@ -66,6 +101,9 @@ function resetState() {
     lastProfile: null,      // KIOSK-6: kept so the summary re-renders on language toggle
     resumeQuestion: null,   // KIOSK-7: open resume-loop question on the summary screen
     resumeActive: false,
+    readiness: null,        // F3: the SERVER's verdict on "may this patient submit yet?"
+    scriptIndex: -1,        // F4: position in INTAKE_SCRIPT; -1 = the script is done
+    resumeScripted: null,   // F4: a scripted question re-asked on the summary screen
     inputMode: 'voice',     // S2 (ADR-0048): 'voice' (primary/default) | 'type' (always available)
   };
   document.getElementById('chat-thread').innerHTML = '';
@@ -76,6 +114,7 @@ function resetState() {
   document.getElementById('resume-fallback-row').style.display = 'none';
   document.getElementById('resume-fallback-input').value = '';
   document.getElementById('summary-progress').style.display = 'none';
+  document.getElementById('required-notice').style.display = 'none';   // F3
   document.getElementById('confirm-submit-btn').style.display = '';
 }
 resetState();
@@ -195,22 +234,56 @@ function repeatQuestion() { askAloud(state.lastQuestionText); }
 
 /* --- screens 1-2: identification --- */
 
+/* How many digits the code has. The markup ships exactly this many .otp-input boxes;
+   keeping it as one constant is what lets "the code is complete" be a single check. */
+const OTP_LENGTH = 6;
+
+function otpBoxes() {
+  return Array.from(document.querySelectorAll('#otp-row .otp-input'));
+}
+
+function otpDigits() {
+  return otpBoxes().map((b) => b.value).join('');
+}
+
+/* F1: reset the boxes so a retry always starts from a clean, empty code. Leaving the
+   rejected digits on screen is exactly what made "wrong OTP" confusing — the patient
+   had to work out that they must clear six boxes themselves before trying again. */
+function clearOtpInputs({ focus = true } = {}) {
+  const boxes = otpBoxes();
+  boxes.forEach((b) => { b.value = ''; });
+  if (focus && boxes[0]) boxes[0].focus();
+}
+
+/* F1: a complete code IS the submit gesture — no button hunt, no extra tap (ADR-0048's
+   "minimize clicks" priority). verifyOtp() owns the re-entry guard, so the typed path,
+   the pasted path, Enter and the button can never submit the same code twice. */
+function maybeAutoVerify() {
+  if (otpDigits().length === OTP_LENGTH) verifyOtp();
+}
+
 /* KIOSK-1: OTP boxes auto-advance on digit entry, Backspace walks back, and pasting
-   a full 6-digit code fills every box. Wired once at load. */
+   a full 6-digit code fills every box. F1 adds Enter-to-submit (there was NO Enter
+   handler here at all — pressing Enter did nothing) and auto-verify on completion.
+   Wired once at load. */
 function initOtpInputs() {
-  const boxes = Array.from(document.querySelectorAll('#otp-row .otp-input'));
+  const boxes = otpBoxes();
   boxes.forEach((box, i) => {
     box.addEventListener('input', () => {
       const digits = box.value.replace(/\D/g, '');
       box.value = digits.slice(-1); // keep only the last typed digit
       if (box.value && i < boxes.length - 1) boxes[i + 1].focus();
+      maybeAutoVerify();
     });
     box.addEventListener('keydown', (e) => {
       if (e.key === 'Backspace' && !box.value && i > 0) {
         e.preventDefault();
         boxes[i - 1].value = '';
         boxes[i - 1].focus();
+        return;
       }
+      // F1: Enter submits from any box — the keyboard path a patient expects.
+      if (e.key === 'Enter') { e.preventDefault(); verifyOtp(); }
     });
     box.addEventListener('paste', (e) => {
       e.preventDefault();
@@ -219,6 +292,7 @@ function initOtpInputs() {
       if (!digits) return;
       boxes.forEach((b, j) => { b.value = digits[j] || ''; });
       boxes[Math.min(digits.length, boxes.length - 1)].focus();
+      maybeAutoVerify();
     });
   });
 }
@@ -238,14 +312,50 @@ async function sendOtp() {
   } catch (e) { showError(e.message); }
 }
 
+/* F1: re-entry guard. Auto-verify, Enter and the button all land here, and the code is
+   SINGLE-USE server-side (ADR-0045) — a double submit would burn the patient's own valid
+   code and reject them with "Invalid verification code". */
+let otpVerifying = false;
+
 async function verifyOtp() {
-  const otp = Array.from(document.querySelectorAll('.otp-input')).map((i) => i.value).join('');
+  if (otpVerifying) return;
+  const otp = otpDigits();
+  if (otp.length !== OTP_LENGTH) {
+    showError(t(`Enter all ${OTP_LENGTH} digits of the code.`,
+      `কোডের ${bnDigits(OTP_LENGTH)}টি সংখ্যাই লিখুন।`));
+    return;
+  }
+  otpVerifying = true;
+  let res = null;
   try {
-    const res = await api('POST', '/api/patients/verify-otp', { phone: state.phone, otp });
-    state.visitUuid = res.visit.uuid;
-    showScreen('screen-voice');
-    await assistantSays(OPENING_QUESTION);   // P1-2: bilingual pair → follows the toggle
-  } catch (e) { showError(e.message); }
+    res = await api('POST', '/api/patients/verify-otp', { phone: state.phone, otp });
+  } catch (e) {
+    /* Wrong, expired or locked out: clear the boxes and say what to do next. The
+       server's own detail is kept first — "Too many wrong attempts" and "Invalid
+       verification code" need different reactions from the patient. */
+    clearOtpInputs();
+    showError(`${e.message} ${t('Please enter the code again.',
+      'অনুগ্রহ করে কোডটি আবার লিখুন।')}`);
+  } finally {
+    otpVerifying = false;
+  }
+  if (!res) return;   // failed above — the patient stays on the OTP screen to retry
+  state.visitUuid = res.visit.uuid;
+  showScreen('screen-voice');
+  await askScriptedQuestion(0);   // F4: area → name → age → free description
+}
+
+/* F4: ask INTAKE_SCRIPT[index]. Goes through assistantSays(), so the question is
+   shown, spoken, recorded as a system utterance, and (in auto mode) opens the mic —
+   identical handling to an M7 question. */
+async function askScriptedQuestion(index) {
+  state.scriptIndex = index;
+  const q = INTAKE_SCRIPT[index];
+  await assistantSays({ en: q.en, bn: q.bn });   // P1-2: pair → follows the toggle
+}
+
+function inScriptedOpening() {
+  return state.scriptIndex >= 0 && state.scriptIndex < INTAKE_SCRIPT.length - 1;
 }
 
 /* --- screen 3: the voice conversation --- */
@@ -603,8 +713,19 @@ async function submitPatientTurn(rawText, source) {
       state.activeQuestion = res.next_question || null;
       if (res.complete) await finishConversation();
       else await assistantSays(res.next_question.question_text, { record: false });
+    } else if (inScriptedOpening()) {
+      /* F4: a scripted answer that is NOT the last one. Store it verbatim and move to
+         the next scripted question — intake deliberately waits until the whole
+         opening is in, so M3 extracts area, name, age and the complaint from one
+         complete conversation instead of re-running per turn. */
+      await api('POST', `/api/visits/${state.visitUuid}/utterances`, {
+        raw_text: rawText, role: 'patient', source,
+        stt_provider: source === 'mic' ? 'browser_webspeech' : 'manual',
+      });
+      await askScriptedQuestion(state.scriptIndex + 1);
     } else {
       // Free opening turn(s): store, then run intake and start the loop.
+      state.scriptIndex = -1;   // F4: the scripted opening is finished
       await api('POST', `/api/visits/${state.visitUuid}/utterances`, {
         raw_text: rawText, role: 'patient', source,
         stt_provider: source === 'mic' ? 'browser_webspeech' : 'manual',
@@ -751,32 +872,113 @@ function renderProgress(profile) {
   return n;
 }
 
-function setResumeMode(question) {
-  state.resumeActive = !!question;
+/* --- F3: the patient cannot reach the doctor with required information missing. ---
+
+   The SERVER owns the verdict (GET /readiness), so the screen and the submit guard
+   can never disagree about what "complete" means. This function only renders it.
+
+   ⚠ A FAILED readiness fetch must NOT hide the button. `state.readiness` stays null,
+   which reads here as "unknown" and leaves submit reachable — otherwise one flaky
+   request would trap the patient on the review screen with no way forward. Nothing is
+   lost by that: confirmSubmit() sends ?require_complete=true, so an incomplete case
+   is still refused by the server. The UI guides; the server enforces. */
+function updateSubmitVisibility() {
+  const blocked = state.resumeActive || (state.readiness && !state.readiness.complete);
+  document.getElementById('confirm-submit-btn').style.display = blocked ? 'none' : '';
+  renderRequiredNotice();
+}
+
+/* Name what is still needed, in the patient's language, using the SAME numbered
+   labels as the cards above so "৭. অ্যালার্জি" on the notice and on the card are
+   visibly the same thing. */
+function renderRequiredNotice() {
+  const notice = document.getElementById('required-notice');
+  if (!notice) return;
+  const missing = (state.readiness && !state.readiness.complete)
+    ? (state.readiness.missing || []) : [];
+  if (!missing.length) { notice.style.display = 'none'; notice.textContent = ''; return; }
+  const names = missing
+    .map((key) => (FIELD_LABELS[key] ? t(FIELD_LABELS[key].en, FIELD_LABELS[key].bn) : key))
+    .join(', ');
+  notice.textContent = t(
+    `A few required details are still needed: ${names}`,
+    `আরও কিছু প্রয়োজনীয় তথ্য বাকি আছে: ${names}`);
+  notice.style.display = 'block';
+}
+
+/* F3: ask the server whether the patient may submit. Never throws — an unreachable
+   server leaves the verdict `null` ("unknown"), which updateSubmitVisibility()
+   deliberately treats as not-blocking. */
+async function loadReadiness() {
+  try {
+    state.readiness = await api('GET', `/api/visits/${state.visitUuid}/readiness`);
+  } catch (e) {
+    state.readiness = null;
+  }
+  return state.readiness;
+}
+
+/* F4: identity items (name, age, area) are required but are NOT among the 10 fields,
+   so the M7 resume loop cannot ask for them. If extraction missed one — the patient
+   answered "সবাই আমাকে চাচি ডাকে", or the age never parsed — this finds the ORIGINAL
+   scripted question to re-ask. It is what stops requiring identity from ever trapping
+   a patient on the review screen. */
+function pendingScriptedRequirement() {
+  const missing = (state.readiness && !state.readiness.complete)
+    ? (state.readiness.missing || []) : [];
+  for (const key of missing) {
+    const entry = scriptEntry(key);
+    if (entry) return entry;
+  }
+  return null;
+}
+
+/* One resume dock, two kinds of question: an M7 `question` row, or a re-asked
+   scripted requirement. Everything downstream (dock visibility, TTS, auto-listen,
+   the submit gate) is identical — only where the answer is POSTed differs. */
+function setResumeMode(question, scripted = null) {
   state.resumeQuestion = question || null;
-  document.getElementById('resume-dock').style.display = question ? 'flex' : 'none';
-  document.getElementById('confirm-submit-btn').style.display = question ? 'none' : '';
-  if (question) {
-    document.getElementById('resume-question').textContent = question.question_text;
-    askAloud(question.question_text);   // ADR-0028 + S3: spoken, then the mic arms itself
+  state.resumeScripted = question ? null : scripted;
+  state.resumeActive = !!(question || state.resumeScripted);
+  const text = question
+    ? question.question_text
+    : (state.resumeScripted ? t(state.resumeScripted.en, state.resumeScripted.bn) : '');
+  document.getElementById('resume-dock').style.display = state.resumeActive ? 'flex' : 'none';
+  updateSubmitVisibility();   // F3: readiness decides, not just "is a question open"
+  if (state.resumeActive) {
+    document.getElementById('resume-question').textContent = text;
+    askAloud(text);   // ADR-0028 + S3: spoken, then the mic arms itself
   } else {
     cancelPendingMic();   // loop finished — nothing should open the mic behind the summary
   }
 }
 
 async function refreshResumeLoop(profile) {
-  if (renderProgress(profile) >= 10) { setResumeMode(null); return; }
+  const filled = renderProgress(profile);
+  // F3: readiness is checked FIRST and always — a 10/10 grid is no longer proof that
+  // the required items were covered, and an incomplete one is no longer a reason to
+  // keep asking once the server is satisfied.
+  const readiness = await loadReadiness();
+  if (filled >= 10 && (!readiness || readiness.complete)) { setResumeMode(null); return; }
+  // F4: identity first — a missing name/age/area is re-asked with its own scripted
+  // question, because no M7 question can cover it.
+  const scripted = pendingScriptedRequirement();
+  if (scripted) { setResumeMode(null, scripted); return; }
   try {
     const res = await api('POST', `/api/visits/${state.visitUuid}/followup/next?scope=fields`);
     setResumeMode(res.complete ? null : res.question);
   } catch (e) {
     showError(e.message);
-    setResumeMode(null);   // fail-open: an API hiccup must never block submission
+    // Fail-open on the LOOP only: an API hiccup must not trap the patient behind a
+    // question that never arrived. Submission itself is still gated by readiness
+    // above and re-checked server-side by confirmSubmit().
+    setResumeMode(null);
   }
 }
 
 function repeatResumeQuestion() {
   if (state.resumeQuestion) speak(state.resumeQuestion.question_text);
+  else if (state.resumeScripted) speak(t(state.resumeScripted.en, state.resumeScripted.bn));
 }
 
 function sendResumeTyped() {
@@ -788,18 +990,31 @@ function sendResumeTyped() {
 }
 
 async function submitResumeAnswer(rawText, source) {
-  if (state.busy || !state.resumeQuestion) return;
+  if (state.busy || !(state.resumeQuestion || state.resumeScripted)) return;
   state.busy = true;
+  const sttProvider = source === 'mic' ? 'browser_webspeech' : 'manual';
   try {
-    const res = await api('POST',
-      `/api/visits/${state.visitUuid}/followup/answer?scope=fields`, {
-        question_id: state.resumeQuestion.id, raw_text: rawText,
-        source, stt_provider: source === 'mic' ? 'browser_webspeech' : 'manual',
+    if (state.resumeScripted) {
+      /* F4: a re-asked identity requirement. Stored as an ORDINARY patient turn
+         (same endpoint, same verbatim rules) and then intake re-runs, so M3 harvests
+         the name/age/area from it exactly as it would from the scripted opening. */
+      await api('POST', `/api/visits/${state.visitUuid}/utterances`, {
+        raw_text: rawText, role: 'patient', source, stt_provider: sttProvider,
       });
+      await api('POST', `/api/visits/${state.visitUuid}/intake`);
+    } else {
+      await api('POST',
+        `/api/visits/${state.visitUuid}/followup/answer?scope=fields`, {
+          question_id: state.resumeQuestion.id, raw_text: rawText,
+          source, stt_provider: sttProvider,
+        });
+    }
     const profile = await api('GET', `/api/visits/${state.visitUuid}/profile`);
     renderSummary(profile);          // spec: the summary regenerates automatically
-    renderProgress(profile);
-    setResumeMode(res.complete ? null : res.next_question);
+    /* Re-evaluate from scratch: refreshResumeLoop re-reads readiness and picks the
+       next thing to ask, so both branches converge on ONE decision point instead of
+       each guessing what should come next. */
+    await refreshResumeLoop(profile);
   } catch (e) { showError(e.message); }
   state.busy = false;
 }
@@ -824,8 +1039,15 @@ async function downloadRawTranscript() {
 
 async function confirmSubmit() {
   try {
-    await api('POST', `/api/visits/${state.visitUuid}/submit`);
-  } catch (e) { return showError(e.message); }
+    /* F3: require_complete=true is what makes "cannot skip required information" a
+       SERVER rule rather than a hidden button. If the server refuses, re-run the
+       resume loop so the outstanding question appears instead of a dead end. */
+    await api('POST', `/api/visits/${state.visitUuid}/submit?require_complete=true`);
+  } catch (e) {
+    showError(e.message);
+    if (state.lastProfile) await refreshResumeLoop(state.lastProfile);
+    return;
+  }
   const modal = document.getElementById('logout-modal');
   modal.style.display = 'flex';
   let count = 5;
@@ -854,6 +1076,7 @@ function onLanguageChange() {
   if (state && state.lastProfile) {
     renderSummary(state.lastProfile);
     renderProgress(state.lastProfile);
+    renderRequiredNotice();   // F3: it names fields, so it must follow the toggle too
   }
   document.querySelectorAll('.bubble-speak[data-title-en]').forEach((b) => {
     b.title = t(b.dataset.titleEn, b.dataset.titleBn);
@@ -875,6 +1098,9 @@ function initTypedInputs() {
   };
   wire(DOCKS.conversation.input, sendTypedFallback);
   wire(DOCKS.resume.input, sendResumeTyped);
+  // F1: the phone screen had no Enter handler either — typing a number and pressing
+  // Enter simply did nothing, which reads as a broken kiosk.
+  wire('phone-input', sendOtp);
 }
 initTypedInputs();
 setInputMode('voice', { focus: false });

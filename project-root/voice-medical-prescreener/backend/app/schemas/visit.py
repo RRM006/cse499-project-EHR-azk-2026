@@ -63,3 +63,18 @@ class VisitDetailOut(VisitOut):
     """A visit plus its full conversation in turn order."""
 
     utterances: list[VisitUtteranceOut] = []
+
+
+class ReadinessOut(BaseModel):
+    """F3 — may this patient proceed to the final review?
+
+    The SERVER decides, so the answer is the same whether the kiosk asks, the submit
+    guard asks, or a test asks. ``missing`` carries canonical field keys (never
+    display labels) so the kiosk can look up its own bilingual wording — the same
+    codes-on-the-wire rule the risk tiers follow (ADR-0030 f).
+    """
+
+    complete: bool = Field(..., description="True when nothing required is outstanding.")
+    missing: list[str] = Field(
+        default_factory=list, description="Canonical keys of the required items still owed."
+    )

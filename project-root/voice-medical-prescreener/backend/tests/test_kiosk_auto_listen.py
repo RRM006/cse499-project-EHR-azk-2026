@@ -27,11 +27,21 @@ def tts_js() -> str:
 
 
 def test_every_question_the_patient_must_answer_goes_through_askaloud():
-    """The 3 call sites: the M7 loop, the KIOSK-7 resume dock, and Repeat question."""
+    """The 3 call sites: the M7 loop, the KIOSK-7 resume dock, and Repeat question.
+
+    F4 note: setResumeMode() now serves TWO kinds of question — an M7 row and a
+    re-asked scripted requirement (name/age/area) — so it speaks a local `text` that
+    covers both, instead of reaching into `question.question_text`. The rule being
+    pinned is unchanged and now covers strictly more questions: anything the patient
+    is expected to ANSWER goes through askAloud(), so the mic arms itself.
+    """
     js = kiosk_js()
-    assert "askAloud(text)" in js                       # assistantSays()
-    assert "askAloud(question.question_text)" in js      # setResumeMode()
+    assert "askAloud(text)" in js                        # assistantSays()
     assert "askAloud(state.lastQuestionText)" in js      # repeatQuestion()
+    # setResumeMode(): still askAloud, and still the only thing it speaks.
+    resume = js[js.index("function setResumeMode("):js.index("async function refreshResumeLoop(")]
+    assert "askAloud(text)" in resume
+    assert "speak(" not in resume.replace("askAloud(", "")   # never plain speak() here
 
 
 def test_replaying_an_old_bubble_does_not_open_the_microphone():

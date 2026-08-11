@@ -72,6 +72,88 @@ transcribed by hand (the "ground truth"). Record the model + machine each time.
 
 ## Test entries (newest first)
 
+## 2026-08-11 — Session 32 — Faculty-demo cycle F1–F4 + F6: suite **324 → 392**, plus two no-microphone browser verifications
+
+- Setup: Windows 11, `.venv` Python **3.13.3**, `PYTHONIOENCODING=utf-8`,
+  `pytest backend/tests/`. Browser checks ran against the project's own dev server on
+  **port 8001** (`.claude/launch.json`) in the in-app Chromium pane. No API keys were
+  exercised — every LLM call in the new tests is stubbed.
+- Metric: suite size + pass/fail, and pass/fail per browser scenario.
+
+### A. AUTOMATED (pytest) — the only thing these prove is what the code does offline
+
+- **Result: 392 passed, 1 skipped** (was 324 passed, 1 skipped at the end of S31).
+  The skip is unchanged: the opt-in `TTS_LIVE=1` real-network TTS test.
+- **+68 tests across 5 new files:**
+  - `test_kiosk_otp_entry.py` (12) — F1. Enter wiring on both screens, auto-verify from
+    the typed AND pasted paths, the incomplete-code gate, clear-and-re-ask, the
+    single-use re-entry guard, and that manual entry survives in full.
+  - `test_followup_target_gap.py` (13) — F2. Parameterised over 6 things M7 might echo
+    back (different case, near miss, display label, phrase, empty, **and a different
+    real key** — the dangerous one); all must record the field actually asked about.
+    Includes the JSON-salvage path and two tests proving the MAIN loop is untouched.
+  - `test_required_info.py` (21) — F3/F4. The two-kinds requirement split, the resume
+    budget, `GET /readiness`, the 409 gate, that the DEFAULT submit contract is
+    unchanged, and the anti-trap invariant (every identity requirement has a question
+    the kiosk can ask).
+  - `test_intake_context.py` (16) — F4. `problem_area` extraction, the merge that stops
+    `entities` being wiped, the age/area context reaching M7, and script ordering.
+  - `test_conversation_preserved.py` (6) — F6. Both speakers in order; summary/report
+    ADD rows and delete none; raw byte-exact **in the database** (including a
+    deliberately awkward trailing space); the .docx renders the whole conversation.
+- **Two pre-existing tests were updated, neither weakened, none deleted:**
+  `test_resume_loop.py` — its fake `Settings` had to gain `followup_resume_max_questions`
+  (a stub must model the real object); renamed, both caps zeroed, **same assertion**.
+  `test_kiosk_auto_listen.py` — `setResumeMode()` now speaks a local `text` covering both
+  an M7 row and a re-asked scripted requirement, so the literal
+  `askAloud(question.question_text)` no longer exists; the assertion was retargeted to the
+  function body and **strengthened** (it now also proves that function never falls back to
+  plain `speak()`).
+
+### B. REAL BROWSER (no microphone required) — behaviour, not source assertions
+
+> ⚠ These are the only two things this session verified in a running browser. Both were
+> chosen precisely because they need **no audio**. Everything voice-related is untested.
+
+- **F1 — OTP entry cycle: PASS.** Typed `01712345678`, pressed **Enter** → advanced to the
+  OTP screen (`state.phone` set, `otp-sub` filled). Entered a **wrong** 6-digit code → it
+  auto-submitted with no button press, the server returned 401, **all six boxes cleared**,
+  focus returned to box 1, and the banner read *"Invalid verification code. Please enter the
+  code again."* (`display:block` confirmed immediately after `showError`). Entered `000000`
+  (dev bypass, `OTP_CHANNEL=dev`) → auto-submitted and advanced to the voice screen with a
+  visit created.
+  - *Artifact worth recording, not a defect:* the automation's synthetic typing drops
+    characters when our KIOSK-1 auto-advance moves focus mid-string, so the six digits were
+    driven box-by-box through the same `input` event a keyboard fires. Real human typing is
+    unaffected — that auto-advance passed the S25 live run.
+  - *Second false alarm, same as S31:* a later read showed the banner as `display:none`.
+    That is `showError`'s own 8-second auto-hide (`shared.js:134`), not a missing message.
+- **F4 — scripted opening sequence: PASS.** After OTP, the first question was the **area**
+  question. Answering advanced `scriptIndex` 0 → 1 → 2 → 3 with the questions appearing in
+  the intended order: area → *"What is your name?"* → *"How old are you?"* → the free
+  description. `GET /api/visits/{uuid}` then showed **every system question and every
+  patient answer stored in order** (live confirmation of the F6 property), and
+  `GET /readiness` correctly listed all 8 outstanding requirements.
+  - *Investigated and dismissed:* a stray leading opening-question turn was leftover state
+    from the earlier F1 probe — `verify-otp` deliberately resumes an open `in_progress`
+    visit. Re-checked with an unused phone number: a fresh visit has **0 turns**. Not a bug.
+- Console across both runs: **only** the expected 401 from the deliberately wrong OTP.
+
+### C. NOT TESTED — do not read anything above as covering these
+
+- ❌ **Bangla voice digits were NOT validated.** No spoken phone number, no spoken OTP, no
+  digit normalization exists yet (F5 is not started). Nothing here says Bangla voice digits
+  work.
+- ❌ **No microphone path was exercised at all** — the Browser pane blocks mic capture.
+  STT, TTS, auto-listen, the countdown and barge-in remain provable only by the human's
+  live run.
+- ❌ **The F4 prompt changes are unproven against a real model.** The tests prove the age +
+  area context *reaches* M7 and that the system prompt demands age-appropriate questions;
+  no live LLM call was made, so whether the model *obeys* is unmeasured. Worth one real
+  conversation before the demo.
+- ❌ Still outstanding from earlier cycles: the combined **Chrome + Edge live listen / STT
+  run**, and formal **WER / extraction precision-recall** on a labeled set.
+
 ## 2026-08-09 — Session 31 — Module 1/7 — **Web Speech terminal-error fix**: suite 318 → 324, plus a real-engine error-injection matrix
 - Setup: Windows 11, `.venv` Python 3.13.3, `pytest backend/tests/` with `PYTHONIOENCODING=utf-8`.
   Live checks against the dev server on **port 8001** (`uvicorn backend.app.main:app --reload`), page

@@ -11,11 +11,12 @@ from __future__ import annotations
 
 import json
 import logging
+from datetime import datetime, timezone
 
 from sqlalchemy.orm import Session
 
 from backend.app.core.config import get_settings
-from backend.app.db.models import CaseProfile, FollowupQuestion, Visit
+from backend.app.db.models import CaseProfile, FollowupQuestion, Patient, Visit
 from backend.app.db.repository_visits import add_utterance
 from backend.app.schemas.profile import SUMMARY_FIELD_KEYS
 from backend.app.services.completion import field_has_text
@@ -32,6 +33,13 @@ _QUESTION_SYSTEM = (
     "and the questions already asked.\n"
     "If any missing data points remain, pick the single most clinically important one "
     "that has NOT been asked about yet and ask about it.\n"
+    "A PATIENT CONTEXT block may give the patient's age and the body/health area "
+    "they came about. When it does, honor it: keep the question inside that area "
+    "unless a missing data point takes you elsewhere, and make it AGE-APPROPRIATE — "
+    "never ask an elderly patient about school or adolescent concerns, never ask a "
+    "child or teenager about age-related conditions, pregnancy questions only where "
+    "they could plausibly apply, and use simpler wording for an elderly patient. "
+    "Never mention the patient's age back to them as a reason for the question.\n"
     "If the list is empty, ask ONE short DEEPENING question grounded in what the "
     "patient already said — the clinical detail a doctor would want next (for "
     "example: severity on a 1-10 scale, exact location or spread, what triggers or "
@@ -44,6 +52,32 @@ _QUESTION_SYSTEM = (
     "label for the new detail>\", \"priority\": <1 = most important>, "
     "\"question\": \"<Bangla question> (<English question>)\"}"
 )
+
+
+#: F2 — what each of the 10 canonical fields (``SUMMARY_FIELD_KEYS``) means, in the
+#: words M7 needs to write a question about it. Used ONLY by the resume scope, where
+#: the server names the field instead of letting the model choose: the key alone
+#: ("recent_changes_exposures") is not enough for a good Bangla question.
+#: A test pins this to exactly the 10 keys, so a contract change cannot silently
+#: leave a field undescribed.
+FIELD_PROMPTS: dict[str, str] = {
+    "main_problem": "the main problem or chief complaint that brought them in today",
+    "onset_duration": "when the problem started and how long it has lasted",
+    "symptom_details": (
+        "the symptom itself in detail — where it is, what it feels like, and what "
+        "makes it better or worse"
+    ),
+    "associated_symptoms": "any OTHER symptoms happening alongside the main problem",
+    "medical_history": "past or ongoing medical conditions they have",
+    "current_medicines": "medicines they are taking at the moment",
+    "allergies": "allergies to any medicine, food or anything else",
+    "recent_changes_exposures": (
+        "recent changes or exposures — travel, unusual food, a new medicine, contact "
+        "with someone ill, or a change at work or home"
+    ),
+    "treatments_tried": "what they have already tried for this problem",
+    "current_concern": "what worries them most, or what they want to ask the doctor",
+}
 
 
 def unanswered_question(db: Session, *, visit_id: int) -> FollowupQuestion | None:
@@ -63,6 +97,34 @@ def questions_asked(db: Session, *, visit_id: int) -> list[FollowupQuestion]:
         .order_by(FollowupQuestion.asked_at)
         .all()
     )
+
+
+def patient_context(db: Session, visit: Visit, profile: CaseProfile) -> str:
+    """F4 — the age + area block handed to M7, or '' when nothing is known.
+
+    Age comes from the patients row (filled by ``apply_demographics`` from what the
+    patient themselves said, never guessed) and the area from
+    ``entities["problem_area"]``. Both are what make questions age-appropriate and
+    on-topic instead of a generic questionnaire.
+
+    Returns '' rather than a block of empty labels when nothing is known — an empty
+    "Age:" line invites the model to invent one.
+    """
+    bits: list[str] = []
+    patient = db.get(Patient, visit.patient_id) if visit.patient_id else None
+    if patient is not None and patient.birth_year:
+        age = datetime.now(timezone.utc).year - patient.birth_year
+        if 0 < age < 130:
+            bits.append(f"Age: {age} years")
+        if patient.sex:
+            bits.append(f"Sex: {patient.sex}")
+    area = (profile.entities or {}).get("problem_area") or {}
+    area_text = str(area.get("en") or area.get("bn") or "").strip()
+    if area_text:
+        bits.append(f"Area the patient came about: {area_text}")
+    if not bits:
+        return ""
+    return "PATIENT CONTEXT:\n" + "\n".join(bits) + "\n\n"
 
 
 def missing_summary_fields(profile: CaseProfile) -> list[str]:
@@ -93,11 +155,20 @@ def generate_next_question(
     if open_q is not None:
         return open_q
 
+    fields_scope = missing is not None
     asked = questions_asked(db, visit_id=visit.id)
-    if len(asked) >= settings.followup_max_questions:
+    # F3: the resume loop gets its OWN budget on TOP of the main loop's. The two used
+    # to share one cap of 5, which the main loop's 4-5 questions consumed entirely —
+    # so the resume loop had nothing left to ask and the patient reached the review
+    # page with required fields still empty and no way to fill them. Both remain hard
+    # caps: the loop ends because the budget ends, never because the patient gave up
+    # (M9 guardrail, and the "never trap the patient" fail-safe below).
+    cap = settings.followup_max_questions
+    if fields_scope:
+        cap += settings.followup_resume_max_questions
+    if len(asked) >= cap:
         return None  # turn limit — avoid patient fatigue (M9 guardrail)
 
-    fields_scope = missing is not None
     if missing is None:
         missing = list((profile.gaps or {}).get("missing") or [])
     asked_gaps = {q.target_gap for q in asked if q.target_gap}
@@ -108,8 +179,25 @@ def generate_next_question(
     # M7 asks a history-grounded DEEPENING question instead (the route's min/cap
     # gates decide when the loop actually ends).
 
+    # F2: in the RESUME scope the SERVER names the field; the model does not choose it.
+    # Before, M7 picked, and its `target_gap` was trusted to echo an exact field key
+    # back. When it didn't (a label, different case, a phrase), the code silently
+    # recorded the question against `remaining[0]` instead — so the field actually
+    # ASKED about stayed "unasked" and got asked again, while a field nobody had asked
+    # was marked answered and never revisited. That is the question/answer mismatch.
+    # Naming the field up front makes the pairing true by construction.
+    target_key = remaining[0] if fields_scope else None
+
+    field_directive = ""
+    if target_key is not None:
+        field_directive = (
+            f"ASK ABOUT EXACTLY THIS ONE FIELD, nothing else: {target_key} — "
+            f"{FIELD_PROMPTS.get(target_key, target_key)}\n\n"
+        )
     user = (
+        f"{patient_context(db, visit, profile)}"
         f"CONVERSATION:\n{_conversation_text(db, visit)}\n\n"
+        f"{field_directive}"
         f"MISSING DATA POINTS:\n{json.dumps(remaining, ensure_ascii=False)}\n\n"
         f"ALREADY ASKED (do not repeat):\n"
         f"{json.dumps([q.question_text for q in asked], ensure_ascii=False)}"
@@ -128,10 +216,10 @@ def generate_next_question(
         logger.warning("M7 returned non-JSON for visit %s; using raw text", visit.id)
         question_text, target_gap, priority = reply.strip(), fallback_gap, 1
 
-    if fields_scope and target_gap not in remaining:
-        # The no-repeat memory only works on real field keys — never trust the LLM
-        # to echo one back verbatim.
-        target_gap = remaining[0]
+    if target_key is not None:
+        # The field we ASKED the model to cover is the field we record — always, and
+        # on the JSON-salvage path too. Whatever the model echoed back is ignored.
+        target_gap = target_key
 
     question = FollowupQuestion(
         visit_id=visit.id, target_gap=target_gap, question_text=question_text, priority=priority

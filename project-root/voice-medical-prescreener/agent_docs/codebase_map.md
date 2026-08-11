@@ -4,7 +4,55 @@
 > re-exploring the whole project each session. Update it whenever you add or move
 > a folder/file. Keep each note to one line.
 
-**Last updated:** 2026-08-09 (**Session 31 — the Edge terminal-error fix: ONE production file changed,
+**Last updated:** 2026-08-11 (**Session 32 — faculty-demo cycle F1–F4 + F6: ONE new production file,
+five new test files, no schema change (Alembic stays 0012), no dependency change.**
+
+**NEW production file — `backend/app/services/requirements.py`** (F3). The ONE definition of what a
+pre-screening must have collected before the patient reaches the final review. Exports
+`MUST_HAVE_VALUE` (`main_problem` — must carry text), `MUST_HAVE_BEEN_ASKED` (onset, symptom details,
+medicines, allergies — must have been PUT to the patient but may legitimately end empty),
+`IDENTITY_REQUIREMENTS` (`patient_name`, `patient_age`, `problem_area` — F4, living OUTSIDE
+`summary_fields`), and `missing_requirements(db, visit)`. The kiosk gate, the readiness route and the
+submit guard all read it from here — do NOT fork a second definition.
+
+**Edited production files:**
+- **`frontend/kiosk.js`** — the bulk. F1: `OTP_LENGTH` / `otpBoxes()` / `otpDigits()` /
+  `clearOtpInputs()` / `maybeAutoVerify()`, an Enter branch inside `initOtpInputs()`'s keydown
+  (⚠ the Backspace branch keeps its early `return` — a test pins that), `wire('phone-input', sendOtp)`
+  in `initTypedInputs()`, and a rewritten `verifyOtp()` with `otpVerifying`. F3:
+  `updateSubmitVisibility()` / `renderRequiredNotice()` / `loadReadiness()`, `state.readiness`, and
+  `confirmSubmit()` now posts `?require_complete=true`. F4: `INTAKE_SCRIPT` + `scriptEntry()` +
+  `askScriptedQuestion()` + `inScriptedOpening()`, `state.scriptIndex` / `state.resumeScripted`,
+  `pendingScriptedRequirement()`, and **`setResumeMode(question, scripted)` now takes two kinds of
+  question** — this is what invalidated the old `askAloud(question.question_text)` assertion.
+- **`frontend/kiosk.html`** — `#required-notice` div + its `.required-notice` warning style.
+- **`backend/app/services/followup.py`** — `FIELD_PROMPTS` (one description per canonical key),
+  `patient_context()` (age/sex/area → M7), the AGE-APPROPRIATE clause in `_QUESTION_SYSTEM`, the
+  server-named `target_key` replacing the old `target_gap = remaining[0]` repair, and the resume cap
+  = `followup_max_questions + followup_resume_max_questions`.
+- **`backend/app/services/intake.py`** — `problem_area()` helper + the `problem_area` key in
+  `_EXTRACT_SYSTEM`; `run_intake` now **merges** into `entities` instead of replacing it.
+- **`backend/app/services/profile_update.py`** — same merge fix, so a found area and the C1
+  `suggested_condition` survive every follow-up answer.
+- **`backend/app/api/routes_visits.py`** — NEW `GET /api/visits/{uuid}/readiness`.
+- **`backend/app/api/routes_dashboard.py`** — `submit_visit()` gains `require_complete: bool = False`
+  (⚠ **opt-in on purpose** — staff/walk-in paths legitimately submit partial cases; the kiosk always
+  sends true; ADR-0052 d).
+- **`backend/app/schemas/visit.py`** — `ReadinessOut`.
+- **`backend/app/core/config.py`** — `followup_resume_max_questions: int = 8`.
+
+**NEW test files:** `test_kiosk_otp_entry.py` (12) · `test_followup_target_gap.py` (13) ·
+`test_required_info.py` (21) · `test_intake_context.py` (16) · `test_conversation_preserved.py` (6)
+→ suite **324 → 392, 1 skipped**. Two existing test files edited, neither weakened:
+`test_resume_loop.py` (its fake Settings gained the new field) and `test_kiosk_auto_listen.py` (the
+`setResumeMode` assertion retargeted and strengthened).
+
+**Pointer for next session (F5, NOT built):** `backend/app/db/repository_visits.py:17`
+`normalize_phone` — `re.sub(r"\D", "", ...)` **keeps** Bangla digits (they are Unicode digits) and then
+fails the ASCII `startswith("1")` check → `ValueError` → 400. **Verified, not assumed.** JS `/\D/g` in
+`kiosk.js` is ASCII-only and silently **deletes** them instead. The two languages disagree; F5's
+normalizer must resolve that explicitly.
+Prior: 2026-08-09 (**Session 31 — the Edge terminal-error fix: ONE production file changed,
 ONE test file added.** `frontend/kiosk.js` — three bilingual message constants (`MIC_UNAVAILABLE` /
 `STT_SERVICE_UNAVAILABLE` / `STT_LANGUAGE_UNSUPPORTED`) + the **`TERMINAL_STT_ERRORS`** map, declared
 immediately **above `initRecognition()`**; `r.onerror` became a 5-line map lookup. ⚠ **`r.onend` and

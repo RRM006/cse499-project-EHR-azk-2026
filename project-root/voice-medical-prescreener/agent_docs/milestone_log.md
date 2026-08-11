@@ -6,7 +6,39 @@
 
 **Status keys:** ⬜ Not started · 🟨 In progress · 🟦 Blocked · ✅ Done · ⛔ Retired
 
-**Last updated:** 2026-08-09 (**Session 31 — the ONE real defect S30 found is now FIXED and CLOSED.**
+**Last updated:** 2026-08-11 (**Session 32 — the FACULTY-DEMO feature cycle opened; F1–F4 + F6 shipped,
+F5 NOT started.** The human gave an 8-part feature list and approved a P0 plan **F1→F2→F3→F4→F5→F6**.
+**⚠ NO MODULE CHANGED STATUS and the faculty-demo voice flow is NOT complete** — these are refinements
+inside modules already ✅ (M7 follow-up, M9 completion, M13 storage) plus one bug fix, not new modules.
+Shipped: **F1** OTP entry (`frontend/kiosk.js` — Enter on the OTP boxes AND the phone field, which had
+**no Enter handler at all**; auto-verify at 6 digits from both the typed and pasted paths; a rejected
+code now clears and re-asks; an `otpVerifying` guard because ADR-0045 codes are SINGLE-USE and a double
+submit would burn the patient's own valid code). **F2** the question/answer mismatch (`followup.py` —
+the resume scope used to "repair" M7's `target_gap` to `remaining[0]`, filing a question against a
+DIFFERENT field, so the asked field stayed unasked and an unasked field was marked answered; the SERVER
+now names the field and records that same field, salvage path included; **the MAIN loop is deliberately
+unchanged**). **F3** required-info enforcement (NEW `services/requirements.py` = the ONE definition,
+with the two-kinds split MUST_HAVE_VALUE vs MUST_HAVE_BEEN_ASKED so "no allergies" can satisfy a
+requirement; NEW `GET /api/visits/{uuid}/readiness`; `submit?require_complete=true`; and
+`followup_resume_max_questions = 8` giving the resume loop its OWN budget — it shared the main cap of 5,
+which the main loop spent entirely, and THAT is why review pages arrived with empty required fields).
+**F4** area → name → age → description as an `INTAKE_SCRIPT` of ORDINARY recorded turns through the SAME
+endpoint (no second pipeline); `problem_area` added to M3/M8 and `entities` now MERGED instead of
+replaced (it was silently wiping `suggested_condition`); `patient_context()` hands M7 age + sex + area
+and `_QUESTION_SYSTEM` demands AGE-APPROPRIATE questions. **F6** conversation-preservation regression
+tests — **tests only, no production code**: requirement 8 was ALREADY satisfied, so this converts "true
+today" into "cannot silently stop being true". **324 → 392 tests pass, 1 skipped.** New ADR **0052**
+(identity stays OUTSIDE the 10 fields; two kinds of requirement; server-side gate; `require_complete`
+opt-in; resume budget; server names the resume field). **Alembic stays 0012 — no schema change.**
+⚠ **NOT DONE and explicitly deferred by the human:** **F5 voice phone-number entry and voice OTP**
+(their requirements 1 and 2 — so the specified demo flow is NOT yet achievable), **P1 robotic
+doctor/avatar**, **P1/P2 elderly-friendly + 3D UI**, **real human Bangla voice-DIGIT validation**, and
+**full voice-first faculty-demo validation**. ⚠ **NO VOICE PATH WAS VERIFIED this session** — the
+Browser pane blocks mic capture, so every voice claim still rests on the human's live run; what WAS
+live-verified needs no mic (the OTP keyboard/auto-submit/clear cycle, and the scripted opening
+sequencing area → name → age → description with every turn stored in order). ⚠ **The F4 prompt changes
+are UNPROVEN** — tests prove the age/area context REACHES M7, not that the model obeys it.
+Prior: 2026-08-09 (**Session 31 — the ONE real defect S30 found is now FIXED and CLOSED.**
 `frontend/kiosk.js` only, ONE handler: `r.onerror` looks up a **`TERMINAL_STT_ERRORS`** map
 (`not-allowed`, `audio-capture`, `network`, `service-not-allowed`, **`language-not-supported`**) →
 message + `stopListening(false)` + `setInputMode('type')`. That flips `listening` to false, which is what

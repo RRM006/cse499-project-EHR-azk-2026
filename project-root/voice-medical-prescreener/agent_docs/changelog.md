@@ -16,6 +16,79 @@
 
 ---
 
+## Session 32 — 2026-08-11 — **Faculty-demo cycle: F1–F4 + F6 shipped** (OTP entry, target_gap mismatch, required-info gate, area/name/age, conversation-preservation tests) — 324 → 392 tests
+- Did: the human gave a 8-part faculty-demo feature list and approved a P0 plan **F1→F2→F3→F4→F5→F6**.
+  **F1, F2, F3, F4 and F6 are DONE. F5 (voice phone number + voice OTP) is NOT STARTED**, and neither
+  are the P1/P2 items (robotic-doctor avatar, review identity header, 3D/elderly UI polish).
+- **F1 — OTP entry (BUG FIX + UX).** `frontend/kiosk.js` only. Three defects the human reported:
+  Enter did nothing (there was NO Enter handler on the OTP boxes OR the phone field — `initTypedInputs`
+  wired only the two conversation text boxes); a complete code still needed a button click; a rejected
+  code left its digits on screen. Now: `OTP_LENGTH` + `otpDigits()` + `clearOtpInputs()` +
+  `maybeAutoVerify()` (called from the typed AND pasted paths), Enter on both screens, and a rewritten
+  `verifyOtp()` with a length gate, an `otpVerifying` re-entry guard (codes are SINGLE-USE per
+  ADR-0045 — a double submit would burn the patient's own valid code), clear-and-re-ask on failure
+  keeping the server's own reason, and `if (!res) return;` so a failure cannot fall through to
+  `showScreen('screen-voice')`.
+- **F2 — the question/answer mismatch (BUG FIX).** `services/followup.py`. The resume scope used to
+  let M7 pick the field and then "repair" a non-matching `target_gap` to `remaining[0]` — filing the
+  question against a DIFFERENT field, so the asked field stayed unasked (asked again) and an unasked
+  field was marked answered (never revisited). The SERVER now names the field in the prompt
+  (`FIELD_PROMPTS`, one description per canonical key) and records that same field, including on the
+  JSON-salvage path. The MAIN loop is deliberately untouched (M6 free-text gaps, no key contract).
+- **F3 — required info cannot be skipped.** NEW `services/requirements.py` = the ONE definition, with
+  the two-kinds split (`MUST_HAVE_VALUE` vs `MUST_HAVE_BEEN_ASKED`) so "no allergies" can satisfy a
+  requirement. NEW `GET /api/visits/{uuid}/readiness`; `POST .../submit?require_complete=true`;
+  `followup_resume_max_questions = 8` giving the resume loop its own budget on top of the main 5.
+  Kiosk: `updateSubmitVisibility()` hides Confirm & Submit on the server's verdict, a bilingual
+  `#required-notice` names what is outstanding, and `confirmSubmit()` sends the flag and re-runs the
+  loop on a 409.
+- **F4 — area first, name + age collected, both fed to M7.** `INTAKE_SCRIPT` = area → name → age →
+  free description, each an ORDINARY recorded turn through the SAME endpoint (no second pipeline).
+  M3/M8 gained `problem_area`; `entities` is now MERGED rather than replaced (intake used to wipe
+  `suggested_condition` and any found area). `patient_context()` hands M7 age + sex + area, and
+  `_QUESTION_SYSTEM` demands AGE-APPROPRIATE questions. Identity is re-askable on the review screen
+  via the resume dock, which is what makes requiring it safe.
+- **F6 — conversation preservation (tests only, no code).** Inspection found requirement 8 ALREADY
+  satisfied; `test_conversation_preserved.py` converts "true today" into "cannot silently stop being
+  true": both speakers in order, summary/report ADD rows and delete none, raw byte-exact in the DB
+  (incl. a trailing space), and the .docx renders the whole conversation.
+- Decided: **ADR-0052** — identity outside the 10 fields; two kinds of requirement; server-side gate;
+  `require_complete` opt-in; resume budget; server names the resume field.
+- Verified: **392 pass, 1 skipped** (was 324). New files: `test_kiosk_otp_entry.py` (12),
+  `test_followup_target_gap.py` (13), `test_required_info.py` (21), `test_intake_context.py` (16),
+  `test_conversation_preserved.py` (6). **Live-verified in a real browser engine** (no mic needed):
+  Enter advanced the phone screen; six digits auto-submitted with no button press; a wrong code
+  cleared all six boxes, refocused box 1 and showed *"Invalid verification code. Please enter the code
+  again."*; `000000` advanced to the voice screen; and the scripted opening sequenced
+  area → name → age → description with every turn stored server-side in order.
+- Broke / problem: **two existing tests needed updating, neither weakened.**
+  `test_resume_loop.py::test_resume_respects_shared_question_cap` — its settings stub had to gain
+  `followup_resume_max_questions` (a fake Settings must model the real one); renamed and both caps
+  zeroed, same assertion. `test_kiosk_auto_listen.py::test_every_question_..._goes_through_askaloud` —
+  `setResumeMode()` now speaks a local `text` covering BOTH an M7 row and a re-asked scripted
+  requirement, so the literal `askAloud(question.question_text)` no longer exists; the assertion was
+  retargeted to the function body and now also proves it never uses plain `speak()`.
+- ⚠ Honest gaps: **F5 not started** — voice phone/OTP entry is the human's requirement 1 and 2, so the
+  full demo flow they specified is NOT yet achievable. **No voice path was verified** (the Browser pane
+  blocks mic capture); the age-appropriateness and area-context prompt changes are **prompt-level and
+  unproven** — no live LLM call was made against them. `require_complete` is bypassable by omitting
+  the flag (deliberate, ADR-0052 d). A resumed `in_progress` visit re-asks the script and appends to
+  the earlier conversation (pre-existing `verify-otp` behaviour, now more visible).
+- **Deferred (the human called STOP at this point — next session's work):**
+  **F5 — voice phone-number entry** and **F5 — voice OTP** (their requirements 1 and 2; the design is
+  agreed and written into `current_task.md`, but no code exists). **P1 — the robotic doctor/avatar**
+  and the review-page identity header. **P1/P2 — elderly-friendly + selective-3D UI work.**
+  **Real human Bangla voice-DIGIT validation** (never attempted — the Browser pane blocks mic capture).
+  **Full voice-first faculty-demo validation.** Also still deferred from earlier cycles: the combined
+  **Chrome + Edge live listen / STT run**, the **mid-turn word-loss** rule #1 decision, **Step S5** of
+  Requirement 3, **rotating the 3 API keys** (human-only), and the stale
+  `human_live_run_guide.md` / `CLAUDE.md` lines.
+- Next: **F5 — implement and validate voice phone-number entry + voice OTP.** Re-read the docs and
+  re-inspect the STT/listening state machine FIRST; reuse the existing seam (no second recognizer);
+  normalize Bangla/English digits and number words; **never silently submit an uncertain phone
+  number** — show it and require confirmation; then voice OTP on top of F1's `maybeAutoVerify()`.
+  Only after F5 is stable, P1/P2.
+
 ## Session 31 — 2026-08-09 — **The Edge STT terminal-error dead end is FIXED and CLOSED** — 318 → 324 tests
 - Did: implemented the one defect the S30 Edge verification found and deliberately left unfixed.
   **`frontend/kiosk.js` only — ONE handler, one file, no backend/schema/Alembic change.**

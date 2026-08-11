@@ -31,6 +31,7 @@ from backend.app.schemas.patient import PatientOut
 from backend.app.schemas.profile import SUMMARY_FIELD_KEYS, CaseProfileOut, SuggestedCondition
 from backend.app.schemas.visit import VisitOut
 from backend.app.services.audit import audit
+from backend.app.services.requirements import missing_requirements
 from backend.app.services.risk import assess_visit, latest_assessment
 from backend.app.services.suggestion import (
     CONDITION_DISCLAIMER,
@@ -118,14 +119,25 @@ def _post_submit_assessment(engine, visit_id: int) -> None:
 
 @router.post("/visits/{visit_uuid}/submit", response_model=VisitOut)
 def submit_visit(
-    visit_uuid: str, background_tasks: BackgroundTasks, db: Session = Depends(get_db)
+    visit_uuid: str,
+    background_tasks: BackgroundTasks,
+    require_complete: bool = False,
+    db: Session = Depends(get_db),
 ) -> VisitOut:
     """Patient's "Confirm & Submit": in_progress -> awaiting_review INSTANTLY.
 
     P1-5 (ADR-0042b): the risk assessment + C1 suggestion (reconciliation f6 — M10
     runs before staff review) moved to a BackgroundTasks job so the patient never
     waits on LLM latency; status + audit stay synchronous, so the case is in the
-    medic queue the moment this returns (tier fills in on the queue's refresh)."""
+    medic queue the moment this returns (tier fills in on the queue's refresh).
+
+    F3 — ``require_complete``: enforce the pre-screening requirements server-side, so
+    a patient cannot reach the doctor by clicking past the questions. **The kiosk
+    always sends true.** It is opt-IN rather than always-on because this same endpoint
+    serves staff and walk-in paths that never went through the kiosk interview and
+    legitimately submit partial cases (a medic entering a case by hand has no resume
+    loop to satisfy). Making it unconditional would block those flows.
+    """
     visit = _get_visit_or_404(db, visit_uuid)
     if visit.status != "in_progress":
         raise HTTPException(status_code=409, detail=f"Visit is already '{visit.status}'.")
@@ -133,6 +145,16 @@ def submit_visit(
         u.role == "patient" for u in repo.list_visit_utterances(db, visit_id=visit.id)
     ):
         raise HTTPException(status_code=400, detail="Nothing to submit — no patient speech yet.")
+    if require_complete:
+        missing = missing_requirements(db, visit)
+        if missing:
+            raise HTTPException(
+                status_code=409,
+                detail=(
+                    "Required pre-screening information is still missing: "
+                    + ", ".join(missing)
+                ),
+            )
 
     updated = repo.set_visit_status(db, visit=visit, status="awaiting_review")
     audit(db, action="visit.submit", entity_type="visit", entity_id=visit.uuid,

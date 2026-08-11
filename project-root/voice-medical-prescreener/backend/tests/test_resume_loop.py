@@ -146,13 +146,20 @@ def test_negative_answer_counts_as_answered_never_reasked(env):
     assert "নেই" in patient_turns and "জানি না" in patient_turns
 
 
-def test_resume_respects_shared_question_cap(env, monkeypatch):
+def test_resume_respects_its_question_cap(env, monkeypatch):
+    """F3 note: the resume loop no longer shares the main cap — it has its OWN budget
+    on top of it (`followup_resume_max_questions`). Exhausting the budget therefore
+    means zeroing BOTH; the behaviour being pinned here is unchanged, and is the
+    fail-safe that matters: a spent budget must report complete, never trap the
+    patient behind a question the server has decided not to ask."""
     client, _, _ = env
     uuid = _visit_with_intake(client)
 
     monkeypatch.setattr(
         "backend.app.services.followup.get_settings",
-        lambda: type("S", (), {"followup_max_questions": 0, "completeness_threshold": 0.7})(),
+        lambda: type("S", (), {"followup_max_questions": 0,
+                               "followup_resume_max_questions": 0,
+                               "completeness_threshold": 0.7})(),
     )
     r = client.post(f"/api/visits/{uuid}/followup/next?scope=fields")
     body = r.json()

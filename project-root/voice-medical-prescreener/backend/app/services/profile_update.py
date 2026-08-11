@@ -21,6 +21,7 @@ from backend.app.services.intake import (
     _parse_json,
     _to_summary_fields,
     apply_demographics,
+    problem_area,
 )
 from backend.app.services.llm_client import call_module
 
@@ -56,8 +57,15 @@ def process_answer(
     extracted = _parse_json(reply)
     fresh = _to_summary_fields(extracted).model_dump(mode="json")
     apply_demographics(db, visit, extracted)  # P2-2: fill-only-when-empty
-    existing = (profile.entities or {}).get("summary_fields") or {}
-    profile.entities = {"summary_fields": _merge_fields(existing, fresh)}
+    # F4: merge INTO the existing entities instead of replacing them, so a
+    # problem_area (and the C1 suggested_condition) survives every follow-up answer.
+    entities = dict(profile.entities or {})
+    existing = entities.get("summary_fields") or {}
+    entities["summary_fields"] = _merge_fields(existing, fresh)
+    area = problem_area(extracted)
+    if area is not None:                      # only ever fills in, never blanks out
+        entities["problem_area"] = area
+    profile.entities = entities
 
     # The answered gap moves from missing -> present (M6 checklist upkeep).
     gaps = dict(profile.gaps or {"present": [], "missing": []})

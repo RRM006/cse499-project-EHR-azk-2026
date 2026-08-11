@@ -77,6 +77,13 @@ class Settings(BaseSettings):
     followup_min_questions: int = 4
     followup_max_questions: int = 5
     completeness_threshold: float = 0.7
+    # F3: the KIOSK-7 resume loop's OWN budget, on top of followup_max_questions.
+    # It used to share the main cap, so the main loop's 4-5 questions consumed the
+    # whole allowance and the resume loop had nothing left to ask — the patient
+    # reached the review page with required fields still empty and no way to fill
+    # them. The resume loop asks about ONE named field at a time (F2), so its
+    # questions are cheap, specific, and bounded by how many fields are empty.
+    followup_resume_max_questions: int = 8
 
     # --- patient voice loop (faculty Requirement 3 + 3b; ADR-0047 + ADR-0048) ---
     # VOICE IS THE PRIMARY patient interaction; typing is ALWAYS available as the

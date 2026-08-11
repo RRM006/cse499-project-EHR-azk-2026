@@ -41,6 +41,12 @@ _EXTRACT_SYSTEM = (
     "age in years, and their sex/gender, each ONLY if the patient explicitly stated "
     "it about themselves in the conversation; otherwise use empty/null. Never guess "
     "these from symptoms, voice, or context.\n"
+    "Also include a key \"problem_area\": an object {\"en\": \"...\", \"bn\": \"...\"} "
+    "naming the BODY AREA or health area the patient came to talk about (for example "
+    "\"abdomen / stomach\", \"chest\", \"head\", \"skin\", \"mental health\"), in "
+    "English (en) and Bangla script (bn). Use ONLY what the patient indicated; if they "
+    "have not indicated an area, use {\"en\": \"\", \"bn\": \"\"}. Do NOT infer a "
+    "disease — this is a location, not a diagnosis.\n"
     "Base every value ONLY on the conversation text."
 )
 
@@ -105,6 +111,27 @@ def _to_summary_fields(extracted: dict) -> SummaryFields:
             "pain_severity_0_10": structured.get("pain_severity_0_10"),
         }
     return SummaryFields.model_validate(payload)
+
+
+def problem_area(extracted: dict) -> dict | None:
+    """F4 — the body/health area the patient came about, as ``{"en", "bn"}``.
+
+    Stored BESIDE ``summary_fields`` in ``case_profiles.entities`` (the same place
+    ``suggested_condition`` lives, ADR-0036) rather than inside it: the human's
+    decision is that the 10-field contract stays byte-identical, so the area gets its
+    own key instead of becoming an 11th field.
+
+    Returns None when the model said nothing usable, so a later extraction that DOES
+    find an area cannot be overwritten by an emptier one.
+    """
+    area = extracted.get("problem_area")
+    if not isinstance(area, dict):
+        return None
+    en = str(area.get("en") or "").strip()
+    bn = str(area.get("bn") or "").strip()
+    if not (en or bn):
+        return None
+    return {"en": en, "bn": bn}
 
 
 _SEX_VALUES = {"male", "female", "other"}
@@ -180,7 +207,14 @@ def run_intake(db: Session, visit: Visit) -> CaseProfile:
     if profile is None:
         profile = CaseProfile(visit_id=visit.id)
         db.add(profile)
-    profile.entities = {"summary_fields": summary_fields.model_dump(mode="json")}
+    # F4: keep whatever else already lives in entities (suggested_condition, a
+    # previously found problem_area) — this used to REPLACE the dict wholesale.
+    entities = dict(profile.entities or {})
+    entities["summary_fields"] = summary_fields.model_dump(mode="json")
+    area = problem_area(extracted)
+    if area is not None:                      # never overwrite a found area with none
+        entities["problem_area"] = area
+    profile.entities = entities
     profile.summary = summary
     profile.gaps = gaps
     profile.updated_at = datetime.now(timezone.utc)

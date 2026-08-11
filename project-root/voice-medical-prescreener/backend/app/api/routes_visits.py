@@ -25,6 +25,7 @@ from backend.app.services.audit import audit
 from backend.app.services.intake import run_intake
 from backend.app.services.llm_client import LLMCallError
 from backend.app.services.otp import OtpSendError, issue_otp, verify_otp_code
+from backend.app.services.requirements import missing_requirements
 from backend.app.schemas.patient import (
     OtpVerifyOut,
     OtpVerifyRequest,
@@ -34,6 +35,7 @@ from backend.app.schemas.patient import (
     VisitDetailWithPatientOut,
 )
 from backend.app.schemas.visit import (
+    ReadinessOut,
     StoreVisitUtteranceRequest,
     VisitCreate,
     VisitOut,
@@ -191,6 +193,20 @@ def run_visit_intake(visit_uuid: str, db: Session = Depends(get_db)) -> CaseProf
         raise HTTPException(status_code=400, detail=str(exc))
     except LLMCallError as exc:
         raise HTTPException(status_code=502, detail=str(exc))
+
+
+@router.get("/visits/{visit_uuid}/readiness", response_model=ReadinessOut)
+def get_visit_readiness(visit_uuid: str, db: Session = Depends(get_db)) -> ReadinessOut:
+    """F3 — may the patient proceed to the final review, or is required info still owed?
+
+    Public like the rest of the kiosk flow, and READ-ONLY: it asks
+    ``services/requirements`` and reports. The kiosk gates its Confirm & Submit on
+    this, and ``POST /submit?require_complete=true`` enforces the same answer, so the
+    screen and the server can never disagree about what "complete" means.
+    """
+    visit = _get_visit_or_404(db, visit_uuid)
+    missing = missing_requirements(db, visit)
+    return ReadinessOut(complete=not missing, missing=missing)
 
 
 @router.get("/visits/{visit_uuid}/profile", response_model=CaseProfileOut)

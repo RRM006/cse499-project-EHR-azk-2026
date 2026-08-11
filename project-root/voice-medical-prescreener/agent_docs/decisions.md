@@ -1178,3 +1178,51 @@ separate, still-**unproven** question tracked in `current_task.md`.
 - Status: **Accepted (code shipped). ⚠ The human has NOT yet heard it** — the tests prove which string
   reaches each provider, not that it sounds right. Independent of ADR-0050 (TTS-2, voice naturalness),
   which remains **Proposed** and unstarted.
+
+## ADR-0052 — 2026-08-11 — Faculty-demo cycle: required pre-screening info is server-gated; identity (name/age/area) lives OUTSIDE the 10 fields
+- Decision (the human's, recorded during the F1–F6 build):
+  (a) **The 10-field `summary_fields` contract stays byte-identical.** Patient name, age and the
+      body/health **area** are required information, but they are NOT promoted to fields 11/12.
+      Name and age use the existing `patients` columns; the area gets its own key
+      `case_profiles.entities["problem_area"]` — beside `summary_fields`, the same pattern
+      `suggested_condition` already uses (ADR-0036). Rejected: extending to 12 fields, which would
+      ripple through `SUMMARY_FIELD_KEYS`, `staff.js`, `visit_docx.py`, `report.py`, the completeness
+      math and every stored row.
+  (b) **"Required" has two kinds, not one.** `MUST_HAVE_VALUE` (main_problem) must carry text;
+      `MUST_HAVE_BEEN_ASKED` (onset, symptom details, medicines, allergies) must have been PUT to the
+      patient but may legitimately end empty. The human's rule: *"do not artificially force every one
+      of the 10 fields to contain an answer when a field is genuinely not applicable."* Forcing a
+      value would push a patient into inventing one, and an invented answer in a medical record is
+      worse than an empty one.
+  (c) **The gate is server-side** — `services/requirements.py` is the ONE definition, served by
+      `GET /api/visits/{uuid}/readiness` and enforced by `POST .../submit?require_complete=true`.
+      The kiosk hides Confirm & Submit on the same verdict, so screen and server cannot disagree.
+  (d) **`require_complete` is opt-IN, not the default.** The same endpoint serves staff/walk-in paths
+      that never ran the kiosk interview and legitimately submit partial cases; making it
+      unconditional would block them and would have forced three unrelated test fixtures
+      (`test_report_review`, `test_suggested_condition`, `test_risk_override`) to stop modelling
+      sparse cases. **The kiosk always sends it.** ⚠ Known limitation, accepted deliberately: a client
+      that omits the flag skips the check. The threat model here is a patient pressing Next, not a
+      hostile client.
+  (e) **The resume loop gets its OWN budget** (`followup_resume_max_questions = 8`) on top of
+      `followup_max_questions = 5`. They shared one cap of 5, which the main loop spent entirely — so
+      the loop that exists to fill gaps routinely had zero questions left. No schema change: the
+      resume scope simply compares against `main + resume`, so questions need no scope column.
+  (f) **The resume scope names the field; the model does not choose it** (F2). M7's echoed
+      `target_gap` used to be "repaired" to `remaining[0]` whenever it wasn't an exact key, which
+      filed the question against a DIFFERENT field — the asked field stayed "unasked" and was asked
+      again, while an unasked field was marked answered and never revisited. That is the
+      question/answer mismatch the human reported. The server now puts the field in the prompt and
+      records that same field, on the JSON-salvage path too.
+  (g) **Requiring identity is only safe because it is askable.** The kiosk's `INTAKE_SCRIPT` asks
+      area → name → age → free description, and re-asks any of the three on the review screen via the
+      existing resume dock. A requirement nothing can ask about would trap the patient; a test pins
+      that every `IDENTITY_REQUIREMENTS` key has a matching script entry.
+- Why: requirements 3A/3B/3C/6 of the faculty-demo list. Inspection showed the follow-up loop was
+  ALREADY context-aware (M7 receives the whole conversation, the gap list and the asked list), so the
+  work was never "replace the questionnaire" — it was to give M7 the two contexts it lacked (age,
+  area) and to stop the budget starving the gap-filling loop.
+- Rules preserved: raw utterances still insert-only and verbatim (rule #1) — the scripted opening is
+  ordinary turns through the SAME endpoint, no second pipeline (ADR-0048); no diagnosis added
+  (rule #2) — the area prompt says explicitly *"this is a location, not a diagnosis"*.
+- Status: Accepted (code shipped, 392 tests). Alembic unchanged at **0012**.
