@@ -5,7 +5,7 @@ existing flat-transcript paths stay untouched. Same rule applies here: raw_text 
 write-once — add_utterance() inserts, nothing updates it (rule #1).
 """
 
-import re
+import unicodedata
 from datetime import datetime, timezone
 
 from sqlalchemy import func
@@ -14,13 +14,37 @@ from sqlalchemy.orm import Session
 from backend.app.db.models import Clinic, Patient, Utterance, Visit
 
 
+def to_ascii_digits(text: str) -> str:
+    """Keep only decimal digits, folding every script's form to ASCII 0-9.
+
+    F5 (ADR-0053): "a Unicode decimal digit IS a digit" — a patient reading their
+    number aloud in Bangla, or typing on a Bangla keyboard, produces
+    ``০১৭১৫৯৮৪৬৩২``, and refusing that is refusing the language the kiosk is built
+    for. This replaces ``re.sub(r"\\D", "", ...)``, which was subtly wrong rather
+    than merely strict: Python's ``\\d`` is Unicode-aware, so it KEPT ``০১৭…``
+    unchanged and let the ASCII ``startswith("880")`` / length checks below fail on
+    an otherwise perfectly valid number.
+
+    ``unicodedata.decimal`` (not ``str.isdigit``) is the right filter: it accepts
+    exactly the Nd category — Bangla, Devanagari, Arabic-Indic, fullwidth — while
+    rejecting things like superscript ``²`` that are "digits" to ``isdigit()`` but
+    carry no positional value.
+    """
+    return "".join(
+        str(unicodedata.decimal(ch))
+        for ch in text
+        if unicodedata.decimal(ch, None) is not None
+    )
+
+
 def normalize_phone(phone: str) -> str:
     """Normalize a Bangladeshi mobile number to ``+8801XXXXXXXXX``.
 
-    Accepts '01715984632', '8801715984632', '+880 1715-984632', etc.
+    Accepts '01715984632', '8801715984632', '+880 1715-984632', the Bangla-digit
+    forms of all of those, and any mix of the two scripts.
     Raises ValueError for anything that doesn't reduce to a valid BD mobile.
     """
-    digits = re.sub(r"\D", "", phone)
+    digits = to_ascii_digits(phone)
     if digits.startswith("880"):
         digits = digits[3:]
     digits = digits.lstrip("0") if digits.startswith("0") else digits

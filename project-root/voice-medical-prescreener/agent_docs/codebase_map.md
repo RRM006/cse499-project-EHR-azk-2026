@@ -4,7 +4,41 @@
 > re-exploring the whole project each session. Update it whenever you add or move
 > a folder/file. Keep each note to one line.
 
-**Last updated:** 2026-08-11 (**Session 32 — faculty-demo cycle F1–F4 + F6: ONE new production file,
+**Last updated:** 2026-08-11 (**Session 33 — FOUR new test files, NO new production file, no
+schema change (Alembic stays 0012), no dependency change.**
+
+**NEW test files** (all under `backend/tests/`):
+- **`test_voice_digits.py`** (20) — F5a. The cross-language digit contract: `normalize_phone` /
+  `to_ascii_digits` accepting Bangla digits, and the shipped `SPOKEN_DIGITS` map parsed OUT of the
+  served `kiosk.js` rather than restated. Also pins the two Unicode traps — `\p{M}` in the
+  tokeniser and the NFC fold for `ছয়`/`নয়`.
+- **`test_kiosk_voice_identification.py`** (26) — F5b. That identification is two more `DOCKS`
+  entries and two branches, NOT a second recognizer (`new SR()` appears exactly once); that a
+  spoken phone number is never auto-sent; that a spoken OTP reuses `maybeAutoVerify()`.
+- **`test_kiosk_avatar.py`** (25) — P1/P2. Avatar state derived-not-pushed and its precedence,
+  the poll, the error expiry, the TDZ guard, the custom-property lamp, plus the elderly-UI
+  assertions (touch targets, focus rings, both responsive axes) and a regression test for
+  equal-specificity duplicate CSS.
+- **`test_age_appropriate_questions.py`** (17 + 1 opt-in skip) — P3, tiered: deterministic code
+  validation and prompt validation, with the live `M7_LIVE=1` probe skipped by default.
+
+**Edited production files (no new modules):**
+- **`backend/app/db/repository_visits.py`** — NEW `to_ascii_digits()`; `normalize_phone` now folds
+  any Unicode decimal digit instead of `re.sub(r"\D", ...)`. `import re` -> `import unicodedata`.
+- **`frontend/kiosk.js`** — F5a pure digit functions (`unicodeDigit`, `asciiDigits`,
+  `SPOKEN_DIGITS`, `digitsFromSpeech`, `phoneFromSpeech`); F5b `DOCKS.phone`/`DOCKS.otp`,
+  `state.identifyStep`/`pendingPhone`, `applySpokenPhone`/`applySpokenOtp`, the read-back
+  (`showPhoneConfirm`/`confirmPhone`/`rejectPhone`), `reAskPhone`/`reAskOtp`, `IDENTIFY_HINTS` +
+  a dock-aware `modeHint(dock)`; P1 `AVATAR_STATES`/`currentAvatarState`/`refreshAvatar`/
+  `applyAvatarState`/`setAvatarOverride` + the 200 ms poll.
+  ⚠ `IDENTIFY_HINTS` MUST stay declared ABOVE `const DOCKS` (temporal dead zone).
+- **`frontend/kiosk.html`** — the two identification docks + the phone read-back panel; the
+  robotic-doctor markup in both docks and its CSS-only 3D; the P2 elderly sizing block and the two
+  responsive media queries.
+- **`backend/tests/test_kiosk_otp_entry.py`** — one assertion updated (not weakened) for F5b's
+  extended `if (!res) { reAskOtp(); return; }`.
+
+Prior: 2026-08-11 (**Session 32 — faculty-demo cycle F1–F4 + F6: ONE new production file,
 five new test files, no schema change (Alembic stays 0012), no dependency change.**
 
 **NEW production file — `backend/app/services/requirements.py`** (F3). The ONE definition of what a

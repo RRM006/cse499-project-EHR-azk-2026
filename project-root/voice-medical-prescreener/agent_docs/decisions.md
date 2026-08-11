@@ -1226,3 +1226,103 @@ separate, still-**unproven** question tracked in `current_task.md`.
   ordinary turns through the SAME endpoint, no second pipeline (ADR-0048); no diagnosis added
   (rule #2) — the area prompt says explicitly *"this is a location, not a diagnosis"*.
 - Status: Accepted (code shipped, 392 tests). Alembic unchanged at **0012**.
+
+## ADR-0053 — 2026-08-11 — F5: identification by voice on the existing engine; "a Unicode decimal digit is a digit"
+
+- Context: the faculty demo flow is *speak the phone number -> speak the OTP -> interview*, but the
+  two identification screens were keyboard-only, and the two languages DISAGREED about Bangla
+  digits in opposite directions. Python's `re.sub(r"\D", "", ...)` is Unicode-aware, so it KEPT
+  `০১৭...` and the ASCII `startswith("880")`/length checks below it then failed -> `ValueError`
+  -> HTTP 400. JS `replace(/\D/g,'')` is ASCII-only, so the same digits were SILENTLY DELETED as the
+  patient typed them into an OTP box. Neither was a strictness decision; both were accidents of one
+  regex escape meaning different things in two languages.
+- Decision (a) — ONE cross-language contract: **a decimal digit is a digit whatever script it is
+  written in.** Server: `to_ascii_digits()` in `db/repository_visits.py` folds via
+  `unicodedata.decimal` (the Nd category — NOT `str.isdigit()`, which would read a `2` out of `m2`).
+  Kiosk: `unicodeDigit()`/`asciiDigits()` fold ASCII + Bangla. The server is deliberately the MORE
+  permissive of the two: it must never be the thing that rejects a valid number.
+- Decision (b) — identification reuses the ONE recognizer. Two more entries in the `DOCKS` map
+  (`phone`, `otp`) plus `state.identifyStep` and two branches at the single routing point in
+  `stopListening()`. The human's explicit regression rule was "do NOT build a second recognizer";
+  the payoff is that S3's echo guard, S4's confirmation countdown, S2's Speak/Type switch and S31's
+  terminal-error handling all apply to identification with no new logic. The identification docks
+  declare NO `fallback` row on purpose — the number field and the OTP boxes are simultaneously the
+  typed path and the display of what was heard, so they stay visible in voice mode.
+- Decision (c) — the two screens are deliberately ASYMMETRIC. A spoken PHONE NUMBER is read back
+  (large, grouped, in the local 11-digit form, spoken digit-by-digit) and requires an explicit
+  confirmation tap: a wrong digit here sends the patient's verification code to a stranger's
+  handset, and nothing about that is self-correcting. A spoken OTP fills the six boxes and is handed
+  straight to F1's existing `maybeAutoVerify()`: a wrong code is rejected, cleared and re-asked by
+  code that already exists, so a confirmation step would cost a tap and buy no safety (ADR-0048's
+  "minimize clicks"). A TYPED number is not re-confirmed either — the patient can already see it.
+- Decision (d) — the phone screen is TAP-to-start; auto-listen begins at the OTP screen. That screen
+  is the kiosk's first paint, where no user gesture has happened: arming a recognizer there raises
+  the microphone permission prompt unprompted and lets Chrome block the TTS. The one tap is the
+  gesture that unlocks audio and permission for the whole session. This is a deliberate, narrow
+  exception to ADR-0048's "the mic opens itself", taken to protect it everywhere else.
+- Decision (e) — digit-WORD vocabulary is single digits 0-9 only, in Bangla and English, plus the
+  spelling variants the recognizer really returns. English homophones (`to`/`too`/`for`/`won`/`ate`)
+  and Bangla compounds (এগারো, তেইশ) are excluded ON PURPOSE: a MISSED digit shows up in the
+  read-back and the patient fixes it, whereas an INVENTED digit reads as correct.
+- Rules preserved: rule #1 is untouched — identification digits are not clinical utterances and are
+  never stored as raw text; no visit exists yet at this point in the flow, which is exactly why
+  `activeDock()` and `stopListening()` check `identifyStep` FIRST. Typing remains available on both
+  screens in both modes (ADR-0048). Rule #4 unchanged: the Web Speech API already sends audio to
+  Google, and this adds phone/OTP digits to what it hears -- worth stating plainly in the thesis's
+  privacy section, and one more reason `OTP_CHANNEL=dev` + synthetic numbers stay the dev default.
+- Two defects found only by EXECUTING the shipped code in a browser, not by any assertion:
+  (1) `[^\p{L}\p{N}]+` shredded Bangla words at their own vowel marks (category M, not L/N), so
+  the eleven-digit sentence returned "118" -- `এক` and `আট` are the only two digit words with no
+  combining mark; (2) `ছয়` and `নয়` each have two encodings that render identically (precomposed
+  U+09DF vs ya+nukta) and are `!==` in JS, so one spelling silently dropped a digit. Fixed by
+  `\p{M}` in the split class and an NFC fold; both are now test-pinned.
+- Status: Accepted (code shipped, **438 tests pass, 1 skipped**). Alembic unchanged at **0012** — no
+  schema change. NOT proven: what Chrome's `bn-BD` recognizer actually returns for spoken digits.
+  No microphone was ever involved; that gate is the human's live run.
+
+## ADR-0054 — 2026-08-11 — P1/P2/P3: the avatar's state is DERIVED not pushed; elderly sizing is kiosk-scoped; validation is reported in three tiers
+
+- Context: the faculty-demo list ended with three items that are all about the patient UNDERSTANDING
+  the system rather than about new clinical capability — a robotic doctor, an elderly-friendly
+  interface, and evidence that questions suit the patient's age.
+- Decision (a) — **the avatar may never be able to lie.** Its five live states are DERIVED, in one
+  reader (`currentAvatarState()`), from the same variables the rest of the kiosk already acts on:
+  `listening`, `ttsSpeaking()`, `state.busy`. There is deliberately NO `setAvatarState('speaking')`
+  at call sites, because a scattered setter drifts out of sync with the microphone and the one
+  question this component answers is "is it my turn?". The precedence is a contract, not a
+  preference: **listening > speaking > processing > idle.** Listening outranks everything because a
+  patient who believes the kiosk stopped listening stops talking mid-answer — a rule #1 defect.
+  Speaking outranks processing because `state.busy` stays TRUE across `assistantSays()`, so a
+  busy-first test would caption a talking doctor with "please wait". Only `done` and `error` may be
+  PUSHED, since no live variable can express "finished" or "failed", and `error` therefore expires
+  with its 8 s banner so a recovered patient is not told the kiosk is still broken.
+- Decision (b) — **polled, not evented.** Neither speech path emits a "still speaking" event:
+  speechSynthesis fires only start/end, and the ADR-0049 server-TTS fallback is an `<audio>` element
+  whose request latency is part of speaking. A 200 ms poll of the SAME predicate the S3 echo guard
+  uses is what keeps the face and the microphone agreeing. `refreshAvatar()` writes nothing when the
+  state is unchanged, so CSS animations are never restarted.
+- Decision (c) — **CSS-only 3D, no library and no asset.** Hardware is CPU-only and the kiosk must
+  work offline, so the doctor is built from transforms, gradients and keyframes. "3D" enhances the
+  avatar; it does not become an application. Every state also carries a NON-COLOUR cue (mouth
+  motion, pulse rings, scanning eyes, flipped mouth) because colour alone fails a low-vision
+  patient, and `prefers-reduced-motion` keeps the meaning via the lamp colour and the status text.
+- Decision (d) — **elderly sizing is scoped to `kiosk.html`, NOT `shared.css`.** shared.css is the
+  design system for all three portals; enlarging `.btn` there would inflate the medic and doctor
+  dashboards, which trained staff use on desktops. The patient is the one who is elderly and
+  non-technical, so only the patient portal grows: 52px buttons, 54px inputs, 60px OTP boxes,
+  1.12rem chat, 44px minimum touch targets, and visible focus rings on every control.
+- Decision (e) — **two responsive axes are treated as different problems.** Short screens run out of
+  VERTICAL room and push the primary action under the fold (`max-height: 820px`); narrow screens run
+  out of HORIZONTAL room and overflow the six OTP boxes and the two-column summary
+  (`max-width: 620px`). One breakpoint cannot serve both.
+- Decision (f) — **age-appropriateness is reported in THREE EXPLICIT TIERS, and tier 3 is not
+  claimed.** Tier 1 (deterministic code) and tier 2 (prompt content) are proven by the suite. Tier 3
+  — that the model OBEYS — cannot be proven by asserting against a stub we wrote ourselves, so it is
+  left unproven with an opt-in `M7_LIVE=1` probe instead of a fake green test. The project's
+  standing rule that automated tests must not be reported as model validation is now structural.
+- Rules preserved: rule #1 — the avatar reads state and never writes to a transcript; identification
+  and avatar work add no stored text. Rule #2 — the no-diagnosis constraint is asserted
+  unconditionally across both age tiers. The 10-field summary shape is age-invariant, proven by
+  running the real requirements gate for a 19- and a 78-year-old and comparing what it demands.
+- Status: Accepted (code shipped, **480 tests pass, 2 skipped**). Alembic unchanged at **0012**.
+  NOT proven: any microphone behaviour, and whether the model's questions actually differ by age.

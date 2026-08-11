@@ -6,7 +6,46 @@
 
 **Status keys:** ⬜ Not started · 🟨 In progress · 🟦 Blocked · ✅ Done · ⛔ Retired
 
-**Last updated:** 2026-08-11 (**Session 32 — the FACULTY-DEMO feature cycle opened; F1–F4 + F6 shipped,
+**Last updated:** 2026-08-11 (**Session 33 — ALL IN-SCOPE FACULTY-DEMO DEVELOPMENT IS COMPLETE.**
+Shipped **F5** (voice phone number + voice OTP), **P1** the robotic doctor/avatar, **P2** the
+elderly-friendly / selective-3D UI, and **P3** age-appropriate conversation validation.
+**392 → 480 tests pass, 2 skipped, 0 failures.** New ADRs **0053** (F5) and **0054** (P1/P2/P3).
+**Alembic stays 0012 — no schema change.**
+⚠ **NO MODULE CHANGED STATUS.** These are refinements inside modules already ✅ (M1 STT input,
+M7 follow-up, M13 storage, M14 presentation) plus bug fixes — not new modules. **M15 stays 🟨.**
+**F5:** ONE cross-language digit contract (`to_ascii_digits()` server-side; `digitsFromSpeech()` /
+`phoneFromSpeech()` kiosk-side) — Python's Unicode-aware `\D` had KEPT Bangla digits and then failed
+the ASCII checks (400), while JS's ASCII-only `\D` had SILENTLY DELETED them. Identification reuses
+the ONE recognizer as two more `DOCKS` entries + `state.identifyStep` + two branches at the single
+routing point in `stopListening()` — **no second pipeline**, the human's explicit regression rule.
+A spoken phone number is READ BACK and requires a confirmation tap; a spoken OTP reuses F1's
+`maybeAutoVerify()` untouched. Phone screen is tap-to-start (no user gesture exists at first paint);
+auto-listen resumes from the OTP screen on.
+**P1 (robotic doctor):** CSS-only 3D, no library/WebGL/asset (CPU-only hardware, offline kiosk).
+Five states **DERIVED** from real signals — never pushed — with the precedence
+**listening > speaking > processing > idle**; only `done`/`error` may be pushed and `error` expires
+with its banner. Present in BOTH the conversation and resume docks, bilingual, `aria-live`, and
+`prefers-reduced-motion` keeps the meaning.
+**P2 (elderly / 3D UI):** scoped to `kiosk.html` so the medic and doctor dashboards are untouched —
+52px buttons, 54px inputs, 60px OTP boxes, 1.12rem chat, visible focus rings, and two SEPARATE
+responsive axes (`max-height: 820px` for the fold, `max-width: 620px` for overflow). Measured at
+1280x900 / 1280x720 / 1024x600 / 375x812: no horizontal overflow, primary action always visible,
+**zero controls under the 44px touch minimum**.
+**P3 (age validation):** proven in **three explicit tiers** — Tier 1 deterministic code (age
+computed, reaching M7 verbatim, confined to PATIENT CONTEXT, implausible ages rejected, the 10-field
+shape and the requirements gate identical for a 19- and a 78-year-old) and Tier 2 prompt content
+(directional age instructions, no diagnosis, no reciting the age back). ⚠ **Tier 3 — that the MODEL
+obeys — is explicitly NOT claimed**; an opt-in `M7_LIVE=1` probe replaces a fake green test.
+⚠ **NO MICROPHONE WAS USED ANYWHERE IN THIS SESSION** — the Browser pane blocks capture, so all
+voice results come from feeding the recogniser's own buffer. **What Chrome's `bn-BD` recogniser
+returns for spoken digits is still UNPROVEN and is the entire next session.** Screenshots were also
+unavailable (pane not compositing), so the UI evidence is measured geometry, not visual inspection.
+✅ **One live end-to-end run did happen (no mic):** spoken Bangla-word phone → read-back → confirm →
+spoken Bangla-word OTP → verified → area/name/age/complaint → a REAL M7 question
+(*"ব্যথার তীব্রতা কত? (How severe is the pain?)"*, on-topic and non-diagnostic) for an extracted
+**age 78** → 10-card summary with F3's gate correctly withholding Submit → all 12 turns byte-exact
+and in order.
+Prior: 2026-08-11 (**Session 32 — the FACULTY-DEMO feature cycle opened; F1–F4 + F6 shipped,
 F5 NOT started.** The human gave an 8-part feature list and approved a P0 plan **F1→F2→F3→F4→F5→F6**.
 **⚠ NO MODULE CHANGED STATUS and the faculty-demo voice flow is NOT complete** — these are refinements
 inside modules already ✅ (M7 follow-up, M9 completion, M13 storage) plus one bug fix, not new modules.

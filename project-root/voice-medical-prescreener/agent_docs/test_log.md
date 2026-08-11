@@ -72,6 +72,53 @@ transcribed by hand (the "ground truth"). Record the model + machine each time.
 
 ## Test entries (newest first)
 
+## 2026-08-11 — Session 33 — F5 voice identification + P1 avatar + P2 elderly UI + P3 age validation
+- Setup: Windows 11, Python 3.13.3 (venv), FastAPI TestClient + pytest; uvicorn on port 8001;
+  browser validation in the in-app Chromium engine (Electron/Chromium). SQLite, Alembic head 0012.
+- Metric(s): automated test pass/fail (not an ML metric); UI geometry measured in a live browser;
+  ONE live M7 (LLM) observation.
+- Result: **480 passed, 2 skipped, 0 failures** (was 392 at the end of S32; 438 mid-session after
+  F5). Runtime ~40 s. The **2 skips are both opt-in network tests** and are skipped by design:
+  `TTS_LIVE=1` (edge-tts) and the new `M7_LIVE=1` (live M7 age probe).
+  Per new file: `test_voice_digits.py` **20**, `test_kiosk_voice_identification.py` **26**,
+  `test_kiosk_avatar.py` **25**, `test_age_appropriate_questions.py` **17 + 1 skipped**.
+  One existing test updated (`test_kiosk_otp_entry.py`) and NOT weakened — it pinned the literal
+  `if (!res) return;` which F5b extended; it now asserts the guard returns before both the screen
+  change and the visit assignment.
+- **Browser validation performed (NO MICROPHONE — see the note below).** Driven by writing the
+  recogniser's own `finalBuffer` and calling the real `stopListening(true)`, i.e. the production
+  routing path:
+  * digit vocabulary, 23 + 11 cases, all passing — Bangla words, Bangla digits, ASCII, English
+    words, "oh", variant spellings, grouped/punctuated, mixed-script, filler-wrapped; both
+    encodings of `ছয়`/`নয়`; ZWJ/ZWNJ mid-word; and the traps stay empty (`তিনি বলেছেন` -> "",
+    `for the number, too` -> "").
+  * full flow: spoken Bangla-word phone -> read-back `01715-984632` with **nothing sent** ->
+    confirm -> OTP screen -> spoken Bangla-word code -> verified -> interview.
+  * avatar: all 6 states across both avatar elements, the precedence cases (speaking beats busy,
+    listening beats all), autonomous 200 ms polling, error expiry, and the EN/BN toggle.
+  * geometry at **1280x900, 1280x720, 1024x600 and 375x812**: no horizontal overflow on any of the
+    four screens, primary action visible without scrolling, and **zero controls below the 44px
+    touch minimum** after fixing the 🔊 replay button (measured 30x20 before the fix).
+- **ONE live M7 call** (synthetic patient, rule #4 respected): a 78-year-old with a stomach
+  complaint. Spoken Bangla age word "আমার বয়স আটাত্তর বছর" was extracted to `birth_year 1948`
+  (= age 78), name and sex captured, and M7 returned *"ব্যথার তীব্রতা কত? (How severe is the
+  pain?)"* — bilingual, on-topic, non-diagnostic. Summary rendered **10 cards**, F3's gate hid
+  Submit and named the outstanding items, and all **12 turns stayed byte-identical and in order**.
+- ⚠ **NO MICROPHONE TESTING OCCURRED IN THIS SESSION.** The Browser pane blocks audio capture. No
+  claim here is evidence about real speech recognition: what Chrome's `bn-BD` recogniser returns
+  for spoken digits remains UNPROVEN and is next session's task. Screenshots were also unavailable
+  (the pane stopped compositing), so the UI results are measured geometry, not visual inspection.
+- ⚠ **Age-appropriateness is NOT validated at the model level.** Tier 1 (age computed, reaching M7
+  verbatim, confined to PATIENT CONTEXT, implausible ages rejected, nothing else age-coupled) and
+  Tier 2 (the prompt's instructions are directional) are proven. Tier 3 — that the model's questions
+  actually differ appropriately by age — rests on the single live observation above.
+- Notes: six defects were found by EXECUTING code rather than by any assertion, which is the
+  reusable lesson — a Bangla tokeniser that shredded words at their own vowel marks (returned
+  "118" for an eleven-digit sentence), two identical-looking Unicode encodings, a temporal-dead-zone
+  ReferenceError, a stale-layout `scrollIntoView` no-op, equal-specificity duplicate CSS that read
+  as applied but was dead, and a 30x20 touch target. All fixed and regression-pinned.
+
+
 ## 2026-08-11 — Session 32 — Faculty-demo cycle F1–F4 + F6: suite **324 → 392**, plus two no-microphone browser verifications
 
 - Setup: Windows 11, `.venv` Python **3.13.3**, `PYTHONIOENCODING=utf-8`,

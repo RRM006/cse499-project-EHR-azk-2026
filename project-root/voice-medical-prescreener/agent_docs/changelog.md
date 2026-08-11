@@ -16,6 +16,77 @@
 
 ---
 
+## Session 33 — 2026-08-11 — **F5 voice identification + P1 robotic doctor + P2 elderly UI + P3 age validation** — 392 → 480 tests
+- Did: finished every remaining in-scope faculty-demo item. **F5a/F5b** (voice phone number +
+  voice OTP, ADR-0053), **P1** the robotic-doctor avatar, **P2** elderly-friendly/3D UI, and
+  **P3** age-appropriate conversation validation. **Alembic stays 0012 — no schema change.**
+- **F5a — one cross-language digit contract.** `to_ascii_digits()` in `db/repository_visits.py`
+  (folds any Nd digit via `unicodedata.decimal`) replaces `re.sub(r"\D", ...)`, which was
+  Unicode-aware and so KEPT `০১৭…` and then failed the ASCII checks below it -> 400. JS gained
+  `unicodeDigit()`/`asciiDigits()`/`digitsFromSpeech()`/`phoneFromSpeech()`, and both OTP box
+  handlers stopped using ASCII-only `\D`, which had been SILENTLY DELETING Bangla digits.
+- **F5b — identification by voice on the ONE recognizer.** Two more `DOCKS` entries
+  (`phone`, `otp`) + `state.identifyStep` + two branches at the single routing point in
+  `stopListening()` — no second pipeline, the human's explicit regression rule. A spoken phone
+  number is READ BACK (large, grouped, spoken digit-by-digit) and requires a confirmation tap;
+  a spoken OTP fills the boxes and reuses F1's `maybeAutoVerify()` unchanged. Phone screen is
+  tap-to-start (no user gesture exists at first paint); auto-listen resumes at the OTP screen.
+- **P1 — the robotic doctor.** CSS-only 3D (no library, no WebGL, no asset — CPU-only hardware).
+  Five states DERIVED from real signals in `currentAvatarState()`, never pushed: listening >
+  speaking > processing > idle. Only `done`/`error` may be pushed, and `error` expires with its
+  8 s banner. Present in BOTH the conversation and resume docks; bilingual; `aria-live`;
+  `prefers-reduced-motion` keeps the meaning.
+- **P2 — elderly-friendly UI**, scoped to `kiosk.html` so the medic/doctor dashboards are
+  untouched: 52px buttons, 54px inputs, 60px OTP boxes, 1.12rem chat, visible focus rings, and
+  two separate responsive axes (`max-height: 820px` for the fold, `max-width: 620px` for overflow).
+- **P3 — age validation, honestly tiered.** New `test_age_appropriate_questions.py` proves
+  Tier 1 (the age is computed, reaches M7 verbatim, is confined to PATIENT CONTEXT, is rejected
+  when implausible, and changes nothing else) and Tier 2 (the prompt's age instructions are
+  directional, not just the phrase). **Tier 3 — that the MODEL obeys — is NOT proven** and an
+  opt-in `M7_LIVE=1` probe is provided instead of a fake assertion.
+- Decided: **ADR-0053** (F5: a Unicode decimal digit is a digit; identification reuses the one
+  recognizer; phone confirmed / OTP not; tap-to-start on first paint) and **ADR-0054** (P1/P2/P3:
+  avatar state derived-not-pushed with its precedence rule; elderly sizing scoped to the kiosk,
+  not shared.css; the three-tier validation split).
+- Verified: **480 passed, 2 skipped, 0 failures** (was 392). New files: `test_voice_digits.py` (20),
+  `test_kiosk_voice_identification.py` (26), `test_kiosk_avatar.py` (25),
+  `test_age_appropriate_questions.py` (17 + 1 opt-in skip). The 2 skips are both opt-in network
+  tests (`TTS_LIVE=1`, `M7_LIVE=1`).
+- **Live browser run (no microphone).** Full flow driven by feeding the recognizer's own buffer:
+  spoken Bangla-word phone -> read-back `01715-984632` (nothing sent) -> confirm -> OTP screen ->
+  spoken Bangla-word code -> verified -> interview. The scripted opening ran area -> name -> age ->
+  complaint; **"আমার বয়স আটাত্তর বছর" was extracted to birth_year 1948 = age 78**, name and sex
+  captured. A **real M7 call** then returned *"ব্যথার তীব্রতা কত? (How severe is the pain?)"* —
+  on-topic, bilingual, non-diagnostic. Summary showed **10 cards**, F3's gate hid Submit and named
+  the outstanding items, and all 12 turns stayed byte-identical and in order.
+- Broke / problem: **six defects found by EXECUTING the code, none by assertions** — every one
+  fixed and test-pinned. (1) `[^\p{L}\p{N}]+` shredded Bangla words at their own vowel marks
+  (category M), so an eleven-digit sentence returned **"118"**. (2) `ছয়`/`নয়` have two encodings
+  that render identically (U+09DF vs ya+nukta) and are `!==` in JS — one spelling dropped a digit;
+  fixed with an NFC fold. (3) **TDZ**: `DOCKS` referenced `IDENTIFY_HINTS` before its `const`
+  initialised — a ReferenceError that killed the whole kiosk. (4) `scrollIntoView` was a no-op
+  called in the same tick as `display='flex'`; `requestAnimationFrame` would have *looked* like a
+  fix but never fires on a non-painting tab, so a forced `offsetHeight` reflow is used. (5) My own
+  P2 block re-declared `.welcome-title`/`.welcome-sub`/`.summary-label` at equal specificity AFTER
+  existing rules — **dead CSS that read as applied**; sizes raised in place and a regression test
+  added. (6) The 🔊 replay button measured **30x20**, under the 44px touch minimum.
+  Also: per-state rules on `.doctor-antenna::after` applied box-shadow but silently kept the base
+  `background`, so the state lamp stayed grey in all six states — moved to custom properties.
+- One existing test updated, not weakened: `test_kiosk_otp_entry.py` pinned the literal
+  `if (!res) return;`, which F5b extended to `if (!res) { reAskOtp(); return; }`. It now asserts
+  the guard returns before BOTH the screen change and the visit assignment.
+- ⚠ Honest gaps: **NO MICROPHONE WAS USED — the Browser pane blocks capture.** Every voice claim
+  rests on feeding the recognizer's buffer directly; what Chrome's `bn-BD` recogniser actually
+  returns for spoken digits is still unproven and is the next session's whole job. Screenshots
+  were unavailable (the pane stopped compositing), so P2 rests on measured geometry at 1280x900,
+  1280x720, 1024x600 and 375x812 rather than on looking at it. Age-appropriateness Tier 3 remains
+  one live observation, not a validation across ages.
+- Deferred: **real-microphone validation of F5** (next session), rotating the 3 API keys
+  (human-only), the combined Chrome + Edge live listen/STT run, the mid-turn word-loss rule #1
+  decision, Step S5 of Requirement 3, and formal WER.
+- Next: **REAL MICROPHONE VALIDATION OF F5** — spoken phone -> confirmation -> spoken OTP ->
+  verification, in Bangla and English digits AND number words, including the re-ask paths.
+
 ## Session 32 — 2026-08-11 — **Faculty-demo cycle: F1–F4 + F6 shipped** (OTP entry, target_gap mismatch, required-info gate, area/name/age, conversation-preservation tests) — 324 → 392 tests
 - Did: the human gave a 8-part faculty-demo feature list and approved a P0 plan **F1→F2→F3→F4→F5→F6**.
   **F1, F2, F3, F4 and F6 are DONE. F5 (voice phone number + voice OTP) is NOT STARTED**, and neither

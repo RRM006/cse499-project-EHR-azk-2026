@@ -122,11 +122,19 @@ def test_the_retry_prompt_is_bilingual_and_keeps_the_server_reason():
 
 
 def test_a_failed_verification_keeps_the_patient_on_the_otp_screen():
-    """`if (!res) return;` is what stops a failed attempt falling through into
-    showScreen('screen-voice') with no visit."""
-    js = kiosk_js()
-    assert "if (!res) return;" in js
-    assert js.index("if (!res) return;") < js.index("showScreen('screen-voice');")
+    """The `if (!res)` early return is what stops a failed attempt falling through into
+    showScreen('screen-voice') with no visit.
+
+    F5b (ADR-0053) added a re-ask to that same branch — `if (!res) { reAskOtp(); return; }`
+    — so this no longer matches one exact literal. The INTENT is unchanged and is now
+    asserted more directly than the old string compare managed: the guard returns, and it
+    returns before BOTH the screen change and the visit assignment. Verifying that
+    reAskOtp() is what runs there belongs to test_kiosk_voice_identification.py."""
+    body = kiosk_js().split("async function verifyOtp() {")[1].split("\n}")[0]
+    guard = re.search(r"if \(!res\)[^\n]*\breturn;", body)
+    assert guard, "the failed-verification early return is gone"
+    assert guard.start() < body.index("showScreen('screen-voice');")
+    assert guard.start() < body.index("state.visitUuid = res.visit.uuid;")
 
 
 # --- the guard: a single-use code must never be submitted twice -------------
