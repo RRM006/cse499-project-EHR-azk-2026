@@ -112,6 +112,19 @@ class Settings(BaseSettings):
     voice_no_speech_ms: int = 10000
     # Hard cap on a single answer -> submit whatever was captured (runaway guard).
     voice_max_answer_ms: int = 120000
+    # S34 (ADR-0055): after a SPOKEN answer is captured, read it back and wait for the
+    # patient to accept or repeat it. It is the only moment a patient can hear what the
+    # machine understood, and the alternative — submitting on the recogniser's say-so —
+    # is how a misheard sentence reaches the doctor unchallenged. Costs one tap per
+    # spoken turn, so a clinic that wants the S25-era hands-free flow can set it false.
+    # TYPED answers are never gated: the patient is already looking at their own text.
+    voice_answer_confirm: bool = True
+    # S34 (ADR-0055): the review screen submits itself after this long so an unattended
+    # kiosk cannot strand a completed pre-screening on the summary page. Any manual
+    # action (Confirm & Submit, Speak Again) cancels it, and it never runs while the
+    # server says something is still REQUIRED — see updateSubmitVisibility() in kiosk.js.
+    # 0 disables the auto-submit entirely and leaves the patient in full control.
+    voice_review_timeout_ms: int = 60000
 
     # --- Bangla TTS fallback (services/tts) ---
     # Windows ships NO Bengali voice at all (verified against Microsoft's supported-voices

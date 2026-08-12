@@ -166,6 +166,10 @@ def test_config_still_leaks_no_paths_keys_or_provider_names(monkeypatch):
     assert set(body) == {
         "voice_loop", "countdown_ms", "tts_guard_ms", "no_speech_ms",
         "max_answer_ms", "server_tts",
+        # S34 (ADR-0055): two more behavioural knobs — the spoken-answer read-back gate
+        # and the review auto-submit delay. Both are pure UX behaviour, exactly like
+        # the timings above; nothing here names a provider, a path or a credential.
+        "answer_confirm", "review_timeout_ms",
     }
     raw = client.get("/api/config").text
     for leak in ("espeak", "secret", "path", ".exe"):

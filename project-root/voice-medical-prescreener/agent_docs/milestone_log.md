@@ -6,7 +6,55 @@
 
 **Status keys:** ⬜ Not started · 🟨 In progress · 🟦 Blocked · ✅ Done · ⛔ Retired
 
-**Last updated:** 2026-08-11 (**Session 33 — ALL IN-SCOPE FACULTY-DEMO DEVELOPMENT IS COMPLETE.**
+**Last updated:** 2026-08-12 (**Session 34 — the manual-testing cycle the human reported is
+CLOSED; all twelve phases shipped in one pass. 480 → 547 tests pass, 2 skipped, 0 failures.**
+New ADR **0055**. **Alembic stays 0012 — no schema change, no migration, no new dependency.**
+⚠ **NO MODULE CHANGED STATUS.** Everything here is a refinement inside modules already ✅
+(M1 speech input, M7 follow-up, M13 storage, M14 presentation) plus three bug fixes — not new
+modules. **M15 stays 🟨.**
+**Phase 1 (the reported "one two…" defect):** the kiosk listens at `lang='bn-BD'`, and a
+Bangla-language recogniser handed spoken English digits returns the TRANSLITERATION
+(`ওয়ান টু থ্রি`), not Latin text — so the ten English keys in `SPOKEN_DIGITS` could never be hit
+by a patient SPEAKING English digits. Ten transliterations added (`ও` deliberately excluded: it is
+one of the commonest words in Bangla and would invent zeros out of ordinary speech). Plus a live
+**digit preview** (`0 1 7 1 5`) beside the transcript, derived by the same `digitsFromSpeech()`
+that produces the value — the transcript keeps showing the words, because that is the evidence and
+it is never rewritten (rule #1).
+**Phase 2 (the real gap):** between S4 and this session a spoken answer went from the recogniser
+straight into the permanent record with **no human confirmation anywhere in the path**. Now every
+SPOKEN clinical answer is shown large and verbatim, SPOKEN back (`bn-BD`, `verbatim`), and held
+until the patient taps ✔ — nothing reaches the server before that, and ✖ discards a capture that
+was never stored and re-asks the SAME question. ONE gate, in `stopListening()`'s spoken branch;
+`acceptAnswer()` re-enters the SAME `submitPatientTurn`/`submitResumeAnswer` calls, so ADR-0048's
+one-pipeline rule is intact and TYPED answers are never gated. An unusable capture (no letter, no
+digit) is **never guessed at** — silence and noise both re-ask. Switchable off via
+`VOICE_ANSWER_CONFIRM=false`; the re-ask half is not.
+**Phases 3-5 (review + motion):** every filled summary card can be HEARD (labelled 🔊, plus a
+"Hear my answers" read-through on one queue token); the P1 robotic doctor gains a THIRD mount as a
+floating assistant on the review screen — same DERIVED state machine (ADR-0054), stepping aside
+when the resume dock's own avatar opens; and the conversation auto-scrolls the THREAD (never
+`scrollIntoView()`, which moves the whole document out from under the patient).
+**Phases 6-7 (the clock):** a 60-second digital countdown top-right of the review heading, blinking,
+`urgent` under 10 s, bilingual (`60s left` / `৬০ সেকেন্ড বাকি`). It runs ONLY while Confirm &
+Submit is genuinely pressable, is idempotent against re-entry, and `confirmSubmit()` gained a
+`submitting` guard — **verified live: the timeout racing two manual taps produced exactly ONE
+POST.** `startTicker()` is extracted and the auto-logout countdown moved onto it; **the S4
+endpointer is deliberately NOT converted** — its deadline restart is the rule #1 anti-clipping
+guarantee, not a UI detail.
+**Three defects found by MEASURING the running page, not by any assertion:** the confirm panel
+opened below the fold; underneath it, a **PRE-EXISTING** unbounded page (`body` had `min-height:
+100vh` and no height → 1538px of document in a 694px viewport, `.chat-thread` never scrolling, the
+whole voice dock under the fold); and a **PRE-EXISTING** sideways overflow at 375px from an inline
+`grid-column: span 2` creating an implicit second column (497px of content in a 375px viewport).
+All three fixed, scoped to `kiosk.html`.
+⚠ **STILL NO MICROPHONE, in any session.** Every voice result on record comes from feeding the
+recogniser's own buffer in a browser engine. **The Bangla transliterations are REASONED, NOT
+OBSERVED** — what Chrome's `bn-BD` recogniser really returns for spoken English digits remains the
+single most disprovable claim in the build.
+⛔ **Step S5 was NOT implemented** (by explicit instruction): its `no_speech_ms` watchdog,
+`max_answer_ms` cap and permission/visibility recovery are untouched. Only the narrow empty-capture
+re-ask required by Phase 2 was built — ADR-0055 (e) records the overlap.
+Prior: 2026-08-11 (**Session 33 — ALL IN-SCOPE FACULTY-DEMO DEVELOPMENT IS COMPLETE.**
 Shipped **F5** (voice phone number + voice OTP), **P1** the robotic doctor/avatar, **P2** the
 elderly-friendly / selective-3D UI, and **P3** age-appropriate conversation validation.
 **392 → 480 tests pass, 2 skipped, 0 failures.** New ADRs **0053** (F5) and **0054** (P1/P2/P3).

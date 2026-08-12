@@ -72,6 +72,81 @@ transcribed by hand (the "ground truth"). Record the model + machine each time.
 
 ## Test entries (newest first)
 
+## 2026-08-12 — Session 34 — S34 manual-testing cycle: read-back gate, digit vocabulary, review clock — suite **480 → 547**
+- Setup: Windows 11, Python 3.13.3 (venv), FastAPI TestClient + pytest; uvicorn on port 8001;
+  browser validation in the in-app Chromium engine. SQLite, Alembic head **0012** (verified from the
+  DB: `alembic_version = 0012_otp_codes`, 12 migration files, 17 data tables + `alembic_version`).
+- Metric(s): automated test pass/fail (not an ML metric); live function-level execution in a real
+  browser engine; measured page geometry at two viewports. **No microphone, no audio, no WER.**
+- Result: **547 passed, 2 skipped, 0 failures.** Runtime ~32 s. Baseline before any change this
+  session was re-measured at **480 passed, 2 skipped** (~90 s cold). The **2 skips are unchanged and
+  opt-in by design** (`TTS_LIVE=1` network test, `M7_LIVE=1` model probe).
+- Targeted counts: **3 new test files, +59 tests** — `test_kiosk_answer_confirm.py` (23),
+  `test_kiosk_review_timer.py` (17), `test_kiosk_review_screen.py` (19). **2 files extended, +8** —
+  `test_voice_digits.py` 20 → 26, `test_kiosk_config.py` 6 → 8.
+- **3 existing tests updated, none weakened:** `test_kiosk_config.py` and `test_tts_provider.py`
+  each assert the COMPLETE `/api/config` key set (deliberately, so a new secret cannot leak through
+  an unauthenticated route), so the two new behavioural knobs had to be declared in both;
+  `test_kiosk_avatar.py::test_both_conversation_and_resume_docks_carry_the_avatar` pinned the exact
+  literal `const AVATAR_IDS = ['doctor-avatar', 'resume-avatar'];` and was rewritten to PARSE the
+  list and additionally require every mount to exist in the markup — strictly stronger than the
+  string it replaced, and renamed to match what it now checks.
+
+### Live browser verification (no microphone — S33's method: feed the recogniser's own buffer)
+Executed against the running server at `http://localhost:8001/kiosk.html`.
+
+**Digit vocabulary (Phase 1) — pure functions, executed:**
+
+| input (as a `bn-BD` recogniser would return it) | `digitsFromSpeech` | `phoneFromSpeech` |
+|---|---|---|
+| `one two three four five six seven eight nine zero` | `1234567890` | `1234567890` |
+| `এক দুই তিন চার পাঁচ ছয় সাত আট নয় শূন্য` | `1234567890` | — |
+| `জিরো ওয়ান সেভেন ওয়ান ফাইভ নাইন এইট ফোর সিক্স থ্রি টু` (English digits, spoken) | `01715984632` | `1715984632` |
+| `zero one seven one five nine eight four six three two` | — | `1715984632` |
+| `আমার নম্বর হলো শূন্য এক ৭ ওয়ান five নয় আট চার ছয় তিন দুই` (mixed + filler) | — | `1715984632` |
+| `তিনি বলেছেন` (pronoun containing "তিন") | `''` | — |
+| `for the number` (English homophone trap) | `''` | — |
+
+**Identification flow:** live preview showed `0 1 7 1 5` while the transcript showed the words →
+read-back `01715-984632` with **nothing sent** (still on the phone screen) → confirm → OTP screen →
+spoken Bangla-word code → boxes `000000` → verified → interview opened on the scripted area question.
+
+**Read-back gate (Phase 2):** a captured answer showed the panel with the words verbatim and
+**0 turns stored**; ✔ stored it and advanced to the next scripted question; ✖ stored nothing, left
+the turn count unchanged and re-asked the SAME question; an empty capture and a punctuation-only
+capture both produced *"Sorry, I did not catch that — let me ask again"* with **0 turns stored** and
+the same question still pending. With `inputMode = 'type'` the re-ask correctly stayed silent.
+
+**Review clock (Phases 6-7):** 60 → 57 → 53 → 52 s; `startReviewTimer()` called three more times
+returned the SAME ticker handle (no stacking); Speak Again froze it at 25 s and hid it; returning
+restarted it at 60 s; it went `urgent` at ≤10 s. **The timeout firing while TWO manual
+`confirmSubmit()` calls raced it produced exactly 1 POST to `/submit`** (counted by wrapping
+`window.fetch`), the avatar went `done`, the logout modal ran, and the reset returned the kiosk to
+the phone screen with `submitting` released, the thread empty, and voice mode restored.
+**Ticker in isolation:** `startTicker(3000)` yielded `3,3,3,3,2,2,2,2,1,1,1,1,0` with `onEnd` fired
+**once**; cancelled at 400 ms it fired **zero** times, and a double `cancel()` was safe.
+
+**Layout, measured (not eyeballed):**
+- 730x694: review title occupies x 28-568, clock x 582-687 → **no overlap** (as an absolute overlay
+  it had covered the centred title — that is why it became a flex sibling).
+- 375x812: `summary-layout` scrollWidth 375 = clientWidth 375 → **no horizontal overflow**. Before
+  the fix it was **497px of content in a 375px viewport** (pre-existing, caused by an inline
+  `grid-column: span 2` creating an implicit second column in the one-column narrow grid).
+- Conversation at 730x694 with 12 bubbles + the read-back panel open: `documentElement.scrollHeight
+  == clientHeight` (**the page no longer grows**; before the fix it was **1538px in a 694px
+  viewport**), the thread scrolls internally, and the mic, the panel and its ✔ button are all fully
+  inside the viewport (panel at y 361-519).
+- Auto-scroll: thread forced to `scrollTop = 0`, a new bubble appended → 476px at 150 ms (moving,
+  not jumping) → landed at the end with the last bubble fully visible.
+- Bilingual: preview `০ ১ ৭ ১ ৫`, clock `৬০ সেকেন্ড বাকি` / `60s left`, panel
+  `আমি শুনেছি আপনি বলেছেন:` / `✔ হ্যাঁ — এটাই ঠিক`; toggling EN↔BN mid-state left the patient's own
+  captured words **byte-identical** (they carry no `data-en`/`data-bn`, by design).
+- Console: clean apart from the pre-existing `/favicon.ico` 404. No JS errors at load or during any
+  of the above.
+- Notes: **nothing here is a microphone result.** What Chrome's `bn-BD` recogniser actually returns
+  for spoken English digits is REASONED (transliteration), not observed, and remains the single most
+  disprovable claim in the build. Formal WER and extraction precision/recall are still not measured.
+
 ## 2026-08-11 — Session 33 — F5 voice identification + P1 avatar + P2 elderly UI + P3 age validation
 - Setup: Windows 11, Python 3.13.3 (venv), FastAPI TestClient + pytest; uvicorn on port 8001;
   browser validation in the in-app Chromium engine (Electron/Chromium). SQLite, Alembic head 0012.

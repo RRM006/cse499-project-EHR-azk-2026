@@ -205,6 +205,48 @@ def test_recogniser_spelling_variants_are_covered():
     assert shipped.get("oh") == "0"                              # "oh-one-seven…"
 
 
+# --- S34: the English digit words as a bn-BD recogniser actually writes them ---
+
+# What Chrome returns for spoken English digits when `lang='bn-BD'`: the Bangla
+# TRANSLITERATION, not Latin script. Written as literals because that is exactly the
+# form that has to be matched.
+ENGLISH_DIGITS_AS_BANGLA = [
+    "জিরো",      # zero
+    "ওয়ান",     # one
+    "টু",        # two
+    "থ্রি",      # three
+    "ফোর",       # four
+    "ফাইভ",      # five
+    "সিক্স",     # six
+    "সেভেন",     # seven
+    "এইট",       # eight
+    "নাইন",      # nine
+]
+
+
+def test_english_digit_words_are_covered_in_the_script_the_recogniser_returns():
+    """S34, and the whole reason a spoken English phone number produced NOTHING.
+
+    The kiosk listens at `lang='bn-BD'` — it must, because every clinical answer is
+    Bangla — and a Bangla-language recogniser handed "one two three" does not return
+    Latin text. It returns `ওয়ান টু থ্রি`. So the Latin keys in SPOKEN_DIGITS could
+    never be hit by a patient speaking English digits ALOUD; they only ever matched
+    typed or pasted text. Ten missing entries, not a design decision."""
+    shipped = shipped_spoken_digits()
+    assert [shipped.get(w) for w in ENGLISH_DIGITS_AS_BANGLA] == [str(i) for i in range(10)]
+
+
+def test_the_transliterations_are_all_loan_words_not_ordinary_bangla():
+    """The safety test for the new keys, and it is the same one every other key passes:
+    a mapping is only safe if the word cannot arise in ordinary speech. `ও` — "and",
+    "he/she", one of the commonest words in Bangla — is what an English "oh" is
+    transliterated to, and it is deliberately NOT mapped: a missed digit is caught by
+    the read-back, an INVENTED one reads as correct."""
+    shipped = shipped_spoken_digits()
+    for ordinary in ("ও", "না", "হ্যাঁ", "আমি", "তিনি", "এটা", "কি"):
+        assert ordinary not in shipped, f"{ordinary!r} is ordinary Bangla and would invent a digit"
+
+
 def test_no_english_homophone_is_mapped_to_a_digit():
     """The dangerous direction. A missed digit shows up in the read-back and the patient
     fixes it; an INVENTED digit reads as correct. 'for the number' must stay four-free."""
@@ -288,6 +330,50 @@ def test_unicode_digit_covers_the_whole_bangla_block():
     assert "const BN_ZERO = 0x09E6;" in js
     assert "if (code >= BN_ZERO && code <= BN_ZERO + 9) return String(code - BN_ZERO);" in js
     assert "if (code >= 0x30 && code <= 0x39) return String(code - 0x30);" in js
+
+
+# --- S34: the patient SEES digits, not the words they said ---
+
+
+def test_the_identification_docks_show_the_digits_the_words_mean():
+    """The reported symptom: the screen showed "one two…" where the patient expected
+    "1 2…". The transcript SHOULD show what was heard — that is the evidence, and it is
+    never rewritten (rule #1). What was missing is the derived reading: the same
+    digitsFromSpeech() that will produce the value, rendered live, so the patient can
+    check a phone number one digit at a time instead of parsing their own sentence."""
+    js = kiosk_js()
+    body = js.split("function renderDigitPreview(live) {")[1].split("\n}")[0]
+    assert "const digits = digitsFromSpeech(live);" in body
+    assert "spacedDigits(digits)" in body                 # '0 1 7 1 5', not '01715'
+    assert "renderDigitPreview(live);" in js              # called from r.onresult
+    html = TestClient(app).get("/kiosk.html").text
+    for element_id in ("phone-digit-preview", "otp-digit-preview"):
+        assert f'id="{element_id}"' in html
+
+
+def test_the_digit_preview_is_display_only_and_never_stored():
+    """It is a reading of the utterance, not a replacement for it. Nothing here touches
+    the transcript element, an utterance, or the server."""
+    body = kiosk_js().split("function renderDigitPreview(live) {")[1].split("\n}")[0]
+    for forbidden in ("api(", "dock.transcript", "raw_text"):
+        assert forbidden not in body
+
+
+def test_the_preview_follows_the_language_toggle_like_every_other_number():
+    """P1-2 and the F5b read-back's own convention: Bangla numerals under the BN
+    toggle. The value that is stored and sent is ASCII either way — phoneFromSpeech()
+    and the server's to_ascii_digits() see to that."""
+    body = kiosk_js().split("function renderDigitPreview(live) {")[1].split("\n}")[0]
+    assert "box.dataset.en = spacedDigits(digits);" in body
+    assert "box.dataset.bn = spacedDigits(bnDigits(digits));" in body
+
+
+def test_the_preview_is_cleared_when_the_turn_ends():
+    """A stale digit string under the next question would be a number the patient never
+    said, sitting exactly where they were told to check one."""
+    js = kiosk_js()
+    assert "function clearDigitPreview()" in js
+    assert "clearDigitPreview();                                 // S34" in js
 
 
 def test_phone_from_speech_mirrors_the_server_rule():

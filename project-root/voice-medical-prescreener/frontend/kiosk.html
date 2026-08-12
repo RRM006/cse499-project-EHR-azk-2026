@@ -29,7 +29,21 @@
       outline: 3px solid var(--border-focus); outline-offset: 3px; border-radius: 6px;
     }
 
-    .screen { display: none; flex: 1; flex-direction: column; }
+    /* S34 — the kiosk page itself must not grow. PRE-EXISTING defect, measured here
+       rather than assumed: shared.css gives `body` `min-height: 100vh` but no height, so
+       with a handful of chat bubbles the document grew (1538px inside a 694px viewport),
+       `.chat-thread`'s `flex: 1` was handed unbounded space and never scrolled, and the
+       whole voice dock — mic, Done, and now the answer read-back — sat below the fold.
+       Auto-scrolling the thread cannot help while the thread is not the thing scrolling.
+
+       Pinning html/body to the viewport makes each `.screen` a bounded flex item, which
+       is what lets `.chat-thread` and `.summary-layout` be the scroll containers they
+       were always written to be. `min-height: 0` is required too: a flex item's default
+       `min-height: auto` refuses to shrink below its content, which is the other half of
+       why the bounding never took effect. Scoped to the kiosk, not shared.css — the
+       staff dashboards are long documents and SHOULD scroll as pages. */
+    html, body { height: 100%; }
+    .screen { display: none; flex: 1; min-height: 0; flex-direction: column; overflow-y: auto; }
     .screen.active { display: flex; }
     .center-col { max-width: 460px; margin: auto; text-align: center; padding: 32px; width: 100%; }
     /* P2: raised in place (see the note in the elderly-sizing block above). */
@@ -194,6 +208,36 @@
     @media (prefers-reduced-motion: reduce) {
       .doctor-mouth, .doctor-ring, .doctor-eye, .doctor-avatar { animation: none !important; transition: none !important; }
       [data-avatar-state="listening"] .doctor-ring { opacity: .85; }
+      /* S34: the float bob and the clock blink are decoration on top of information
+         that is still fully carried without them — the status text, and a number that
+         changes once a second. Removing the motion removes nothing the patient needs. */
+      .doctor-float-inner, .review-timer, .review-timer-value { animation: none !important; }
+    }
+
+    /* S34 — the live digit read-out under the identification transcript. Tabular
+       numerals and wide tracking because the ONLY thing it is for is checking one digit
+       at a time; it is the same job the phone read-back does, half a second earlier. */
+    .digit-preview {
+      display: none; font-size: 1.55rem; font-weight: 700; letter-spacing: .18em;
+      color: var(--primary-color); font-variant-numeric: tabular-nums;
+      text-align: center; line-height: 1.3; word-break: break-word;
+    }
+
+    /* S34 (ADR-0055) — the spoken-answer read-back. Deliberately the loudest thing in
+       the dock: this is the patient's one chance to catch a mis-recognition before it
+       becomes part of their medical record. */
+    .answer-confirm {
+      display: none; flex-direction: column; align-items: stretch; gap: 12px;
+      width: 100%; padding: 16px 18px; border-radius: var(--radius);
+      background: #E6F7F3; border: 1px solid #B8E5DC;
+    }
+    .answer-confirm-head { font-size: .95rem; font-weight: 700; color: var(--primary-color); }
+    /* The patient's own words. Large, never italic (that reads as "provisional"), and
+       selectable-looking so it is obviously a quotation of them, not of us. */
+    .answer-text {
+      font-size: 1.25rem; line-height: 1.55; font-weight: 600; color: var(--text-color);
+      background: var(--bg-white); border-radius: 10px; padding: 12px 15px;
+      border: 1px solid #B8E5DC; word-break: break-word;
     }
 
     /* summary (KIOSK-5: one card per field; P1-6: Teal Medical tints, ADR-0043) */
@@ -248,6 +292,75 @@
       background: #FFFBEB; border: 1px solid var(--warning-color);
       color: #B45309; font-weight: 600; font-size: .95rem; line-height: 1.5;
     }
+    /* S34 — review layout: the floating assistant on the LEFT, the cards on the right.
+       `align-items: start` + `position: sticky` is what makes it float alongside a long
+       summary instead of scrolling away at the first card. */
+    /* The clock is a FLEX SIBLING of the heading, not an absolutely-positioned overlay.
+       Measured: absolute positioning put it on top of the centred title at 730px wide —
+       "does not cover important content" has to hold at every width, not just the one
+       it was designed at. As a flex item it reserves its own space, and when it is
+       hidden the heading simply re-centres across the full row. */
+    .summary-head { display: flex; align-items: flex-start; gap: 14px; }
+    .summary-head > div:first-child { flex: 1; min-width: 0; }
+    /* minmax(0, 1fr), not 1fr: a bare `1fr` track cannot shrink below its content's
+       min-content width, so one wide card would push the whole review sideways instead
+       of wrapping inside its column. */
+    .summary-body { display: grid; grid-template-columns: 210px minmax(0, 1fr); gap: 18px; align-items: start; }
+    .doctor-float { position: sticky; top: 8px; }
+    .doctor-float-inner {
+      display: flex; flex-direction: column; align-items: center; gap: 8px;
+      text-align: center; padding: 16px 12px; border-radius: 20px;
+      background: rgba(255,255,255,.78);
+      -webkit-backdrop-filter: blur(8px); backdrop-filter: blur(8px);
+      border: 1px solid var(--border-color); box-shadow: 0 10px 26px rgba(13,63,60,.10);
+      perspective: 700px;
+      /* The "floating" part: a slow, shallow bob on the CARD, never on .doctor-avatar —
+         the avatar's own transform is owned by the speaking state, and animating both
+         would make the two fight. */
+      animation: doctor-hover 5.5s ease-in-out infinite;
+    }
+    @keyframes doctor-hover {
+      0%, 100% { transform: translateY(0); box-shadow: 0 10px 26px rgba(13,63,60,.10); }
+      50%      { transform: translateY(-7px); box-shadow: 0 18px 32px rgba(13,63,60,.14); }
+    }
+    /* The float is a narrow column, so its own type is tuned down from the conversation
+       sizes — at 170-210px the full-size status line wraps to three ragged lines and
+       stops being the quick glance it exists to be. More specific than the base rules,
+       so it overrides them without duplicating a selector. */
+    .doctor-float .doctor-status { font-size: 1rem; line-height: 1.3; }
+    .doctor-float .doctor-substatus { font-size: .82rem; line-height: 1.3; }
+    .doctor-float .doctor-avatar { width: 78px; height: 78px; }
+    .doctor-float .btn { width: 100%; margin-top: 4px; font-size: .85rem; padding: 11px 8px; line-height: 1.3; }
+    /* the per-card 🔊 sits at the right edge of the card head, like the "needs info" chip */
+    .summary-item-head .bubble-speak { margin-left: auto; }
+
+    /* S34 (ADR-0055) — the review clock. A small digital display: monospaced-looking
+       tabular numerals, a steady blink so it reads as RUNNING rather than as a static
+       label, and a louder red pulse under 10 s. Never overlaps the heading — it is a
+       grid/absolute corner item, and it becomes a normal inline chip on narrow screens
+       where there is no corner to spare. */
+    .review-timer {
+      display: none; flex: none; align-items: baseline; gap: 6px; white-space: nowrap;
+      padding: 8px 14px; border-radius: 10px;
+      background: #0B3F3C; color: #E6F7F3;
+      border: 1px solid var(--primary-color); box-shadow: var(--shadow-sm);
+      font-variant-numeric: tabular-nums; letter-spacing: .06em;
+    }
+    .review-timer-value {
+      font-size: 1.45rem; font-weight: 700; line-height: 1;
+      animation: clock-blink 1s steps(1, end) infinite;
+    }
+    .review-timer-label { font-size: .8rem; font-weight: 600; opacity: .85; }
+    @keyframes clock-blink { 0%, 60% { opacity: 1; } 61%, 100% { opacity: .45; } }
+    .review-timer.urgent {
+      background: #7F1D1D; border-color: var(--danger-color); color: #FEE2E2;
+      animation: clock-urgent .9s ease-in-out infinite;
+    }
+    @keyframes clock-urgent {
+      0%, 100% { transform: scale(1); box-shadow: 0 0 0 rgba(220,38,38,0); }
+      50%      { transform: scale(1.06); box-shadow: 0 0 14px rgba(220,38,38,.55); }
+    }
+
     .resume-dock { display: none; flex-direction: column; gap: 12px; border-left: 4px solid var(--secondary-color); }
     .resume-q-row { display: flex; align-items: flex-start; gap: 12px; }
     .resume-question { font-size: 1.15rem; line-height: 1.5; margin-top: 2px; font-weight: 600; }
@@ -275,12 +388,27 @@
       .doctor-substatus { font-size: .85rem; }
       .convo-layout { padding: 12px 28px; gap: 10px; }
       .summary-layout { padding: 16px 28px; gap: 12px; }
+      /* S34: on a short screen the review must still show cards, so the floating
+         assistant gives up its height first — same rule as the conversation avatar. */
+      .summary-body { grid-template-columns: 170px minmax(0, 1fr); }
+      .doctor-float-inner { padding: 10px 8px; gap: 5px; }
+      .answer-text { font-size: 1.12rem; padding: 9px 12px; }
+      .answer-confirm { padding: 12px 14px; gap: 9px; }
+      .digit-preview { font-size: 1.3rem; }
     }
     @media (max-width: 620px) {
       .center-col { padding: 20px 14px; }
       .convo-layout { padding: 14px 14px; }
       .summary-layout { padding: 16px 14px; }
+      .summary-body { grid-template-columns: minmax(0, 1fr); }
       .summary-grid { grid-template-columns: 1fr; }   /* two columns is unreadable here */
+      /* PRE-EXISTING defect, measured here rather than assumed: renderSummary() sets
+         `grid-column: span 2` INLINE on the two wide cards. In the single-column grid
+         above, spanning 2 creates an IMPLICIT second column, and the review then
+         scrolled sideways inside its own box at 375px (497px of content in a 375px
+         viewport). `!important` is what beats an inline style — the alternative is
+         teaching the renderer about breakpoints, which is worse. */
+      .summary-grid .summary-item { grid-column: span 1 !important; }
       .chat-turn { max-width: 94%; }
       .dock-row { flex-wrap: wrap; justify-content: center; gap: 12px; }
       .summary-actions { flex-direction: column; align-items: stretch; }
@@ -288,6 +416,15 @@
       .doctor-stage { gap: 12px; }
       .otp-row { gap: 6px; }
       .otp-input { height: 50px; font-size: 1.25rem; }
+      /* S34: no corner to spare — the assistant goes above the cards and the clock
+         becomes an ordinary centred chip instead of overlapping the heading. */
+      .summary-body { grid-template-columns: 1fr; }
+      .doctor-float { position: static; }
+      .doctor-float-inner { flex-direction: row; flex-wrap: wrap; justify-content: center; text-align: left; }
+      .doctor-float .btn { width: auto; }
+      .review-timer { justify-content: center; margin: 0 auto 8px; width: max-content; }
+      .summary-head { flex-direction: column-reverse; align-items: center; }
+      .confirm-row .btn { width: 100%; }
     }
   </style>
 </head>
@@ -334,8 +471,13 @@
           <div class="identify-instruction"
                data-en="Or tap the microphone and say your mobile number"
                data-bn="অথবা মাইকে চাপ দিয়ে আপনার মোবাইল নম্বরটি বলুন">Or tap the microphone and say your mobile number</div>
-          <div class="dock-transcript" id="phone-transcript"
+          <div class="dock-transcript" id="phone-transcript" aria-live="polite"
                data-en="Say the digits one at a time..." data-bn="সংখ্যাগুলো একটি একটি করে বলুন...">Say the digits one at a time...</div>
+          <!-- S34: the DIGITS the words above mean, updated live. The transcript shows
+               what was heard ("সাত এক পাঁচ" / "one two three"); this shows what it is
+               worth as a number, which is the thing the patient must actually check.
+               Written by renderDigitPreview() — display only, nothing stored. -->
+          <div class="digit-preview" id="phone-digit-preview" aria-live="polite"></div>
           <div class="countdown" id="phone-countdown">
             <span class="countdown-digit" id="phone-countdown-digit"></span>
             <span class="countdown-caption"
@@ -388,8 +530,10 @@
           <div class="identify-instruction"
                data-en="Or just say the 6 digits out loud"
                data-bn="অথবা ৬টি সংখ্যা মুখে বলুন">Or just say the 6 digits out loud</div>
-          <div class="dock-transcript" id="otp-transcript"
+          <div class="dock-transcript" id="otp-transcript" aria-live="polite"
                data-en="Say the digits one at a time..." data-bn="সংখ্যাগুলো একটি একটি করে বলুন...">Say the digits one at a time...</div>
+          <!-- S34: same live digit read-out as the phone screen. -->
+          <div class="digit-preview" id="otp-digit-preview" aria-live="polite"></div>
           <div class="countdown" id="otp-countdown">
             <span class="countdown-digit" id="otp-countdown-digit"></span>
             <span class="countdown-caption"
@@ -437,8 +581,21 @@
         <div class="voice-hint" id="voice-hint"
              data-en="⚠ No Bangla voice is installed on this device — questions will not play as audio, but they always appear as text on screen."
              data-bn="⚠ এই যন্ত্রে কোনো বাংলা ভয়েস ইনস্টল করা নেই — প্রশ্ন শোনা যাবে না, তবে সবসময় পর্দায় লেখা থাকবে।">⚠ No Bangla voice is installed on this device — questions will not play as audio, but they always appear as text on screen.</div>
-        <div class="dock-transcript" id="dock-transcript"
+        <div class="dock-transcript" id="dock-transcript" aria-live="polite"
              data-en="Your speech will appear here as you talk..." data-bn="আপনি বলার সাথে সাথে এখানে দেখা যাবে...">Your speech will appear here as you talk...</div>
+        <!-- S34 (ADR-0055): the spoken-answer read-back. Nothing is stored until the
+             patient accepts it, and the text below is their own words, verbatim —
+             never translated, never re-rendered by the language toggle (rule #1). -->
+        <div class="answer-confirm" id="dock-answer-confirm">
+          <div class="answer-confirm-head" data-en="I heard you say:" data-bn="আমি শুনেছি আপনি বলেছেন:">I heard you say:</div>
+          <div class="answer-text" id="dock-answer-text" aria-live="polite"></div>
+          <div class="confirm-row">
+            <button class="btn btn-accent" onclick="acceptAnswer()"
+                    data-en="✔ Yes — that is right" data-bn="✔ হ্যাঁ — এটাই ঠিক">✔ Yes — that is right</button>
+            <button class="btn btn-secondary" onclick="rejectAnswer()"
+                    data-en="✖ No — say it again" data-bn="✖ না — আবার বলি">✖ No — say it again</button>
+          </div>
+        </div>
         <!-- S4: shown only while a turn is being confirmed; speaking again cancels it. -->
         <div class="countdown" id="dock-countdown">
           <span class="countdown-digit" id="dock-countdown-digit"></span>
@@ -473,12 +630,49 @@
   <!-- 4: summary review -->
   <div class="screen" id="screen-summary">
     <div class="summary-layout">
-      <div style="text-align:center;">
-        <div class="welcome-title" data-en="Please Review Your Pre-Screening Summary" data-bn="দয়া করে আপনার প্রাক-পরীক্ষার বিবরণীটি পর্যালোচনা করুন">Please Review Your Pre-Screening Summary</div>
-        <div class="welcome-sub" data-en="Compiled from your voice answers. It will be sent to the doctor." data-bn="আপনার ভয়েস উত্তর থেকে সংকলিত। এটি ডাক্তারের কাছে পাঠানো হবে।">Compiled from your voice answers. It will be sent to the doctor.</div>
-        <span class="progress-chip" id="summary-progress"></span>
+      <!-- S34: the heading row owns the review clock, so the countdown sits with the
+           thing it is counting down (top right of the review title) instead of floating
+           over the cards. `position: relative` here is what the clock anchors to. -->
+      <div class="summary-head">
+        <div style="text-align:center;">
+          <div class="welcome-title" data-en="Please Review Your Pre-Screening Summary" data-bn="দয়া করে আপনার প্রাক-পরীক্ষার বিবরণীটি পর্যালোচনা করুন">Please Review Your Pre-Screening Summary</div>
+          <div class="welcome-sub" data-en="Compiled from your voice answers. It will be sent to the doctor." data-bn="আপনার ভয়েস উত্তর থেকে সংকলিত। এটি ডাক্তারের কাছে পাঠানো হবে।">Compiled from your voice answers. It will be sent to the doctor.</div>
+          <span class="progress-chip" id="summary-progress"></span>
+        </div>
+        <!-- S34 (ADR-0055): the 60-second review clock. Digital, blinking, and louder
+             as it runs down. Shown ONLY while Confirm & Submit is actually pressable —
+             updateSubmitVisibility() owns both. -->
+        <div class="review-timer" id="review-timer" role="timer" aria-live="off">
+          <span class="review-timer-value" id="review-timer-value">60s</span>
+          <span class="review-timer-label" data-en="left" data-bn="সেকেন্ড বাকি">left</span>
+        </div>
       </div>
-      <div class="summary-grid" id="summary-grid"></div>
+
+      <!-- S34: the floating AI assistant. LEFT of the summary, same derived state as the
+           conversation avatar (there is one state machine, not three) — so it speaks
+           while the review is being read aloud and idles while the patient reads. -->
+      <div class="summary-body">
+        <div class="doctor-float" id="summary-float">
+          <div class="doctor-float-inner">
+            <div class="doctor-avatar" id="summary-avatar" data-avatar-state="idle" role="img"
+                 aria-label="Assistant">
+              <div class="doctor-ring"></div>
+              <div class="doctor-head">
+                <div class="doctor-antenna"></div>
+                <div class="doctor-visor"><span class="doctor-eye"></span><span class="doctor-eye"></span></div>
+                <div class="doctor-mouth"></div>
+              </div>
+            </div>
+            <div class="doctor-status" id="summary-status" aria-live="polite"
+                 data-en="Ready when you are" data-bn="আপনি প্রস্তুত হলেই শুরু করুন">Ready when you are</div>
+            <div class="doctor-substatus" id="summary-substatus"
+                 data-en="Your AI health assistant" data-bn="আপনার এআই স্বাস্থ্য সহকারী">Your AI health assistant</div>
+            <button class="btn btn-secondary" id="read-summary-btn" onclick="toggleSummaryReadAloud()"
+                    data-en="🔊 Hear my answers" data-bn="🔊 আমার উত্তরগুলো শুনুন">🔊 Hear my answers</button>
+          </div>
+        </div>
+        <div class="summary-grid" id="summary-grid"></div>
+      </div>
 
       <!-- KIOSK-7: resume dock — asks ONLY still-missing fields, one at a time -->
       <div class="card resume-dock" id="resume-dock">
@@ -504,7 +698,18 @@
           </div>
           <button class="bubble-speak" type="button" onclick="repeatResumeQuestion()" title="🔊">🔊</button>
         </div>
-        <div class="dock-transcript" id="resume-transcript"></div>
+        <div class="dock-transcript" id="resume-transcript" aria-live="polite"></div>
+        <!-- S34: the resume dock gets the SAME read-back (one gate, both docks). -->
+        <div class="answer-confirm" id="resume-answer-confirm">
+          <div class="answer-confirm-head" data-en="I heard you say:" data-bn="আমি শুনেছি আপনি বলেছেন:">I heard you say:</div>
+          <div class="answer-text" id="resume-answer-text" aria-live="polite"></div>
+          <div class="confirm-row">
+            <button class="btn btn-accent" onclick="acceptAnswer()"
+                    data-en="✔ Yes — that is right" data-bn="✔ হ্যাঁ — এটাই ঠিক">✔ Yes — that is right</button>
+            <button class="btn btn-secondary" onclick="rejectAnswer()"
+                    data-en="✖ No — say it again" data-bn="✖ না — আবার বলি">✖ No — say it again</button>
+          </div>
+        </div>
         <!-- S4: the resume dock gets the SAME countdown (one endpointer, both docks). -->
         <div class="countdown" id="resume-countdown">
           <span class="countdown-digit" id="resume-countdown-digit"></span>
@@ -538,8 +743,11 @@
       <div class="required-notice" id="required-notice"></div>
       <div class="summary-actions card" style="padding:16px 20px;">
         <span style="font-size:.85rem; color:var(--text-muted); margin-right:auto;"
-              data-en="If anything is incorrect, tap Speak Again to correct." data-bn="কোনো তথ্য ভুল হলে, আবার বলুন চাপুন।">If anything is incorrect, tap Speak Again to correct.</span>
-        <button class="btn btn-secondary" onclick="showScreen('screen-voice')" data-en="Speak Again" data-bn="আবার বলুন">Speak Again</button>
+              data-en="Tap 🔊 on any card to hear it. If anything is wrong, tap Speak Again."
+              data-bn="যেকোনো কার্ডের 🔊 চেপে শুনুন। কিছু ভুল থাকলে “আবার বলুন” চাপুন।">Tap 🔊 on any card to hear it. If anything is wrong, tap Speak Again.</span>
+        <!-- S34: reviewSpeakAgain(), not a bare showScreen() — leaving the review must
+             also stop its clock, or it would submit a screen the patient has left. -->
+        <button class="btn btn-secondary" onclick="reviewSpeakAgain()" data-en="Speak Again" data-bn="আবার বলুন">Speak Again</button>
         <button class="btn btn-secondary" id="download-transcript-btn" onclick="downloadRawTranscript()" data-en="Download Raw Transcript (.docx)" data-bn="মূল কথোপকথন ডাউনলোড (.docx)">Download Raw Transcript (.docx)</button>
         <button class="btn btn-accent" id="confirm-submit-btn" onclick="confirmSubmit()" data-en="Confirm & Submit" data-bn="নিশ্চিত ও জমা দিন">Confirm &amp; Submit</button>
       </div>

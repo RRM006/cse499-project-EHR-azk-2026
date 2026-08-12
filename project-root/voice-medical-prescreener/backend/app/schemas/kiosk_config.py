@@ -30,6 +30,12 @@ class KioskConfigOut(BaseModel):
     no_speech_ms: int
     # Hard cap on a single answer before what was captured is submitted.
     max_answer_ms: int
+    # S34 (ADR-0055): read a spoken answer back and require the patient to accept it
+    # before it is stored. False restores the S25-era "capture -> submit" flow.
+    answer_confirm: bool
+    # S34 (ADR-0055): how long the review screen waits before submitting itself.
+    # 0 = never auto-submit.
+    review_timeout_ms: int
     # True when GET /api/tts can actually produce audio (a provider is configured AND
     # its engine is installed). Lets the kiosk fall back to server audio only when a
     # fallback really exists, and lets the "no Bangla voice" banner tell the truth.

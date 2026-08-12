@@ -16,6 +16,94 @@
 
 ---
 
+## Session 34 — 2026-08-12 — **S34 manual-testing cycle: spoken-answer read-back, English digit words in Bangla script, review read-aloud + floating assistant, auto-scroll, the 60 s review clock** — 480 → 547 tests
+- Did: worked the human's manual-testing findings end to end in one pass (their explicit
+  instruction: no per-phase stop). **ADR-0055.** No schema change — **Alembic stays 0012**, no
+  migration, no new dependency, **no module changed status**.
+- **Phase 1 — the phone number showed WORDS, not digits. Two separate causes, both fixed.**
+  (1) The real defect: the kiosk listens at `lang='bn-BD'`, and a Bangla-language recogniser handed
+  "one two three" does not return Latin text — it returns `ওয়ান টু থ্রি`. The ten ENGLISH keys in
+  `SPOKEN_DIGITS` could therefore **never be hit by a patient speaking English digits aloud**; they
+  only ever matched typed/pasted text. Ten transliterations added (`জিরো ওয়ান টু থ্রি ফোর ফাইভ
+  সিক্স সেভেন এইট নাইন`). `ও` ("and"/"he/she") is deliberately NOT mapped, by the same rule every
+  other key passes. (2) The UX half: the identification docks now show a live **digit preview**
+  (`0 1 7 1 5`) derived by the same `digitsFromSpeech()` that produces the value — the transcript
+  keeps showing the words, because that is the evidence and it is never rewritten (rule #1).
+- **Phase 2 — a spoken answer is now READ BACK before anything is stored.** Between S4 and this
+  session a captured answer went from the recogniser straight into the permanent record with no
+  human confirmation anywhere; the only way to catch a mis-recognition was to READ a chat bubble,
+  which the target patient may not be able to do. Now: the words appear large and verbatim, are
+  SPOKEN back (`bn-BD`, `verbatim`), and wait for ✔/✖. **Nothing reaches the server until ✔**; ✖
+  discards the capture (it was never stored, so nothing is edited) and re-asks the SAME question.
+  The gate is at ONE place — the spoken branch of `stopListening()` — and `acceptAnswer()` re-enters
+  the SAME `submitPatientTurn(text,'mic')` / `submitResumeAnswer(text,'mic')`, so ADR-0048's
+  one-pipeline rule is untouched and typed answers are never gated. **An unusable capture (no letter,
+  no digit) is never guessed at**: silence and noise both re-ask. Before this an empty spoken turn
+  fell through `if (sendTurn && text)` and did *nothing at all* — mic closed, no repeat, patient left
+  waiting.
+- **Phase 3/4 — the review can be HEARD, and has a floating assistant.** Every filled card gets a
+  labelled 🔊 plus a "Hear my answers" read-through (one shared queue token, so a card tap and a
+  read-through can never talk over each other). The P1 robotic doctor gains a THIRD mount on the
+  review screen — same derived state machine (ADR-0054), added to `AVATAR_IDS`, with a slow float on
+  the CARD (never on `.doctor-avatar`, whose transform belongs to the speaking state). It steps aside
+  when the KIOSK-7 resume dock opens, so exactly one assistant is ever on screen.
+- **Phase 5 — auto-scroll.** `addBubble()` now smooth-scrolls the THREAD (never `scrollIntoView()`,
+  which moves the whole document and yanks the mic/typing box away mid-interaction), honest under
+  `prefers-reduced-motion`, with the `scrollTop` assignment kept as the always-correct fallback.
+- **Phase 6/7 — the 60-second review clock on ONE reusable ticker.** Digital, blinking, `urgent`
+  under 10 s, `60s left` / `৬০ সেকেন্ড বাকি`. It runs **only while Confirm & Submit is genuinely
+  pressable** (same verdict as the button), is idempotent so re-entry cannot stack a second timer,
+  and `confirmSubmit()` gained a `submitting` re-entry guard. `startTicker()` is extracted and the
+  5-second auto-logout countdown moved onto it — the proof it is reusable. **The S4 endpointer is
+  deliberately NOT converted**: its deadline is restarted by every recognition result, and that
+  restart IS the anti-clipping guarantee (rule #1).
+- Decided: **ADR-0055** (a)-(i) — transliterated digit words; derived digit preview; read-back gate
+  on spoken answers only, switchable via `VOICE_ANSWER_CONFIRM`; the gate at one routing point;
+  unclear-answer re-ask NOT switchable; review read-aloud reads the DERIVED summary; review
+  auto-submit gated on the submit verdict; one shared ticker with the S4 endpointer excluded; the
+  kiosk page bounded to the viewport.
+- Two new public knobs on the existing `/api/config` seam (S1's pattern — a clinic tunes behaviour
+  from `.env`, not from JavaScript): `answer_confirm` (default true) and `review_timeout_ms`
+  (default 60000, clamped at 0, `0` = never auto-submit).
+- Broke / problem: **three defects found by MEASURING the running page, none by any assertion.**
+  (1) The confirm panel opened **below the fold** — the same class of defect as F5b's phone
+  read-back; fixed with the same proven forced-reflow + `scrollIntoView` pair. (2) Root cause of
+  that: **PRE-EXISTING** — `shared.css` gives `body` `min-height: 100vh` and no height, so a handful
+  of chat bubbles grew the document to **1538px inside a 694px viewport**, `.chat-thread` was handed
+  unbounded space by `flex: 1` and never scrolled, and the entire voice dock sat below the fold.
+  Auto-scrolling a thread that is not the scroll container cannot help. Fixed with
+  `html, body { height: 100% }` + `.screen { min-height: 0; overflow-y: auto }`, scoped to the kiosk.
+  (3) **PRE-EXISTING** — `renderSummary()` sets `grid-column: span 2` INLINE on two cards; in the
+  narrow single-column grid that creates an IMPLICIT second column, and the review scrolled sideways
+  inside its own box at 375px (**497px of content in a 375px viewport**). Fixed with
+  `span 1 !important` in the narrow query plus `minmax(0, 1fr)` tracks. Also fixed: the clock as an
+  absolute overlay **covered the centred heading** at 730px (now a flex sibling), and `৫৯s বাকি` was
+  half-translated (the unit moved to the label).
+- Three existing tests updated, none weakened: `test_kiosk_config.py` / `test_tts_provider.py` (the
+  exact `/api/config` key set — both are deliberate whole-contract assertions, so a new knob must be
+  declared in them) and `test_kiosk_avatar.py`'s `AVATAR_IDS` literal, rewritten to parse the list
+  and check every mount also exists in the markup — strictly stronger than the string it replaced.
+- Verified: **547 passed, 2 skipped, 0 failures** (was 480). New files: `test_kiosk_answer_confirm.py`
+  (23), `test_kiosk_review_timer.py` (17), `test_kiosk_review_screen.py` (19); `test_voice_digits.py`
+  +6 and `test_kiosk_config.py` +2. **Live browser run (no microphone, S33's method — feeding the
+  recogniser's own buffer):** spoken-English-digits-in-Bangla-script phone → live preview `0 1 7 1 5`
+  → read-back `01715-984632`, nothing sent → confirm → spoken OTP → verified → interview; a spoken
+  answer showed the panel with **zero turns stored**, ✔ stored it and advanced, ✖ stored nothing and
+  re-asked, silence and punctuation-only both re-asked; the clock ran 60→57→53→52, froze on Speak
+  Again, restarted at 60 on return, went urgent under 10 s, and **a timeout racing TWO manual
+  confirmSubmit() calls produced exactly ONE POST**; the shared ticker gave 3,2,1,0 with `onEnd`
+  fired once and suppressed entirely by an early cancel; no horizontal overflow at 730x694 or
+  375x812; console clean apart from the pre-existing `/favicon.ico` 404.
+- Deferred: **Step S5 — NOT implemented, by explicit instruction** (its `no_speech_ms` watchdog,
+  `max_answer_ms` cap and permission/visibility recovery are untouched; only the narrow
+  empty-capture re-ask that Phase 2 required was built, and ADR-0055 (e) records the overlap).
+  Also still deferred: the **real-microphone run**, rotating the **3 API keys** (human-only), the
+  Chrome + Edge live STT comparison, formal **WER**, and the mid-turn word-loss rule #1 decision —
+  which now also covers a pending read-back discarded by "Done".
+- Next: **REAL MICROPHONE VALIDATION** of the full flow — now including the spoken-answer read-back
+  and the English-digit transliterations, which are the two things a real recogniser can still
+  disprove.
+
 ## Session 33 — 2026-08-11 — **F5 voice identification + P1 robotic doctor + P2 elderly UI + P3 age validation** — 392 → 480 tests
 - Did: finished every remaining in-scope faculty-demo item. **F5a/F5b** (voice phone number +
   voice OTP, ADR-0053), **P1** the robotic-doctor avatar, **P2** elderly-friendly/3D UI, and

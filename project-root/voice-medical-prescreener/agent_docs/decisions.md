@@ -1326,3 +1326,104 @@ separate, still-**unproven** question tracked in `current_task.md`.
   running the real requirements gate for a 19- and a 78-year-old and comparing what it demands.
 - Status: Accepted (code shipped, **480 tests pass, 2 skipped**). Alembic unchanged at **0012**.
   NOT proven: any microphone behaviour, and whether the model's questions actually differ by age.
+
+## ADR-0055 — 2026-08-12 — S34: a spoken answer is READ BACK before it is stored; the review submits itself on one shared countdown
+
+- Context: the human ran the kiosk by hand and reported four things — a spoken phone number showed
+  the WORDS rather than the digits; there was no way to hear what the machine had understood of an
+  answer, or to correct it; the review screen could only be READ, never heard; and a finished review
+  sat there until somebody pressed a button. Underneath the first was a real defect, and underneath
+  the second a real gap: between S4 and now, a captured answer went from the recogniser straight into
+  the patient's permanent record with no human confirmation anywhere in the path.
+
+- Decision (a) — **a decimal digit is a digit in whatever SCRIPT the recogniser writes it, including
+  a transliteration.** ADR-0053 established the character-level half. The word-level half was still
+  half-done: the kiosk listens at `lang='bn-BD'` (it must — every clinical answer is Bangla), and a
+  Bangla-language recogniser handed "one two three" does not return Latin text, it returns
+  `ওয়ান টু থ্রি`. So the ten English keys in `SPOKEN_DIGITS` could never be hit by a patient SPEAKING
+  English digits; they only ever matched typed or pasted text. Ten transliterations were added. The
+  safety rule for adding them is unchanged and is what keeps the map honest: a word is only mapped if
+  it cannot arise in ordinary speech. `ও` — "and", "he/she", one of the commonest words in Bangla, and
+  what an English "oh" transliterates to — is deliberately NOT mapped. **A missed digit is caught by
+  the read-back; an invented one reads as correct.**
+
+- Decision (b) — **the identification docks show the DIGITS, and keep showing the words.** The
+  transcript is the evidence and is never rewritten (rule #1). Beside it now sits a derived reading
+  produced by the same `digitsFromSpeech()` that will produce the value, spaced out (`0 1 7 1 5`) so
+  an elderly patient can check one digit at a time instead of parsing their own sentence back. It is
+  display-only: nothing is stored, sent, or normalised differently because of it.
+
+- Decision (c) — **a SPOKEN clinical answer is read back and must be accepted before it is stored; a
+  TYPED one is not.** The read-back shows the words large and verbatim, speaks them back in the
+  capture language (`bn-BD`, `verbatim: true` — reading back half an answer would be a rule #1
+  defect), and offers a tick and a cross. Nothing reaches the server until the tick. A typed answer is
+  exempt because the patient is already looking at their own text, and a confirmation there would be a
+  tap that buys nothing (ADR-0048's "minimize clicks"). ⚠ This DOES cost one tap per spoken turn,
+  which is a real regression against the zero-touch goal — so `VOICE_ANSWER_CONFIRM=false` restores
+  the S25-era flow exactly, the ADR-0045 pattern of never deleting the previous behaviour. The default
+  is ON: the target patient may not be able to read the chat bubble that was previously the only way
+  to notice a mis-recognition.
+
+- Decision (d) — **the gate lives at ONE place: the spoken branch of `stopListening()`.** Not inside
+  `submitPatientTurn()`/`submitResumeAnswer()`, which the typed paths also call, and not as a second
+  question/answer route. `acceptAnswer()` re-enters the SAME calls with the SAME `source`, so
+  ADR-0048's one-pipeline rule is untouched and the resume dock inherits the whole thing for free.
+
+- Decision (e) — **an unusable capture is asked again, never guessed at, and this is NOT switchable.**
+  "Unusable" is decided locally and deterministically — no letter and no digit — because that is
+  something the kiosk can be right about offline; anything richer would be a heuristic judging a
+  patient's answer, which is the doctor's job (rule #2). Silence, or noise, re-asks the SAME question
+  through `askAloud()` (which reopens the mic in auto mode). Before this, an empty spoken turn fell
+  through `if (sendTurn && text)` and did nothing at all: the mic closed, no question repeated, and the
+  patient waited for a kiosk that had silently given up. ⚠ **Overlap with Step S5, stated plainly:**
+  S5's "empty-submit guard / no-speech re-prompt" covers the same ground. Only the part the human's
+  Phase 2 required is built. S5's distinguishing content — the `no_speech_ms` watchdog, the
+  `max_answer_ms` cap, and permission/visibility recovery — is untouched and remains deferred.
+
+- Decision (f) — **the review screen can be HEARD, and it is the derived summary that is spoken.**
+  Every filled card gets a speaker button (labelled, so "None" is never read out with no subject),
+  plus a read-through of all of them. `verbatim: true` on both, so TTS-1's bilingual split cannot
+  halve a value. This reads the DERIVED `summary_fields`, never the raw transcript — the review screen
+  shows what the doctor will receive, and the read-aloud must not diverge from what is on the card.
+
+- Decision (g) — **the review submits itself after 60 seconds, but only while it legitimately can.**
+  The clock and the Confirm & Submit button share ONE verdict (`updateSubmitVisibility`), so it can
+  never count down toward a button that is not there or a submit the server would refuse; any manual
+  action cancels it; `startReviewTimer()` is idempotent so re-entering the screen cannot stack a second
+  timer; and `confirmSubmit()` gained a `submitting` re-entry guard so a timeout racing a tap produces
+  exactly one POST (verified live: timeout + two taps = 1 submit). `VOICE_REVIEW_TIMEOUT_MS=0` disables
+  it for a clinic that wants the patient in full control.
+
+- Decision (h) — **one reusable ticker, and the S4 endpointer is deliberately NOT folded into it.**
+  `startTicker()` is extracted and the 5-second auto-logout countdown is moved onto it, which is the
+  proof it is reusable rather than a wrapper written for one caller. The S4 silence endpointer looks
+  like the same thing and is not: its deadline is RESTARTED by every recognition result, and that
+  restart IS the anti-clipping guarantee. Rewriting a rule #1 safeguard to share code with a UI clock
+  would trade a real guarantee for a smaller diff. Reuse where it is safe; leave the safety-critical
+  countdown alone.
+
+- Decision (i) — **the kiosk page is bounded to the viewport; the thread and the summary are the
+  scrollers.** Measured, not assumed: `shared.css` gives `body` `min-height: 100vh` and no height, so a
+  handful of chat bubbles grew the document to 1538px inside a 694px viewport, `.chat-thread`'s
+  `flex: 1` was handed unbounded space and never scrolled, and the whole voice dock — mic, Done, and
+  the new read-back — sat below the fold. Auto-scrolling a thread that is not the scroll container
+  cannot help. Scoped to `kiosk.html` for the same reason ADR-0054 scoped the elderly sizing there:
+  the staff dashboards are long documents and SHOULD scroll as pages.
+
+- Rejected: (1) **a spoken yes/no confirmation** instead of two buttons — it needs a voice-driven
+  control loop, which is Step S5 / Requirement 3 territory and would have been built here by the back
+  door. (2) **Auto-accepting the read-back after a countdown** — it reintroduces exactly the silent
+  storage of an unheard answer that this ADR exists to remove. (3) **Reading the RAW transcript aloud
+  on the review screen** — the review shows the derived summary, and speaking something else would let
+  the patient approve one thing while hearing another. (4) **Putting the clock in `shared.css`, or
+  converting the S4 countdown to the shared ticker** — see (h)/(i).
+
+- Rules preserved: **rule #1** — the read-back displays and speaks the patient's words verbatim,
+  carries no `data-en`/`data-bn` so a language toggle cannot overwrite them, and a REJECTED capture was
+  never stored, so rejecting it edits nothing. **Rule #2** — "unclear" is a presence-of-characters
+  test, not a judgement about the answer's content. **Rule #4** — no new data leaves the device; the
+  read-back is local TTS on the same seam as every other spoken line.
+- Status: Accepted (code shipped, **547 tests pass, 2 skipped, 0 failures**; was 480). Alembic
+  unchanged at **0012** — no schema change, no migration.
+  NOT proven: anything involving a real microphone. Every voice result in this session comes from
+  feeding the recogniser's own buffer in a browser engine, as in S33.

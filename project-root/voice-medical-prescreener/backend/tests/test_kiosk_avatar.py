@@ -149,10 +149,22 @@ def test_an_unchanged_state_writes_nothing_to_the_dom():
 # --- both docks, both languages, and a screen reader ---
 
 
-def test_both_conversation_and_resume_docks_carry_the_avatar():
+def test_every_screen_that_talks_to_the_patient_carries_the_avatar():
+    """Conversation dock, KIOSK-7 resume dock, and (S34) the floating assistant on the
+    review screen. One list, one state machine — a mount that is not in AVATAR_IDS is a
+    robot that silently stops reacting, which is worse than no robot at all."""
     js, html = kiosk_js(), kiosk_html()
-    assert "const AVATAR_IDS = ['doctor-avatar', 'resume-avatar'];" in js
-    assert 'id="doctor-avatar"' in html and 'id="resume-avatar"' in html
+    mounts = re.search(r"const AVATAR_IDS = \[([^\]]*)\];", js)
+    assert mounts, "AVATAR_IDS is no longer a plain literal"
+    ids = re.findall(r"'([^']+)'", mounts.group(1))
+    assert ids == ["doctor-avatar", "resume-avatar", "summary-avatar"]
+    for element_id in ids:
+        assert f'id="{element_id}"' in html, f"#{element_id} is in AVATAR_IDS but not in the markup"
+    # The status lines the same states write must exist too, or applyAvatarState()
+    # would silently no-op on that screen.
+    for element_id in ("doctor-status", "summary-status",
+                       "doctor-substatus", "summary-substatus"):
+        assert f'id="{element_id}"' in html
 
 
 def test_every_avatar_state_is_bilingual():

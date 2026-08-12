@@ -4,7 +4,59 @@
 > re-exploring the whole project each session. Update it whenever you add or move
 > a folder/file. Keep each note to one line.
 
-**Last updated:** 2026-08-11 (**Session 33 — FOUR new test files, NO new production file, no
+**Last updated:** 2026-08-12 (**Session 34 — THREE new test files, NO new production file, no
+schema change (Alembic stays 0012), no dependency change, nothing moved or renamed.**
+
+**NEW test files** (all under `backend/tests/`):
+- **`test_kiosk_answer_confirm.py`** (23) — ADR-0055 c/d/e. That the spoken-answer read-back gate
+  sits at ONE routing point (`stopListening()`'s spoken branch, AFTER identification and BEFORE the
+  two clinical submits); that `acceptAnswer()` re-enters the SAME `submitPatientTurn(text,'mic')` /
+  `submitResumeAnswer(text,'mic')` so there is still one pipeline; that nothing reaches the server
+  or the transcript before ✔; that the read-back is verbatim, `bn-BD`, and can never open the mic;
+  that an unclear capture re-asks instead of storing; and (P5) that new turns scroll the THREAD,
+  never the page.
+- **`test_kiosk_review_timer.py`** (17) — ADR-0055 g/h. The shared `startTicker()`, its at-most-once
+  `onEnd`, the auto-logout countdown moved onto it, the clock/submit shared verdict, idempotent
+  start, the `submitting` re-entry guard, and an explicit test that the **S4 endpointer is NOT**
+  folded into the shared ticker.
+- **`test_kiosk_review_screen.py`** (19) — ADR-0055 f/i. Per-card 🔊 and the read-through, the third
+  `AVATAR_IDS` mount and the `AVATAR_SUBSTATUS_IDS` generalisation, "exactly one assistant on
+  screen", the float animation being on the CARD not `.doctor-avatar`, the `minmax(0, 1fr)` tracks
+  and the narrow-screen `span 1 !important`, plus a duplicate-selector guard for the new CSS.
+
+**Edited production files (no new modules, no new routes):**
+- **`frontend/kiosk.js`** — the bulk. Phase 1: ten Bangla transliterations in `SPOKEN_DIGITS`,
+  `spacedDigits()`, `renderDigitPreview()` / `clearDigitPreview()`, `digitPreview` on `DOCKS.phone`
+  and `DOCKS.otp`. Phase 2: `holdForConfirmation()` (the ONE gate) + `isUnclearAnswer()` +
+  `currentQuestionText()` + `reAskUnclearAnswer()` + `offerSpokenAnswer()` + `showAnswerConfirm()` /
+  `hideAnswerConfirm()` + `speakAnswerBack()` + `acceptAnswer()` / `rejectAnswer()`,
+  `state.pendingAnswer`, `applyCountdownCaption()`. Phases 3-4: per-card 🔊 in `renderSummary()`,
+  `speakSummaryField()`, `toggleSummaryReadAloud()` + `readAloudQueue` + `setReadAloudLabel()`,
+  `AVATAR_IDS` += `summary-avatar`, new `AVATAR_STATUS_IDS` / `AVATAR_SUBSTATUS_IDS`. Phase 5:
+  `scrollThreadToEnd()`. Phases 6-7: `startTicker()` (also used by the auto-logout),
+  `startReviewTimer()` / `cancelReviewTimer()` / `renderReviewClock()` / `hideReviewClock()` /
+  `reviewTimeoutMs()` / `reviewSpeakAgain()`, and `let submitting` guarding `confirmSubmit()`.
+  ⚠ `resetState()` still must NOT touch `DOCKS` or any DOCKS-walking helper — it runs at module
+  load, inside the temporal dead zone (the trap that killed the kiosk in S33). The new panels and
+  the clock are hidden there **by element id** for exactly that reason.
+- **`frontend/kiosk.html`** — `#phone-digit-preview` / `#otp-digit-preview`; the two
+  `#dock-answer-confirm` / `#resume-answer-confirm` read-back panels; `.summary-head` +
+  `.summary-body` two-column review with `#summary-float` / `#summary-avatar` / `#summary-status` /
+  `#summary-substatus` / `#read-summary-btn`; `#review-timer` + `#review-timer-value`; the
+  `.digit-preview` / `.answer-confirm` / `.doctor-float` / `.review-timer` CSS and their
+  reduced-motion entries; **`html, body { height: 100% }` + `.screen { min-height: 0; overflow-y:
+  auto }`** (the page-growth fix — see ADR-0055 i); and `span 1 !important` in the narrow query.
+- **`backend/app/core/config.py`** — `voice_answer_confirm: bool = True`,
+  `voice_review_timeout_ms: int = 60000`.
+- **`backend/app/schemas/kiosk_config.py`** + **`backend/app/api/routes_config.py`** — the same two
+  as `answer_confirm` / `review_timeout_ms` (the latter clamped at 0 in the route).
+- **`backend/.env.example`** — `VOICE_ANSWER_CONFIRM` / `VOICE_REVIEW_TIMEOUT_MS` documented.
+- **Three existing test files edited, none weakened:** `test_kiosk_config.py` (+2 tests, key set),
+  `test_tts_provider.py` (key set), `test_kiosk_avatar.py` (the `AVATAR_IDS` assertion rewritten to
+  parse the list and cross-check the markup), `test_voice_digits.py` (+6).
+→ suite **480 → 547 passing, 2 skipped**.
+
+Prior: 2026-08-11 (**Session 33 — FOUR new test files, NO new production file, no
 schema change (Alembic stays 0012), no dependency change.**
 
 **NEW test files** (all under `backend/tests/`):
