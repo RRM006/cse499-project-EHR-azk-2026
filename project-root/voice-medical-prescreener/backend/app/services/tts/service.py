@@ -18,6 +18,7 @@ from ...core.config import get_settings
 from .base import TtsProvider, TtsUnavailable
 from .edge import EdgeTtsProvider
 from .espeak import EspeakNgProvider
+from .prosody import speech_text
 
 logger = logging.getLogger(__name__)
 
@@ -47,6 +48,8 @@ def _make_edge() -> EdgeTtsProvider:
         voice_en=settings.tts_edge_voice_en,
         rate=settings.tts_edge_rate,
         timeout_s=settings.tts_edge_timeout_s,
+        pitch=settings.tts_edge_pitch,
+        volume=settings.tts_edge_volume,
     )
 
 
@@ -107,6 +110,11 @@ def synthesize(text: str, lang: str) -> tuple[bytes, str]:
     provider = get_provider()
     if provider is None:
         raise TtsUnavailable("Server-side TTS is disabled (TTS_PROVIDER=browser).")
+
+    # S35: punctuate for speech ONCE, here, so every provider (and the fallback) reads
+    # the identical line. Punctuation and whitespace only — never a word — because the
+    # kiosk's read-back sends the PATIENT's own captured words down this same path.
+    text = speech_text(text, lang)
 
     try:
         return provider.synthesize(text, lang), provider.media_type

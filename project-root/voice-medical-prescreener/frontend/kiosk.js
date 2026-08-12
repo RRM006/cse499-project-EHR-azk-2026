@@ -73,6 +73,7 @@ const VOICE_DEFAULTS = {
   server_tts: false,       // ADR-0049: is GET /api/tts able to speak? assume not
   answer_confirm: true,    // S34 (ADR-0055): read a spoken answer back before storing it
   review_timeout_ms: 60000, // S34 (ADR-0055): review screen auto-submit; 0 = never
+  phone_confirm_ms: 10000, // S35 (ADR-0056): phone read-back auto-accept; 0 = tap required
 };
 let voiceConfig = { ...VOICE_DEFAULTS };
 
@@ -123,6 +124,7 @@ function resetState() {
     identifyStep: 'phone',  // F5b: 'phone' | 'otp' | null — which identification dock owns the mic
     pendingPhone: null,     // F5b: a spoken number awaiting the patient's confirmation
     pendingAnswer: null,    // S34: {text, scope} — a spoken answer awaiting the read-back OK
+    reviewConfirm: false,   // S35: the review screen is waiting for a spoken yes/no
   };
   document.getElementById('chat-thread').innerHTML = '';
   document.getElementById('phone-input').value = '';
@@ -140,7 +142,7 @@ function resetState() {
      zone. (The same trap that killed the whole kiosk once in S33.) */
   document.getElementById('dock-answer-confirm').style.display = 'none';
   document.getElementById('resume-answer-confirm').style.display = 'none';
-  document.getElementById('review-timer').style.display = 'none';
+  document.getElementById('kiosk-clock').style.display = 'none';
 }
 resetState();
 
@@ -347,13 +349,12 @@ const SPOKEN_DIGITS = {
   'ফাইভ': '5', 'সিক্স': '6', 'সেভেন': '7', 'এইট': '8', 'নাইন': '9',
 };
 
-/** Pull the digit sequence out of one spoken (or typed) utterance.
+/** One spoken (or typed) utterance -> its whole words, lowercased and NFC-folded.
  *
- *  Words are matched WHOLE, never as substrings — `তিনি` ("he/she") contains `তিন`
- *  ("three"), and substring matching would read a three out of a pronoun. Anything
- *  unrecognised contributes nothing, so filler ("আমার নম্বর হলো…") is ignored rather
- *  than being an error, and a token that is itself digits contributes those digits —
- *  which is what makes a mixed "শূন্য এক ৭১৫" work.
+ *  The ONE tokenizer for every vocabulary the kiosk matches against speech: the
+ *  spoken digits (F5a) and, since S35, the spoken yes/no confirmation. Words are
+ *  matched WHOLE, never as substrings — `তিনি` ("he/she") contains `তিন` ("three"),
+ *  and substring matching would read a three out of a pronoun.
  *
  *  ⚠ `.normalize('NFC')` is load-bearing, not defensive tidying. `ছয়` (6) and `নয়` (9)
  *  each have TWO encodings that render identically: precomposed U+09DF, or য U+09AF +
@@ -371,16 +372,87 @@ const SPOKEN_DIGITS = {
  *  twice. ZWJ/ZWNJ are stripped for the same reason: invisible, and they would
  *  silently break an otherwise exact match.
  */
+function speechTokens(text) {
+  const cleaned = String(text || '').normalize('NFC').replace(/[\u200C\u200D]/g, '');
+  return cleaned.toLowerCase().split(/[^\p{L}\p{N}\p{M}]+/u).filter(Boolean);
+}
+
+/** Pull the digit sequence out of one spoken (or typed) utterance.
+ *
+ *  Anything unrecognised contributes nothing, so filler ("আমার নম্বর হলো…") is ignored
+ *  rather than being an error, and a token that is itself digits contributes those
+ *  digits — which is what makes a mixed "শূন্য এক ৭১৫" work. */
 function digitsFromSpeech(text) {
   let out = '';
-  const cleaned = String(text || '').normalize('NFC').replace(/[\u200C\u200D]/g, '');
-  for (const token of cleaned.toLowerCase().split(/[^\p{L}\p{N}\p{M}]+/u)) {
-    if (!token) continue;
+  for (const token of speechTokens(text)) {
     const word = SPOKEN_DIGITS[token];
     if (word !== undefined) { out += word; continue; }
     out += asciiDigits(token);
   }
   return out;
+}
+
+/* --- S35 (ADR-0056): saying YES or NO out loud ------------------------------------
+
+   The ONE yes/no vocabulary in the kiosk. Both places a patient is asked to confirm
+   something — the answer read-back (ADR-0055) and the final review — parse speech
+   through `parseConfirmation()`, so there is a single definition of what "yes" means
+   and a single place a missing word gets added.
+
+   The matching is EXPLICIT and CONSERVATIVE, and the reason is asymmetric risk: a
+   confirmation that is missed costs the patient one repeat, while a confirmation
+   INVENTED out of ordinary speech silently stores an answer they were trying to
+   correct. So an utterance is only a confirmation when EVERY word in it is one this
+   map knows — see parseConfirmation() for what that rules out. */
+
+/* Yes. `ঠিক` ("correct") carries "ঠিক আছে" and "ঠিক" alone; the negated forms are
+   handled by NO winning outright, below. */
+const CONFIRM_YES = new Set([
+  'হ্যাঁ', 'হ্যা', 'হা', 'জি', 'জ্বি', 'জী', 'ঠিক', 'ইয়েস',
+  'yes', 'yeah', 'yep', 'ok', 'okay', 'right', 'correct', 'fine', 'good',
+]);
+
+/* No. `নাই`/`নেই` are what "ঠিক নাই" is built from, and `আবার`/`বলি`/`বলব` cover
+   "আবার বলি" ("let me say it again"), which is how a patient rejects without ever
+   using the word "না". */
+const CONFIRM_NO = new Set([
+  'না', 'নাই', 'নেই', 'ভুল', 'আবার', 'বলি', 'বলব', 'বলবো', 'নো',
+  'no', 'nope', 'wrong', 'incorrect', 'again', 'repeat',
+]);
+
+/* Words that may appear in a confirmation without being one. Kept SHORT on purpose:
+   every entry widens what counts as a confirmation, and the whole safety of this
+   scheme is that an unknown word makes the utterance ambiguous instead of a verdict. */
+const CONFIRM_FILLER = new Set([
+  'আছে', 'হয়েছে', 'একদম', 'জ্বী', 'হুম', 'আচ্ছা', 'মানে', 'এটা', 'এটাই', 'সেটাই',
+  'that', 'is', 'it', 'thats', 'quite', 'very', 'uh', 'um', 'hmm', 'well',
+]);
+
+/** 'yes' | 'no' | null (not a confirmation — ask again, never guess).
+ *
+ *  Two rules, both deliberate:
+ *
+ *  1. **An unknown word makes the whole utterance ambiguous.** This is what stops
+ *     "আমার নাম রহিম, না মানে..." from being read as a rejection, and it is the direct
+ *     answer to "do not assume every sentence containing না means NO". A patient who is
+ *     talking rather than confirming gets asked again; nothing is decided for them.
+ *  2. **Where both appear, NO wins.** `ঠিক নাই` and `ঠিক না` are built from a YES word
+ *     plus a negation, and reading them as agreement would store an answer the patient
+ *     just rejected. Erring toward "ask again" is the safe direction (rule #1).
+ */
+function parseConfirmation(text) {
+  const tokens = speechTokens(text);
+  if (!tokens.length) return null;
+  let yes = false;
+  let no = false;
+  for (const token of tokens) {
+    if (CONFIRM_NO.has(token)) { no = true; continue; }
+    if (CONFIRM_YES.has(token)) { yes = true; continue; }
+    if (CONFIRM_FILLER.has(token)) continue;
+    return null;   // an ordinary word — this is speech, not an answer to a yes/no question
+  }
+  if (no) return 'no';
+  return yes ? 'yes' : null;
 }
 
 /** A digit string spaced out for reading: '01715' -> '0 1 7 1 5'. Used for the LIVE
@@ -614,16 +686,61 @@ function showPhoneConfirm(national) {
   void panel.offsetHeight;
   panel.scrollIntoView({ block: 'nearest' });
   speakDigits('0' + national);   // plain speak(): the next action is a tap, not an answer
+  startPhoneTimer();             // S35: …or no action at all — see below
 }
 
 function hidePhoneConfirm() {
   if (state) state.pendingPhone = null;
+  cancelPhoneTimer();   // S35: the clock belongs to the panel and dies with it
   const el = document.getElementById('phone-confirm');
   if (el) el.style.display = 'none';
 }
 
-/** The patient agreed with what we heard — only now does the number leave the device. */
+/* --- S35 (ADR-0056), Finding 1: the phone read-back accepts itself after 10 seconds ---
+
+   ⚠ This CHANGES ADR-0053, so it is worth being exact about what and why. ADR-0053
+   said a spoken phone number "must be CONFIRMED before anything is sent", because a
+   wrong digit does not annoy the patient — it sends their verification code to a
+   stranger's handset. That reasoning still stands, and nothing here weakens the
+   PRESENTATION: the number is still shown at the largest size on the screen and still
+   read back digit by digit. What changes is the DEFAULT when the patient does nothing:
+   an elderly patient who does not know they are expected to press something used to sit
+   in front of a kiosk that had silently stopped. Ten visible, audible, cancellable
+   seconds is a confirmation window, not a bypass — and `VOICE_PHONE_CONFIRM_MS=0`
+   restores ADR-0053's tap-required behaviour exactly (the ADR-0045 pattern).
+
+   It reuses `startTicker()` and the ONE header clock. No second timer implementation. */
+let phoneTicker = null;
+
+function phoneConfirmMs() {
+  return Math.max(0, Number(voiceConfig.phone_confirm_ms) || 0);
+}
+
+function startPhoneTimer() {
+  if (phoneTicker) return;   // idempotent: re-showing the panel never stacks a second
+  const total = phoneConfirmMs();
+  if (!total) { hideClock(); return; }   // 0 = the clinic requires the tap (ADR-0053)
+  phoneTicker = startTicker(total, {
+    onTick: (secondsLeft) => renderClock(secondsLeft, CLOCK_LABELS.phone),
+    onEnd: () => {
+      phoneTicker = null;
+      hideClock();
+      confirmPhone();   // its own guard makes this exactly one send
+    },
+  });
+}
+
+function cancelPhoneTimer() {
+  if (phoneTicker) phoneTicker.cancel();
+  phoneTicker = null;
+  hideClock();
+}
+
+/** The patient agreed with what we heard — only now does the number leave the device.
+ *  Re-entrant by construction: hidePhoneConfirm() clears `pendingPhone`, so the timeout
+ *  and a simultaneous tap can never both reach sendOtp(). */
 function confirmPhone() {
+  if (!state || !state.pendingPhone) return;
   hidePhoneConfirm();
   sendOtp();
 }
@@ -1052,7 +1169,13 @@ function toggleListening() {
   finalBuffer = '';
   listening = true;
   heardSpeech = false;   // S4: a fresh turn has captured nothing yet, so nothing to confirm
-  hideAnswerConfirm();   // S34: speaking again IS "say it again" — retract the read-back
+  /* ⚠ S35 (ADR-0056) REMOVED an old `hideAnswerConfirm()` from here. S34 read "the
+     patient is speaking again, so they mean 'say it again'" — a heuristic that was
+     reasonable when the only way to answer the read-back was a tap. Now the read-back
+     IS answered by speaking, and this line would have cleared `state.pendingAnswer`
+     between the mic opening and the word "হ্যাঁ" arriving — so the patient's verdict
+     would have been stored as their symptom. All speech while a read-back is open is a
+     verdict; parseConfirmation() decides, and an ordinary sentence is ambiguous. */
   document.getElementById(activeDock().mic).classList.add('listening');
   setBilingualText(activeDock().hint, listeningHint().en, listeningHint().bn);   // S4: mode-aware
   ttsCancel();   // ADR-0049: silences server audio too, not just speechSynthesis
@@ -1081,6 +1204,13 @@ function stopListening(sendTurn) {
        actually on. Everything below them is the clinical path, unchanged. */
     if (state.identifyStep === 'phone') applySpokenPhone(text);
     else if (state.identifyStep === 'otp') applySpokenOtp(text);
+    /* S35 (ADR-0056): a read-back is open, so this utterance is the patient's VERDICT
+       on it — "হ্যাঁ" or "না" — and never a new answer. It must be checked before the
+       clinical branches below or the word "হ্যাঁ" would be stored as their symptom. */
+    else if (state.pendingAnswer) applySpokenConfirmation(text);
+    /* S35 (ADR-0056), Finding 7: the review screen is waiting for the patient to approve
+       the whole pre-screening. Same parser, same rules — a verdict, never an answer. */
+    else if (state.reviewConfirm) applyReviewConfirmation(text);
     /* S34 (ADR-0055): a CLINICAL spoken answer is read back to the patient before it is
        stored. holdForConfirmation() returns true when it has taken ownership of this
        turn — either because the capture was unusable (re-ask, never guess) or because
@@ -1115,9 +1245,17 @@ function stopListening(sendTurn) {
    The read-back is deliberately NOT a question the mic should answer, so it uses plain
    speak() and cancels any pending auto-open — the same rule the per-bubble 🔊 follows. */
 
+/* S35: the prompt now TELLS the patient the two words that work, because a question
+   the patient can answer but does not know they may answer aloud is a question they
+   will look for a button for. */
 const ANSWER_CONFIRM_PROMPT = {
-  en: 'Is this what you said?',
-  bn: 'আপনি কি এটাই বলেছেন?',
+  en: 'Is this correct? Say yes, or say no.',
+  bn: 'এটা কি ঠিক আছে? হ্যাঁ বলুন অথবা না বলুন।',
+};
+
+const CONFIRM_NOT_UNDERSTOOD = {
+  en: 'Sorry — please say yes, or say no.',
+  bn: 'দুঃখিত — অনুগ্রহ করে "হ্যাঁ" বলুন অথবা "না" বলুন।',
 };
 
 const UNCLEAR_ANSWER = {
@@ -1208,15 +1346,36 @@ function hideAnswerConfirm() {
    follows in the UI language. speak() cancels whatever is playing, so chaining on
    `onend` is what stops the two from cutting each other off. */
 function speakAnswerBack(text) {
-  cancelPendingMic();   // a read-back is not a question — no mic may open behind it
-  const prompt = t(ANSWER_CONFIRM_PROMPT.en, ANSWER_CONFIRM_PROMPT.bn);
+  cancelPendingMic();   // nothing may open the mic while the read-back is still playing
   speak(text, {
     lang: 'bn-BD',
     verbatim: true,
     // Guarded: if the patient has already decided, the prompt is moot and would talk
     // over whatever comes next.
-    onend: () => { if (state && state.pendingAnswer) speak(prompt); },
+    onend: () => { if (state && state.pendingAnswer) askConfirmationAloud(); },
   });
+}
+
+/* S35 (ADR-0056): the confirmation question goes through askAloud(), so the mic opens
+   itself once it has been spoken — the patient answers "হ্যাঁ" or "না" without touching
+   anything. This is the ONLY difference from S34's read-back, and it is deliberately
+   the same seam the interview questions use: no second turn-taking path exists. */
+function askConfirmationAloud() {
+  askAloud(t(ANSWER_CONFIRM_PROMPT.en, ANSWER_CONFIRM_PROMPT.bn));
+}
+
+/** A spoken turn that arrived while a read-back was waiting. It is a VERDICT, never an
+ *  answer: routing it anywhere else would store "হ্যাঁ" as the patient's symptom. */
+function applySpokenConfirmation(rawText) {
+  const verdict = parseConfirmation(rawText);
+  if (verdict === 'yes') { acceptAnswer(); return; }
+  if (verdict === 'no') { rejectAnswer(); return; }
+  /* Neither. Never guess — ask the SAME confirmation again, with the answer still on
+     screen and still unsent. The read-back is not repeated: the patient has already
+     heard their own words, and repeating them every time the recogniser mishears a
+     "yes" would be its own kind of trap. */
+  showError(t(CONFIRM_NOT_UNDERSTOOD.en, CONFIRM_NOT_UNDERSTOOD.bn));
+  if (state.inputMode === 'voice') askConfirmationAloud();
 }
 
 /** "Yes, that is what I said." Only now does the answer enter the pipeline — and it
@@ -1321,6 +1480,12 @@ function applyAvatarState(name) {
   });
   AVATAR_STATUS_IDS.forEach((id) => setBilingualText(id, entry.en, entry.bn));
   AVATAR_SUBSTATUS_IDS.forEach((id) => setBilingualText(id, entry.sub.en, entry.sub.bn));
+  /* S35 / Finding 3: publish the SAME derived state on <body>, so the whole page can
+     answer "is it listening?" without a second state machine and without any call site
+     being able to disagree with the avatar. The CSS uses it to make the microphone
+     pulse and the dock hint loud while listening — cues a patient who cannot read the
+     status line, or is not looking at the robot, still cannot miss. */
+  document.body.dataset.kioskState = name;
 }
 
 function refreshAvatar() {
@@ -1672,12 +1837,18 @@ function startTicker(totalMs, { onTick = null, onEnd = null, tickMs = 250 } = {}
        own re-entry guard, so the timeout and a simultaneous tap cannot both send. */
 let reviewTicker = null;
 
-function reviewTimeoutMs() {
-  return Math.max(0, Number(voiceConfig.review_timeout_ms) || 0);
-}
+/* S35 (ADR-0056) — ONE clock renderer for every countdown the patient can see.
+   The element lives in the header (see kiosk.html), which sits outside the scrolling
+   `.screen`, so it is always at the top right and can never be scrolled away from or
+   overlapped. `label` is the {en,bn} pair for the unit, because "10 সেকেন্ড বাকি" and
+   "10s to confirm" are different sentences, not the same one translated. */
+const CLOCK_LABELS = {
+  review: { en: 'left', bn: 'সেকেন্ড বাকি' },
+  phone: { en: 'to send', bn: 'সেকেন্ড পরে যাবে' },
+};
 
-function renderReviewClock(secondsLeft) {
-  const box = document.getElementById('review-timer');
+function renderClock(secondsLeft, label) {
+  const box = document.getElementById('kiosk-clock');
   if (!box) return;
   box.style.display = 'flex';
   // Urgency is carried by a CLASS, not by rewriting the markup: the blink/pulse is CSS
@@ -1686,25 +1857,30 @@ function renderReviewClock(secondsLeft) {
   /* The unit lives with the LABEL, not with the number: "৫৯s বাকি" is half-translated
      (measured on the live page) — Bangla wants "৫৯ সেকেন্ড বাকি", English wants
      "59s left". Same digits, two honest sentences. */
-  setBilingualText('review-timer-value', `${secondsLeft}s`, bnDigits(secondsLeft));
+  setBilingualText('kiosk-clock-value', `${secondsLeft}s`, bnDigits(secondsLeft));
+  setBilingualText('kiosk-clock-label', label.en, label.bn);
 }
 
-function hideReviewClock() {
-  const box = document.getElementById('review-timer');
+function hideClock() {
+  const box = document.getElementById('kiosk-clock');
   if (!box) return;
   box.style.display = 'none';
   box.classList.remove('urgent');
 }
 
+function reviewTimeoutMs() {
+  return Math.max(0, Number(voiceConfig.review_timeout_ms) || 0);
+}
+
 function startReviewTimer() {
   if (reviewTicker) return;            // idempotent: re-entering the screen never stacks
   const total = reviewTimeoutMs();
-  if (!total) { hideReviewClock(); return; }   // 0 = the clinic turned auto-submit off
+  if (!total) { hideClock(); return; }   // 0 = the clinic turned auto-submit off
   reviewTicker = startTicker(total, {
-    onTick: renderReviewClock,
+    onTick: (secondsLeft) => renderClock(secondsLeft, CLOCK_LABELS.review),
     onEnd: () => {
       reviewTicker = null;
-      hideReviewClock();
+      hideClock();
       confirmSubmit();                 // its own guard makes this exactly one submit
     },
   });
@@ -1713,15 +1889,77 @@ function startReviewTimer() {
 function cancelReviewTimer() {
   if (reviewTicker) reviewTicker.cancel();
   reviewTicker = null;
-  hideReviewClock();
+  hideClock();
 }
 
 /** "Speak Again" — back to the conversation. The clock must not keep running behind
  *  the screen the patient just left, or it would submit a review they walked away from. */
 function reviewSpeakAgain() {
   cancelReviewTimer();
+  stopReviewConfirmation();
   ttsCancel();
   showScreen('screen-voice');
+}
+
+/* --- S35 (ADR-0056), Finding 7: approving the whole review BY VOICE ----------------
+
+   The last screen was also the last place a mouse was still required. It is now the
+   same interaction as the per-answer read-back — the identical `parseConfirmation()`
+   vocabulary and the identical "never guess" rule — differing only in what YES and NO
+   mean here:
+
+     YES -> submit (through confirmSubmit(), so the timeout and the tap and the spoken
+            approval all pass the one re-entry guard and the visit is sent once);
+     NO  -> re-open the KIOSK-7 resume dock with a correction question. That is not a
+            new pipeline: `setResumeMode(null, entry)` already serves "a question that
+            is not an M7 row", and `submitResumeAnswer()` already stores such an answer
+            as an ordinary utterance, re-runs intake, re-renders the summary and
+            re-evaluates the loop. The patient never leaves the review screen.
+
+   It is armed by the SAME verdict that shows the submit button and starts the clock,
+   so the kiosk can never be waiting for approval of a review the server would refuse. */
+
+const REVIEW_CONFIRM_PROMPT = {
+  en: 'Your answers are on the screen. Is everything correct? Say yes, or say no.',
+  bn: 'আপনার দেওয়া তথ্য পর্দায় আছে। সবকিছু কি ঠিক আছে? হ্যাঁ বলুন অথবা না বলুন।',
+};
+
+/* The correction turn. Open on purpose — the patient says what is wrong in their own
+   words, and M3 re-extracts it exactly as it would any other answer. Naming a specific
+   card would mean asking them to read the screen, which is what voice-first exists to
+   avoid. */
+const REVIEW_CORRECTION = {
+  key: 'review_correction',
+  en: 'What would you like to correct? Please tell me in your own words.',
+  bn: 'কোন তথ্যটি ঠিক করতে চান? নিজের ভাষায় বলুন।',
+};
+
+function startReviewConfirmation() {
+  if (!state || state.reviewConfirm) return;   // idempotent — never ask twice over
+  state.reviewConfirm = true;
+  askAloud(t(REVIEW_CONFIRM_PROMPT.en, REVIEW_CONFIRM_PROMPT.bn));
+}
+
+function stopReviewConfirmation() {
+  if (state) state.reviewConfirm = false;
+}
+
+function applyReviewConfirmation(rawText) {
+  const verdict = parseConfirmation(rawText);
+  if (verdict === 'yes') { stopReviewConfirmation(); confirmSubmit(); return; }
+  if (verdict === 'no') { rejectReview(); return; }
+  showError(t(CONFIRM_NOT_UNDERSTOOD.en, CONFIRM_NOT_UNDERSTOOD.bn));
+  if (state.inputMode === 'voice') {
+    askAloud(t(REVIEW_CONFIRM_PROMPT.en, REVIEW_CONFIRM_PROMPT.bn));
+  }
+}
+
+/** "No — something is wrong." Nothing is submitted; the resume dock re-opens with a
+ *  correction question and the clock stops, because the patient is now editing. */
+function rejectReview() {
+  stopReviewConfirmation();
+  cancelReviewTimer();
+  setResumeMode(null, REVIEW_CORRECTION);
 }
 
 /* --- F3: the patient cannot reach the doctor with required information missing. ---
@@ -1740,8 +1978,11 @@ function updateSubmitVisibility() {
   renderRequiredNotice();
   /* S34: the review clock and the submit button share ONE verdict. A countdown toward a
      button that is not there — or toward a submit the server would refuse — would be a
-     kiosk counting down to nothing. */
-  if (blocked) cancelReviewTimer(); else startReviewTimer();
+     kiosk counting down to nothing.
+     S35: the spoken approval is armed by that same verdict, for the same reason — the
+     kiosk must never ask "is this correct?" about a review it could not submit. */
+  if (blocked) { cancelReviewTimer(); stopReviewConfirmation(); }
+  else { startReviewTimer(); startReviewConfirmation(); }
 }
 
 /* Name what is still needed, in the patient's language, using the SAME numbered
@@ -1805,14 +2046,19 @@ function setResumeMode(question, scripted = null) {
      leaving the patient with two robots and no idea which one is talking to them. */
   const float = document.getElementById('summary-float');
   if (float) float.style.display = state.resumeActive ? 'none' : '';
-  updateSubmitVisibility();   // F3: readiness decides, not just "is a question open"
   if (state.resumeActive) {
     document.getElementById('resume-question').textContent = text;
     state.lastQuestionText = text;   // S34: so a rejected read-back re-asks THIS question
     askAloud(text);   // ADR-0028 + S3: spoken, then the mic arms itself
   } else {
-    cancelPendingMic();   // loop finished — nothing should open the mic behind the summary
+    cancelPendingMic();   // this question is over — nothing it armed may still fire
   }
+  /* F3: readiness decides, not just "is a question open".
+     ⚠ S35: this MUST run after the branch above, not before it. It is what arms the
+     spoken review approval, and the `cancelPendingMic()` on the else path would
+     otherwise cancel the very microphone that approval needs — the prompt would be
+     spoken and then nothing would listen for the answer. */
+  updateSubmitVisibility();
 }
 
 async function refreshResumeLoop(profile) {
@@ -1908,7 +2154,8 @@ let submitting = false;
 async function confirmSubmit() {
   if (submitting) return;
   submitting = true;
-  cancelReviewTimer();   // whoever got here first, the clock's job is over
+  cancelReviewTimer();        // whoever got here first, the clock's job is over
+  stopReviewConfirmation();   // …and so is the question it was asking
   try {
     /* F3: require_complete=true is what makes "cannot skip required information" a
        SERVER rule rather than a hidden button. If the server refuses, re-run the

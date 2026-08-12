@@ -1427,3 +1427,100 @@ separate, still-**unproven** question tracked in `current_task.md`.
   unchanged at **0012** — no schema change, no migration.
   NOT proven: anything involving a real microphone. Every voice result in this session comes from
   feeding the recogniser's own buffer in a browser engine, as in S33.
+
+## ADR-0056 — 2026-08-12 — S35: confirmation is SPOKEN, on one vocabulary; one clock in the header; the question prompt is told what it already knows
+
+- Context: a second round of manual-testing findings. Two of them are the same complaint from
+  different ends of the flow — the patient still needs a mouse to confirm anything — and two are the
+  same layout complaint: the countdown cannot be found. One correction first, because the brief was
+  wrong about the code: **the phone read-back did NOT auto-accept after ten seconds.** It had no
+  timer at all; ADR-0053 deliberately required a tap. Verified by inspection before anything changed.
+
+- Decision (a) — **YES and NO are spoken, and there is ONE vocabulary for both places they are
+  asked.** `parseConfirmation()` serves the per-answer read-back (ADR-0055) and the final review.
+  ⚠ This **supersedes ADR-0055's "Rejected (1)"**, which turned a spoken yes/no down as Step-S5
+  territory. That was wrong on the facts: S5 is timers and permission recovery, and a yes/no verdict
+  needs neither. The human overruled it, and the reasoning holds — a review screen that can only be
+  approved with a mouse is not voice-first.
+
+- Decision (b) — **the matching is explicit, and ambiguity is a verdict-free outcome.** Two rules:
+  an utterance is a confirmation only when EVERY word in it is one the vocabulary knows, and where a
+  YES word and a negation both appear, NO wins. The first is the direct answer to "do not assume
+  every sentence containing না means NO" — a patient who is TALKING gets asked again rather than
+  decided for. The second is what makes `ঠিক নাই` and `ঠিক না` rejections rather than agreement.
+  The risk here is ASYMMETRIC and that is what shapes it: a missed confirmation costs one repeat; an
+  INVENTED one stores an answer the patient was correcting, or submits a record they never approved.
+
+- Decision (c) — **a verdict is routed before the clinical branches and is never stored.** One more
+  branch at the same single routing point in `stopListening()`, after identification and before
+  `holdForConfirmation()`. Otherwise the word "হ্যাঁ" would be POSTed as the patient's symptom.
+  ⚠ It also forced REMOVING S34's `hideAnswerConfirm()` from `toggleListening()`: "the patient is
+  speaking again, so they mean say-it-again" was a fair inference while the only reply was a tap, and
+  a defect once the reply is speech — it cleared the pending answer between the mic opening and the
+  verdict arriving. The rule did not disappear; it became an explicit word (`আবার বলি`) instead of an
+  inference from the act of speaking.
+
+- Decision (d) — **rejecting the review re-opens the EXISTING resume dock, it does not start a new
+  flow.** `setResumeMode(null, entry)` already serves "a question that is not an M7 row", and
+  `submitResumeAnswer()` already stores such an answer, re-runs intake, re-renders the summary and
+  re-evaluates the loop. So "NO" costs one more entry in that map and no new pipeline, and the
+  patient never leaves the review screen. The correction question is deliberately OPEN ("what would
+  you like to correct?") — naming a card would mean asking them to read the screen.
+
+- Decision (e) — **the phone read-back gains a visible 10-second window; the presentation is
+  untouched.** ADR-0053's reasoning — a wrong digit sends the OTP to a stranger — still stands, and
+  nothing about how the number is shown or read back changes. What changes is the DEFAULT when the
+  patient does nothing: an elderly patient who does not know a press is expected used to sit in front
+  of a kiosk that had silently stopped. `VOICE_PHONE_CONFIRM_MS=0` restores the tap-required rule
+  exactly (ADR-0045's pattern). The guard against a double send is the state itself — `confirmPhone()`
+  returns early without `pendingPhone` — rather than a flag that could be left set.
+
+- Decision (f) — **ONE countdown clock, and it lives in the portal header.** S34 put it inside the
+  review layout, so it existed only on that screen and only while that screen was scrolled to the
+  top. The header sits OUTSIDE `.screen` (the element that scrolls, since ADR-0055 (i)), so the
+  clock is at the top right at ALL times, cannot be scrolled away from, and cannot overlap anything
+  — it is a flex item and the row reserves its width. `position: fixed` was rejected: taking the
+  element out of flow is exactly how a floating clock lands on a heading at some untested width.
+  Both countdowns write it through one renderer, with a PER-COUNTDOWN label, because "10 সেকেন্ড
+  বাকি" and "10s to send" are different sentences rather than one string translated.
+  Measured consequence, and the answer to the review's "first render jumps": the clock appearing no
+  longer moves the review heading, title or grid by a single pixel (0/0/0/0 at 1280).
+
+- Decision (g) — **M7 is told what it already knows, and that is all.** `collected_context()` is the
+  exact mirror of `missing_summary_fields()` — same keys, same `field_has_text` predicate — and the
+  system prompt forbids re-asking anything in it or in PATIENT CONTEXT (age, sex, area), and asks for
+  CLARIFICATION of THAT SAME item when something is vague. ⚠ Deliberately NOT a decision system: it
+  restates collected values, ranks nothing, names no condition, and does not choose the next field —
+  the M6 gap list and the server-named field (ADR-0052) still own that entirely. A test asserts the
+  block contains no evaluative language at all.
+
+- Decision (h) — **TTS naturalness is pacing plus a neural voice, and nothing is claimed beyond
+  that.** The engine question was settled by ADR-0050. What was left is that the strings handed to it
+  are not written for speech: `spokenHalf()` leaves a bare clause with no terminator, a summary value
+  is a fragment, a transcript has no punctuation at all, and every engine reads those flat.
+  `speech_text()` adds a sentence-final terminator (`।`/`.`) and turns the em dashes and ellipses
+  this project already uses as pauses into commas. It runs ONCE, in the service, so the primary and
+  the fallback read the identical line. ⚠ It may never change a WORD — the read-back sends the
+  PATIENT's own captured words down this path (ADR-0055), and a rewrite there would read back
+  something they did not say. Pitch and volume are exposed but NEUTRAL by default: they are for a
+  noisy room or a hard-of-hearing patient, not a "make it human" dial. **Acoustic quality is not
+  tested and is not claimed** — that is a human listening judgement.
+
+- Rejected: (1) **auto-accepting the ANSWER read-back on a timer** — unchanged from ADR-0055; it
+  reintroduces storing something the patient never approved. Only the PHONE number, which is
+  re-enterable and self-correcting via the OTP, gets a window. (2) **A looser yes/no match** (e.g.
+  "any sentence containing না is NO") — it is the one change that could silently store a rejected
+  answer. (3) **`position: fixed` for the clock** — see (f). (4) **Teaching `renderSummary()` about
+  breakpoints** instead of the narrow-screen `span 1 !important` — a renderer that knows about
+  viewport widths is a worse coupling than one `!important`.
+
+- Rules preserved: **rule #1** — a verdict is never stored, a rejected capture was never stored, the
+  read-back is still verbatim and still untranslated, and `speech_text()` cannot touch a word.
+  **Rule #2** — "ambiguous" and "unclear" are presence-of-token tests, not judgements about content;
+  `collected_context()` adds no clinical reasoning. **Rule #4** — no new data leaves the device; the
+  TTS boundary is unchanged.
+- Status: Accepted (code shipped, **622 tests pass, 2 skipped, 0 failures**; was 547). Alembic
+  unchanged at **0012** — no schema change, no migration, no new dependency.
+  NOT proven: anything involving a real microphone — including what a `bn-BD` recogniser actually
+  returns for a spoken "হ্যাঁ", which is now on the critical path — and the acoustic quality of the
+  paced TTS. Both are live-run questions.

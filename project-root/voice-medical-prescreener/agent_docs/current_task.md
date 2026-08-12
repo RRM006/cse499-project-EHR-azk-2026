@@ -6,158 +6,139 @@
 
 ---
 
-**Date:** 2026-08-12 (end of Session 34)
-**Phase:** **The S34 manual-testing cycle is COMPLETE.** All twelve phases the human gave were
-implemented in one pass: the spoken-digit vocabulary fix + live digit preview, the spoken-answer
-read-back, the review read-aloud, the floating review assistant, auto-scroll, the 60-second review
-clock, and one reusable ticker. Test suite: **547 passed, 2 skipped, 0 failures** (was 480).
+**Date:** 2026-08-12 (end of Session 35)
+**Phase:** **The second manual-testing cycle is CLOSED.** All 8 findings were implemented and
+verified in one pass: the phone-confirm countdown, voice yes/no confirmation, guided/elderly cues,
+context-aware questions, the review first-render fix, TTS pacing, review voice confirmation, and an
+always-visible clock. Test suite: **622 passed, 2 skipped, 0 failures** (was 547).
 Alembic head: **0012 — no schema change, do not create a migration.**
-New ADR this session: **0055**. **No module changed status** — these are refinements inside
-M1 / M7 / M13 / M14, all already ✅. **M15 stays 🟨.**
+New ADR this session: **0056** (it supersedes ADR-0055's "Rejected (1)" and amends ADR-0053).
+**No module changed status** — refinements inside M1 / M7 / M13 / M14, all already ✅. **M15 🟨.**
 
 **⚠ Step S5 was NOT implemented and must not be assumed.** See the bottom of this file.
 
-**What is left is still NOT coding. It is a human at a real microphone.**
+**What is left is STILL not coding. It is a human at a real microphone — and the stakes went up.**
 
 ---
 
-## 🚦 THE NEXT STEP — **REAL MICROPHONE VALIDATION** (now with two more things to disprove)
+## 🚦 THE NEXT STEP — **REAL MICROPHONE VALIDATION** (now blocking, not just pending)
 
-This was S33's next step and it is still the next step, because nothing since has involved a real
-microphone. S34 added two things a real recogniser can still invalidate, so they go at the top of
-the list:
+This has been the next step since S33, and S35 made it more urgent rather than less: **the whole
+flow now depends on a spoken "হ্যাঁ" being recognised.** Every answer and the final submit pass
+through a spoken yes/no. If a real `bn-BD` recogniser returns something the vocabulary does not
+know, the patient is stuck in a confirmation loop (recoverable — the buttons still work and the
+banner says so — but it would ruin a demo).
 
-1. **The English digit words in Bangla script.** The kiosk listens at `lang='bn-BD'`, so a patient
-   saying "one two three" should produce `ওয়ান টু থ্রি`, and S34 mapped those ten spellings. **That
-   this is what Chrome actually returns is REASONED, NOT OBSERVED.** If the real spellings differ,
-   the fix is one entry each in `SPOKEN_DIGITS` in `frontend/kiosk.js` — not an architecture change.
-2. **The spoken-answer read-back.** Whether an elderly patient understands ✔/✖ after hearing their
-   own words, and whether the extra tap per turn is acceptable, cannot be settled from here. If it
-   is too slow, `VOICE_ANSWER_CONFIRM=false` in `backend/.env` restores the S25-era flow exactly —
-   that is what the switch is for. Do NOT delete the feature to make it faster.
+Three claims a real microphone can still disprove, in priority order:
+
+1. **The yes/no vocabulary.** `CONFIRM_YES` / `CONFIRM_NO` in `frontend/kiosk.js`. If a real
+   recogniser returns a spelling the map misses, the fix is **one entry** — not an architecture
+   change. Bring a list of what it actually returns for: হ্যাঁ · জি · ঠিক আছে · ঠিক · না · ঠিক নাই ·
+   আবার বলি · ভুল · yes · okay · no.
+2. **The English digit words in Bangla script** (S34, still unproven): `জিরো ওয়ান টু থ্রি …`.
+3. **Whether the paced TTS actually sounds better.** S35 added sentence terminators and real pauses;
+   whether that is audibly more natural is a human listening judgement, not a test.
 
 ### Setup
 - Run: `.venv\\Scripts\\python.exe -m uvicorn backend.app.main:app --reload --port 8001`
 - Open **http://localhost:8001/kiosk.html** in **Chrome** (and repeat in **Edge** if possible —
   nobody has ever run STT in Edge).
-- ⚠ Use `localhost` or `127.0.0.1`. A LAN IP (`http://192.168.x.x`) **blocks the mic and Web
-  Speech entirely** — it is not a secure context.
-- Allow the microphone when prompted. The FIRST tap on the phone screen's mic is deliberately
-  what raises that prompt (F5b tap-to-start).
+- ⚠ Use `localhost` or `127.0.0.1`. A LAN IP **blocks the mic and Web Speech entirely**.
+- Allow the microphone when prompted. The FIRST tap on the phone screen's mic raises that prompt.
 
 ### The exact flow to test
-1. **Phone screen** → tap 🎤 → **speak your mobile number**. Watch the new **digit preview** under
-   the transcript: it should read `0 1 7 1 5 …` while you speak, even though the transcript above
-   shows the words. Then the read-back panel appears — nothing is sent before you tap **"✔ Yes"**.
-2. **OTP screen** → the prompt is spoken and the mic opens by itself → **speak the 6 digits** →
-   the boxes fill and verification runs with no button press.
-3. **Interview** → area → name → age → problem. After each spoken answer: **"I heard you say:"**
-   with your words, spoken back — then ✔ or ✖.
-4. **Review** → the 60-second clock top-right, per-card 🔊, "Hear my answers", the floating doctor
-   on the left. Leave it alone and it should submit itself exactly once.
+1. **Phone** → tap 🎤 → speak the number → watch the live digit preview (`0 1 7 1 5 …`) and the
+   **10-second clock in the header**. Do nothing: it should send by itself, exactly once.
+   Then repeat and tap ✔ early — the clock must stop and it must still send exactly once.
+2. **OTP** → the mic opens itself → speak the 6 digits → verified with no button press.
+3. **Interview** → after each spoken answer: *"আমি শুনেছি আপনি বলেছেন: …"*, then
+   *"এটা কি ঠিক আছে? হ্যাঁ বলুন অথবা না বলুন।"* — and the mic opens by itself for the verdict.
+   Say **হ্যাঁ** (stores and advances), say **না** (stores nothing, same question again), and say
+   **something unrelated** (nothing decided, asked again).
+4. **Review** → the 60-second clock in the header, the floating doctor on the left, per-card 🔊.
+   The assistant asks *"সবকিছু কি ঠিক আছে?"* — say **না** (the correction question opens, nothing
+   submitted) and later **হ্যাঁ** (submits, exactly once).
 
-### What to say (cover all four, on the phone AND the OTP screen)
-- **Bangla digits spoken as words:** শূন্য এক সাত এক পাঁচ নয় আট চার ছয় তিন দুই
-- **English digits spoken as words:** zero one seven one five nine eight four six three two
-  ← **this is the case S34 fixed and the one most worth watching**
-- **Digits read naturally/grouped** ("০১৭ ১৫৯ ৮৪৬৩২") — grouping and pauses must not break it
-- **A number with filler around it** ("আমার নম্বর হলো ০১৭…") — filler must be ignored
-
-### Failure / re-ask behaviour to exercise deliberately
-- **Say too few digits** → partial digits kept, an error naming how many were heard, the prompt
-  re-spoken, the mic reopened. **Nothing sent.**
-- **Say a wrong OTP** → all six boxes cleared, the server's own reason shown, prompt re-spoken.
-- **Answer a question, then tap ✖ "No — say it again"** → nothing stored, the SAME question asked
-  again, the mic reopened in the same gesture.
-- **Stay silent for a whole turn, then tap the mic to stop** → "Sorry, I did not catch that — let
-  me ask again", nothing stored, same question.
-- **Switch to ⌨ Type at any point** → typing works fully, a pending read-back is dropped, and the
-  re-ask must NOT speak at you or reopen the mic (typing patients are left alone by design).
-- **On the review screen:** press Confirm & Submit before 60 s → the clock must stop and there must
-  be exactly ONE submission. Then press Speak Again from a later review → the clock must stop.
-
-### Also worth watching while you are there
-- **TTS-1 / TTS-2** — nobody has ever HEARD these. Is one question spoken in ONE language, and does
-  the Bangla voice sound natural (edge-tts) rather than robotic (espeak)? The read-back is now a
-  second, much more frequent consumer of TTS, so bad audio hurts twice as much.
-- **The robotic doctor (P1)** — *speaking* while it talks, *listening* while the mic is open,
-  *please wait* while it thinks. It is derived from real state, so a wrong face means a real bug.
-- **Elderly readability (P2)** — text size, button reach, and whether anything important is below
-  the fold on your actual screen. S34 fixed the page so the chat thread scrolls instead of the
-  document; check that the mic and Done stay visible however long the conversation gets.
+### Also worth watching
+- **The clock**, at whatever size the demo screen is. It must never need scrolling to find.
+- **The listening cues (Finding 3)** — mic pulsing, the hint going large and red. Is that enough for
+  someone who has never used a computer, without any instruction?
+- **The paced TTS.** Does the question end properly instead of stopping mid-breath?
 
 ### ⚠ The rule for next session
-**Only change code if live testing reveals a REAL issue.** F1–F6, F5, P1–P3 and everything S34
-shipped are complete and test-pinned; do not redesign, "improve" or refactor them speculatively.
+**Only change code if live testing reveals a REAL issue.** Everything through S35 is complete and
+test-pinned. If the confirmation is too slow in practice, `VOICE_ANSWER_CONFIRM=false` and
+`VOICE_PHONE_CONFIRM_MS=0` are the switches — do not delete the features to make it faster.
 
 ---
 
-## ✅ What Session 34 shipped (settled — do not redo or re-derive)
+## ✅ What Session 35 shipped (settled — do not redo or re-derive)
 
-- **Digits:** ten Bangla transliterations of the English digit words in `SPOKEN_DIGITS`;
-  `spacedDigits()`; `renderDigitPreview()` / `clearDigitPreview()`; `digitPreview` on `DOCKS.phone`
-  and `DOCKS.otp` + `#phone-digit-preview` / `#otp-digit-preview`.
-- **Read-back:** `holdForConfirmation()` (the ONE gate, in `stopListening()`'s spoken branch),
-  `isUnclearAnswer()`, `currentQuestionText()`, `reAskUnclearAnswer()`, `offerSpokenAnswer()`,
-  `showAnswerConfirm()` / `hideAnswerConfirm()`, `speakAnswerBack()`, `acceptAnswer()` /
-  `rejectAnswer()`, `state.pendingAnswer`, `applyCountdownCaption()`, and the two panels.
-- **Review:** per-card 🔊 in `renderSummary()`, `speakSummaryField()`, `toggleSummaryReadAloud()` +
-  `readAloudQueue` + `setReadAloudLabel()`; `summary-avatar` as a third `AVATAR_IDS` mount with
-  `AVATAR_STATUS_IDS` / `AVATAR_SUBSTATUS_IDS`; `.doctor-float`.
-- **Timer:** `startTicker()` (shared with the auto-logout), `startReviewTimer()` /
-  `cancelReviewTimer()` / `renderReviewClock()` / `hideReviewClock()` / `reviewTimeoutMs()` /
-  `reviewSpeakAgain()`, and `submitting` in `confirmSubmit()`.
-- **Scroll:** `scrollThreadToEnd()`; `html, body { height: 100% }` + `.screen { min-height: 0;
-  overflow-y: auto }` in `kiosk.html`.
-- **Config:** `voice_answer_confirm` + `voice_review_timeout_ms` → `/api/config` as
-  `answer_confirm` + `review_timeout_ms`.
+- **Voice yes/no:** `speechTokens()` (the ONE tokenizer, extracted so digits and confirmations
+  share it), `CONFIRM_YES`/`CONFIRM_NO`/`CONFIRM_FILLER`, `parseConfirmation()`,
+  `applySpokenConfirmation()`, `askConfirmationAloud()`, `CONFIRM_NOT_UNDERSTOOD`.
+- **Review voice approval:** `state.reviewConfirm`, `startReviewConfirmation()` /
+  `stopReviewConfirmation()` / `applyReviewConfirmation()` / `rejectReview()`,
+  `REVIEW_CONFIRM_PROMPT`, `REVIEW_CORRECTION` (reuses the KIOSK-7 resume dock).
+- **The header clock:** `#kiosk-clock` in the portal header, `renderClock()` / `hideClock()` /
+  `CLOCK_LABELS`; `startPhoneTimer()` / `cancelPhoneTimer()` / `phoneConfirmMs()`; the
+  `#review-timer` element is GONE (not duplicated).
+- **Guidance cues:** `body[data-kiosk-state]` written by `applyAvatarState()` + the mic pulse and
+  the loud dock hint.
+- **Backend:** `collected_context()` + two `_QUESTION_SYSTEM` clauses in `services/followup.py`;
+  NEW `services/tts/prosody.py` (`speech_text()`) applied once in `tts/service.py`;
+  `tts_edge_pitch`/`tts_edge_volume`; `voice_phone_confirm_ms` → `/api/config.phone_confirm_ms`.
 
 ## ⚠ Open gaps / honest caveats (carry these forward)
 
 - **🔴 NO MICROPHONE HAS EVER BEEN USED, in any session.** Every voice result on record comes from
-  feeding the recogniser's own buffer in a browser engine. That is the whole of the next session.
-- **The Bangla transliterations of English digit words are REASONED, not observed** — see above.
-- **The read-back costs one tap per spoken turn.** That is a deliberate trade (ADR-0055 c) and a
-  real regression against the zero-touch goal. `VOICE_ANSWER_CONFIRM=false` is the escape hatch.
-- **A pending read-back discarded by "Done"** joins the existing **mid-turn word-loss** rule #1
-  decision (`stopListening(false)` drops `finalBuffer`). Same open question, now with a second
-  instance — **do not decide it unilaterally.**
-- **Age-appropriateness Tier 3 is still NOT proven** (S33). `M7_LIVE=1` runs the opt-in probe.
-- **Edge is still unproven** for `bn-BD` STT, and has no Bengali browser TTS voice.
-- **Still not done from earlier cycles:** rotating the **3 API keys** (HUMAN-only — I must never
-  handle keys), the combined Chrome + Edge live run, formal **WER**, and the stale
-  `human_live_run_guide.md:19,72` + `CLAUDE.md`'s status paragraph (still says S28/234 tests).
+  feeding the recogniser's own buffer in a browser engine.
+- **The confirmation vocabulary is now on the critical path** — see the top of this file.
+- **Acoustic quality is not tested and is not claimed.** `speech_text()` proves the text is
+  punctuated for speech and that no word is changed; whether it SOUNDS better is a human judgement.
+  Do not let the green suite become "the TTS is natural now".
+- **Whether the model OBEYS the new "do not re-ask" instruction is NOT proven** — Tier 1/Tier 2 only,
+  the ADR-0054 (f) rule. `M7_LIVE=1` runs the opt-in probe.
+- **The confirmation costs a turn.** An ambiguous reply loops back to the same question; the buttons
+  and ⌨ Type are the escapes, and the banner says what to say.
+- **A pending read-back discarded by "Done"** remains part of the open **mid-turn word-loss** rule #1
+  decision (`stopListening(false)` drops `finalBuffer`) — **do not decide it unilaterally.**
+- **Still not done from earlier cycles:** rotating the **3 API keys** (HUMAN-only), the Chrome + Edge
+  live run, formal **WER**, and the stale `human_live_run_guide.md:19,72` + `CLAUDE.md`'s status
+  paragraph (still says S28/234 tests).
 
 ## Locked decisions — do NOT re-open
-- **ADR-0055 (S34):** the read-back gate lives at ONE routing point and typed answers are never
-  gated; an unclear capture is re-asked and that is NOT switchable; the review clock runs only while
-  the submit button is genuinely pressable; ONE shared ticker, with the **S4 endpointer deliberately
-  excluded** because its deadline restart is the rule #1 anti-clipping guarantee.
-- **ADR-0054 (S33):** avatar state is DERIVED, never pushed (listening > speaking > processing);
-  only `done`/`error` may be pushed and `error` expires; elderly sizing scoped to the kiosk.
-- **ADR-0053 (S33):** a Unicode decimal digit is a digit; ONE recognizer; phone confirmed but OTP
-  not; tap-to-start on the phone screen only.
-- **ADR-0052 / 0051 / 0050 / 0049 / 0048 / 0047 / 0045 / 0042–0044 / 0040** — see `decisions.md`.
+- **ADR-0056 (S35):** one yes/no vocabulary for every confirmation; an unknown word makes an
+  utterance ambiguous and NO beats YES; a verdict is routed before the clinical branches and never
+  stored; review-NO reuses the resume dock; the phone window is a window, not a bypass, and 0
+  restores the tap; ONE clock, in the header, never `position: fixed`; `collected_context()` informs
+  the question and never selects it; TTS pacing may never change a word.
+  ⚠ It **supersedes ADR-0055's Rejected (1)** and **amends ADR-0053**.
+- **ADR-0055 (S34):** the read-back gate at ONE routing point, typed answers never gated, unclear
+  captures re-asked (not switchable), ONE shared ticker with the **S4 endpointer excluded**.
+- **ADR-0054 / 0053 / 0052 / 0051 / 0050 / 0049 / 0048 / 0045 / 0040** — see `decisions.md`.
 - **S31's terminal/transient STT split:** `no-speech`, `aborted`, `bad-grammar` must stay OUT of
   `TERMINAL_STT_ERRORS` or Chrome's continuous listening regresses. `r.onend` stays untouched.
 
 ## ⛔ Step S5 is NOT implemented — do not assume it is
 
 S5 of faculty Requirement 3 (`faculty_future_features.md` §J) is: **no-speech re-prompt, empty-submit
-guard, 120 s answer cap, and permission/visibility recovery.** S34 built ONLY the narrow empty-capture
-re-ask that the human's Phase 2 explicitly required. **Untouched and still deferred:** the
-`no_speech_ms` watchdog (a mic open with no speech at all), the `max_answer_ms` hard cap on a runaway
-turn, and recovery when microphone permission is revoked or the tab is backgrounded mid-answer. Both
-`no_speech_ms` and `max_answer_ms` are already served by `/api/config` and are still marked
-`S5 (not used yet)` in `kiosk.js`. ADR-0055 (e) records the overlap in full.
+guard, 120 s answer cap, and permission/visibility recovery.** S34 built only the narrow
+empty-capture re-ask its Phase 2 required; S35 built nothing from S5 at all. **Untouched and still
+deferred:** the `no_speech_ms` watchdog (a mic open with no speech), the `max_answer_ms` cap on a
+runaway turn, and recovery when microphone permission is revoked or the tab is backgrounded
+mid-answer. Both timings are already served by `/api/config` and are still marked `S5 (not used yet)`
+in `kiosk.js`. ADR-0055 (e) records the one overlap in full.
+⚠ Note ADR-0056 corrects a claim ADR-0055 made in passing: a spoken yes/no is **not** S5 content.
+S5 is timers and browser-lifecycle recovery; a verdict needs neither.
 
 ## Reminders (the four non-negotiables)
-- **Rule #1:** raw words never edited. The read-back shows and speaks them verbatim, carries no
-  `data-en`/`data-bn` so a language toggle cannot overwrite them, and a REJECTED capture was never
-  stored — so rejecting it edits nothing.
-- **Rule #2:** never diagnoses. "Unclear" is a presence-of-characters test, not a judgement.
+- **Rule #1:** raw words never edited. A verdict is never stored; a rejected capture was never
+  stored; the read-back stays verbatim and untranslated; `speech_text()` cannot touch a word.
+- **Rule #2:** never diagnoses. "Ambiguous" and "unclear" are presence-of-token tests, not
+  judgements about content; `collected_context()` adds no clinical reasoning.
 - **Rule #3:** red flags ADD-only; the local rule still forces Critical with every LLM down.
-- **Rule #4:** synthetic/consented data only. Web Speech sends audio to Google; F5 added phone
-  numbers and OTP codes to that (ADR-0053) — state this in the thesis privacy section.
+- **Rule #4:** synthetic/consented data only. Web Speech sends audio to Google; edge-tts sends the
+  assistant's question text to Microsoft (ADR-0050) — state both in the thesis privacy section.
 - Run (Windows): `.venv\\Scripts\\python.exe -m uvicorn backend.app.main:app --reload --port 8001`
-- Tests: `pytest backend/tests/` (**547 passing, 2 skipped**). Windows: `PYTHONIOENCODING=utf-8`.
+- Tests: `pytest backend/tests/` (**622 passing, 2 skipped**). Windows: `PYTHONIOENCODING=utf-8`.

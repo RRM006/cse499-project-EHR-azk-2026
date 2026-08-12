@@ -36,6 +36,9 @@ class KioskConfigOut(BaseModel):
     # S34 (ADR-0055): how long the review screen waits before submitting itself.
     # 0 = never auto-submit.
     review_timeout_ms: int
+    # S35 (ADR-0056): how long the spoken phone number is read back and shown before it
+    # is accepted on its own. 0 = the patient must tap (ADR-0053's original rule).
+    phone_confirm_ms: int
     # True when GET /api/tts can actually produce audio (a provider is configured AND
     # its engine is installed). Lets the kiosk fall back to server audio only when a
     # fallback really exists, and lets the "no Bangla voice" banner tell the truth.

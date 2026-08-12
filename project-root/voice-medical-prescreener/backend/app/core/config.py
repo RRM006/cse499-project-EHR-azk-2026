@@ -125,6 +125,14 @@ class Settings(BaseSettings):
     # server says something is still REQUIRED — see updateSubmitVisibility() in kiosk.js.
     # 0 disables the auto-submit entirely and leaves the patient in full control.
     voice_review_timeout_ms: int = 60000
+    # S35 (ADR-0056): how long the spoken phone number is shown and read back before it
+    # is accepted on its own. ADR-0053 required a tap here, and its reason still stands —
+    # a wrong digit sends the patient's OTP to a stranger. What changed is the DEFAULT
+    # when the patient does nothing: an elderly patient who does not know a press is
+    # expected used to sit in front of a kiosk that had silently stopped. The number is
+    # still shown large and still read back digit by digit; this is the window, not a
+    # bypass. Set 0 to restore ADR-0053's tap-required behaviour exactly.
+    voice_phone_confirm_ms: int = 10000
 
     # --- Bangla TTS fallback (services/tts) ---
     # Windows ships NO Bengali voice at all (verified against Microsoft's supported-voices
@@ -153,6 +161,12 @@ class Settings(BaseSettings):
     # Speaking rate as a percentage offset. Slightly slow: the patient may be unwell,
     # elderly, or hearing the question for the first time.
     tts_edge_rate: str = "-10%"
+    # S35: pitch and volume, NEUTRAL by default. The voice is already neural; pushing
+    # its prosody around is how a synthesizer starts sounding like a cartoon rather than
+    # a calm assistant. These are here so a clinic can compensate for a noisy waiting
+    # room or a hard-of-hearing patient — not as a "make it sound human" dial.
+    tts_edge_pitch: str = "+0Hz"
+    tts_edge_volume: str = "+0%"
     # Give up on the network and fall back to the local engine after this long.
     tts_edge_timeout_s: int = 12
     # When the configured provider fails (no internet, service down), render with local

@@ -119,7 +119,11 @@ def test_the_clock_and_the_submit_button_share_one_verdict():
     """A countdown toward a button that is not there — or toward a submit the server
     would refuse with a 409 — is a kiosk counting down to nothing."""
     body = fn_body("updateSubmitVisibility")
-    assert "if (blocked) cancelReviewTimer(); else startReviewTimer();" in body
+    # S35 widened this from one consumer to two: the spoken review approval is armed by
+    # the SAME verdict, for the same reason — the kiosk must never ask "is this correct?"
+    # about a review the server would refuse.
+    assert "if (blocked) { cancelReviewTimer(); stopReviewConfirmation(); }" in body
+    assert "else { startReviewTimer(); startReviewConfirmation(); }" in body
     # …and `blocked` is still the F3 verdict, unchanged.
     assert "state.resumeActive || (state.readiness && !state.readiness.complete)" in body
 
@@ -137,7 +141,7 @@ def test_a_clinic_can_disable_the_auto_submit_entirely():
     js = kiosk_js()
     assert "review_timeout_ms: 60000," in js
     body = fn_body("startReviewTimer")
-    assert "if (!total) { hideReviewClock(); return; }" in body
+    assert "if (!total) { hideClock(); return; }" in body
     assert "Math.max(0, Number(voiceConfig.review_timeout_ms) || 0)" in fn_body("reviewTimeoutMs")
 
 
@@ -196,7 +200,7 @@ def test_no_clock_may_outlive_the_patient_it_belongs_to():
     logout = js.split("async function confirmSubmit() {")[1].split("\n}\n")[0]
     assert "cancelReviewTimer();        // S34" in logout
     assert "cancelPendingMic();" in logout and "cancelCountdown();" in logout
-    assert "document.getElementById('review-timer').style.display = 'none';" in fn_body("resetState")
+    assert "document.getElementById('kiosk-clock').style.display = 'none';" in fn_body("resetState")
 
 
 # --- what the patient sees ---
@@ -204,22 +208,26 @@ def test_no_clock_may_outlive_the_patient_it_belongs_to():
 
 def test_the_clock_reads_as_a_countdown_in_both_languages():
     """"60s left", "59s left" … "1s left" — with Bangla numerals under the BN toggle."""
-    body = fn_body("renderReviewClock")
-    assert "setBilingualText('review-timer-value', `${secondsLeft}s`, bnDigits(secondsLeft))" in body
+    body = fn_body("renderClock")
+    assert "setBilingualText('kiosk-clock-value', `${secondsLeft}s`, bnDigits(secondsLeft))" in body
+    assert "setBilingualText('kiosk-clock-label', label.en, label.bn);" in body
     html = kiosk_html()
-    assert 'id="review-timer-value"' in html
+    assert 'id="kiosk-clock-value"' in html
     # The unit belongs to the LABEL: "৫৯s বাকি" was half-translated on the live page, so
     # Bangla carries the whole unit ("৫৯ সেকেন্ড বাকি") and English keeps "59s left".
     assert 'data-en="left" data-bn="সেকেন্ড বাকি"' in html
+    # S35: two countdowns share the element, and "10 সেকেন্ড বাকি" and "10s to send" are
+    # different sentences — so the label is per-countdown, not one string translated.
+    assert "const CLOCK_LABELS = {" in kiosk_js()
 
 
 def test_the_clock_gets_visually_louder_as_it_runs_out():
     """The last ten seconds are when it matters. Urgency is carried by a CLASS so the
     CSS animation is not restarted on every 250 ms tick."""
-    body = fn_body("renderReviewClock")
+    body = fn_body("renderClock")
     assert "box.classList.toggle('urgent', secondsLeft <= 10);" in body
     css = kiosk_html()
-    assert ".review-timer.urgent {" in css
+    assert ".kiosk-clock.urgent {" in css
     assert "@keyframes clock-urgent" in css
 
 
@@ -230,22 +238,30 @@ def test_it_looks_like_a_blinking_digital_clock():
     assert "@keyframes clock-blink" in css
     # Anchored at line start: the reduced-motion block names this selector too (in a
     # group, to switch the animation OFF), and it comes first in the file.
-    block = re.search(r"(?m)^\s*\.review-timer-value \{([^}]*)\}", css)
-    assert block, ".review-timer-value has no rule of its own"
+    block = re.search(r"(?m)^\s*\.kiosk-clock-value \{([^}]*)\}", css)
+    assert block, ".kiosk-clock-value has no rule of its own"
     assert "animation: clock-blink" in block.group(1)
-    assert "font-variant-numeric: tabular-nums" in css.split(".review-timer {")[1].split("}")[0]
+    assert "font-variant-numeric: tabular-nums" in css.split(".kiosk-clock {")[1].split("}")[0]
 
 
-def test_the_clock_never_covers_the_review_heading():
-    """REGRESSION, measured: as an absolutely-positioned overlay it sat on top of the
-    centred title at 730px wide. As a flex sibling it reserves its own space at every
-    width, and re-centres the heading when it is hidden."""
-    css = kiosk_html().split("<style>")[1].split("</style>")[0]
-    head = css.split(".summary-head {")[1].split("}")[0]
-    assert "display: flex" in head
-    timer = css.split(".review-timer {")[1].split("}")[0]
-    assert "position: absolute" not in timer
-    assert "flex: none" in timer
-    # …and on a narrow screen it moves above the heading rather than beside it.
-    narrow = css.split("@media (max-width: 620px) {")[1]
-    assert ".summary-head { flex-direction: column-reverse;" in narrow
+def test_the_clock_cannot_be_scrolled_away_from_or_overlap_anything():
+    """S35 / Finding 8, and the second regression on this element.
+
+    S34 put it inside the review layout: it could only be seen on that screen, and only
+    while that screen was scrolled to the top — a patient who had scrolled down to read
+    their cards could not see how long they had. It is now a flex item in the PORTAL
+    HEADER, which sits outside `.screen` (the element that scrolls since S34), so it is
+    at the top right of the page at all times and the header row reserves its width —
+    overlap is structurally impossible rather than avoided by measurement.
+
+    ⚠ `position: fixed` was rejected: it removes the element from flow, which is exactly
+    how a "floating" clock ends up on top of a heading at some width nobody tested."""
+    html = kiosk_html()
+    header = html.split('class="portal-header"')[1].split("</div>\n  </div>")[0]
+    assert 'id="kiosk-clock"' in header, "the clock must live in the header, not in a screen"
+    css = html.split("<style>")[1].split("</style>")[0]
+    clock = css.split(".kiosk-clock {")[1].split("}")[0]
+    assert "position: fixed" not in clock and "position: absolute" not in clock
+    assert "flex: none" in clock
+    # …and the header itself must never overflow sideways once the clock joins it.
+    assert ".portal-header { flex-wrap: wrap; row-gap: 8px; }" in css

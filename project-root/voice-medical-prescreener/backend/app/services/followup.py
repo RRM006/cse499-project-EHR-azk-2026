@@ -40,6 +40,13 @@ _QUESTION_SYSTEM = (
     "child or teenager about age-related conditions, pregnancy questions only where "
     "they could plausibly apply, and use simpler wording for an elderly patient. "
     "Never mention the patient's age back to them as a reason for the question.\n"
+    "An ALREADY COLLECTED block lists what the patient has ALREADY told you. Never "
+    "ask again for anything in it, and never ask again for anything in PATIENT "
+    "CONTEXT — the patient's age, sex or the area they came about are already known "
+    "and re-asking them wastes the patient's turn and makes the kiosk look broken. "
+    "Build on those answers instead. If one of them is present but VAGUE, you may ask "
+    "the patient to clarify THAT SAME item — asking for clarification is always "
+    "better than assuming or inventing a detail they did not give.\n"
     "If the list is empty, ask ONE short DEEPENING question grounded in what the "
     "patient already said — the clinical detail a doctor would want next (for "
     "example: severity on a 1-10 scale, exact location or spread, what triggers or "
@@ -127,6 +134,46 @@ def patient_context(db: Session, visit: Visit, profile: CaseProfile) -> str:
     return "PATIENT CONTEXT:\n" + "\n".join(bits) + "\n\n"
 
 
+#: How much of one collected answer to hand back to the model. The block is context,
+#: not a second copy of the record: the whole conversation is already in the prompt.
+_COLLECTED_VALUE_CHARS = 160
+
+
+def collected_context(profile: CaseProfile) -> str:
+    """S35 — the "you already know this" block, or '' when nothing is collected yet.
+
+    The exact mirror of :func:`missing_summary_fields`, built from the SAME
+    ``field_has_text`` predicate over the SAME ``SUMMARY_FIELD_KEYS``, so the two can
+    never disagree about whether a field is filled. It exists because the model was
+    previously told only what was MISSING: the conversation was in the prompt, but
+    nothing named the structured facts already extracted from it, and re-asking
+    something the patient had answered was left to the model noticing on its own.
+
+    Deliberately NOT a decision system. It restates collected values, adds no clinical
+    reasoning, ranks nothing, and names no condition — the choice of what to ask next
+    stays exactly where it was (the M6 gap list, or the server-named field in the
+    resume scope).
+    """
+    fields = ((profile.entities or {}).get("summary_fields")) or {}
+    lines: list[str] = []
+    for key in SUMMARY_FIELD_KEYS:
+        field = fields.get(key)
+        if not field_has_text(field):
+            continue
+        # Whichever language slot carries text; display-language choice is a UI concern.
+        value = ""
+        for slot in ("value_en", "value_bn", "value"):
+            value = str((field or {}).get(slot) or "").strip()
+            if value:
+                break
+        lines.append(f"- {key} ({FIELD_PROMPTS.get(key, key)}): "
+                     f"{value[:_COLLECTED_VALUE_CHARS]}")
+    if not lines:
+        return ""
+    return ("ALREADY COLLECTED (do not ask for these again):\n"
+            + "\n".join(lines) + "\n\n")
+
+
 def missing_summary_fields(profile: CaseProfile) -> list[str]:
     """The keys (of the fixed 10 summary fields) still empty in EVERY language slot —
     the KIOSK-7 resume loop's checklist."""
@@ -196,6 +243,11 @@ def generate_next_question(
         )
     user = (
         f"{patient_context(db, visit, profile)}"
+        # S35: what is already known sits WITH the patient context and BEFORE the
+        # conversation, because it frames the conversation rather than following from
+        # it — and because everything after "CONVERSATION:" is pinned identical across
+        # two patients who differ only in age (test_age_appropriate_questions.py).
+        f"{collected_context(profile)}"
         f"CONVERSATION:\n{_conversation_text(db, visit)}\n\n"
         f"{field_directive}"
         f"MISSING DATA POINTS:\n{json.dumps(remaining, ensure_ascii=False)}\n\n"

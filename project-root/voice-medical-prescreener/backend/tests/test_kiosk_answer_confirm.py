@@ -144,19 +144,28 @@ def test_the_read_back_is_spoken_verbatim_and_in_the_capture_language():
     assert "lang: 'bn-BD'" in speak_back
 
 
-def test_the_read_back_never_opens_the_microphone():
-    """It is not a question. An auto-opening mic here would transcribe the kiosk reading
-    the patient's own words back at them — straight into the next verbatim record."""
+def test_the_words_being_read_back_never_open_the_microphone_underneath_themselves():
+    """The echo guard, at the one place it is easiest to lose. An auto-opening mic while
+    the kiosk is reading the patient's own words back would transcribe those words
+    straight into the next verbatim record (rule #1).
+
+    ⚠ S35 (ADR-0056): the mic DOES open after the confirmation question that follows —
+    that is what makes a spoken "হ্যাঁ" possible — but only via askAloud()'s existing
+    echo guard, and only once the read-back has finished playing."""
     speak_back = fn_body("speakAnswerBack")
     assert "cancelPendingMic();" in speak_back
-    assert "askAloud" not in speak_back, "askAloud() would arm the mic behind the read-back"
+    assert "askAloud(" not in speak_back, "askAloud() here would arm the mic behind the read-back"
 
 
-def test_the_confirmation_question_cannot_talk_over_the_read_back():
-    """speak() cancels whatever is playing, so the follow-up prompt is chained on
-    `onend` — and guarded, so a patient who has already decided is not spoken at."""
+def test_the_confirmation_question_follows_the_read_back_and_then_opens_the_mic():
+    """speak() cancels whatever is playing, so the question is chained on `onend` — and
+    guarded, so a patient who has already decided is not spoken at. The question itself
+    goes through askAloud(), i.e. the SAME arming path every interview question uses:
+    there is no second turn-taking mechanism for confirmations."""
     speak_back = fn_body("speakAnswerBack")
-    assert "onend: () => { if (state && state.pendingAnswer) speak(prompt); }" in speak_back
+    assert "onend: () => { if (state && state.pendingAnswer) askConfirmationAloud(); }" in speak_back
+    assert "askAloud(t(ANSWER_CONFIRM_PROMPT.en, ANSWER_CONFIRM_PROMPT.bn));" \
+        in fn_body("askConfirmationAloud")
 
 
 # --- silence is not an answer ---
@@ -207,12 +216,24 @@ def test_a_typing_patient_is_not_spoken_at_when_a_capture_fails():
 def test_the_panel_is_retracted_by_every_action_that_ends_its_turn():
     """A stale "I heard you say" is worse than none: it invites the patient to accept an
     answer to a question that has moved on — or, after the logout reset, to accept the
-    PREVIOUS patient's words."""
+    PREVIOUS patient's words.
+
+    ⚠ S35 (ADR-0056) REMOVED one retraction that S34 had here: opening the mic no longer
+    clears the pending answer. That line meant "the patient is speaking again, so they
+    mean say-it-again" — a reasonable heuristic while the ONLY way to answer the
+    read-back was a tap, and a defect once the read-back is answered BY SPEAKING: it
+    cleared `state.pendingAnswer` between the mic opening and the word "হ্যাঁ" arriving,
+    so the verdict would have been stored as the patient's symptom. The rule it enforced
+    is not lost — it moved into parseConfirmation(), where "say it again" is now an
+    explicit word rather than an inference from the act of speaking."""
     js = kiosk_js()
-    assert "hideAnswerConfirm();   // S34: speaking again IS" in js   # a new mic turn
+    assert "hideAnswerConfirm();   // S34: speaking again IS" not in js, \
+        "the S34 retraction-on-listen would clear the pending answer before the verdict"
     assert "if (typing) hideAnswerConfirm();" in js                   # switching to typing
     assert "hideAnswerConfirm();" in fn_body("finishConversation")    # "Done"
-    assert js.count("hideAnswerConfirm()") >= 5                       # incl. the logout reset
+    for handler in ("acceptAnswer", "rejectAnswer"):                  # both verdicts
+        assert "hideAnswerConfirm();" in fn_body(handler)
+    assert "hideAnswerConfirm();        // S34" in js                 # the logout reset
 
 
 def test_the_reset_clears_the_panels_by_id_because_docks_is_still_in_its_dead_zone():

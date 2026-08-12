@@ -191,7 +191,7 @@ def test_the_float_and_the_clock_stop_moving_for_a_patient_who_asked_for_less_mo
     text, and a number that changes once a second."""
     css = kiosk_html()
     block = css.split("@media (prefers-reduced-motion: reduce) {")[1].split("\n    }")[0]
-    assert ".doctor-float-inner, .review-timer, .review-timer-value { animation: none !important; }" in block
+    assert ".doctor-float-inner, .kiosk-clock, .kiosk-clock-value { animation: none !important; }" in block
 
 
 def test_the_assistant_uses_no_external_asset():
@@ -234,7 +234,7 @@ def test_no_selector_is_sized_twice_at_the_same_specificity():
     equal specificity loses to the later one, i.e. dead CSS that reads as applied."""
     css = top_level_css()
     for selector in (".summary-body", ".doctor-float", ".doctor-float-inner",
-                     ".review-timer", ".review-timer-value", ".answer-confirm",
-                     ".answer-text", ".digit-preview", ".summary-head"):
+                     ".kiosk-clock", ".kiosk-clock-value", ".answer-confirm",
+                     ".answer-text", ".digit-preview", ".summary-head", ".confirm-say"):
         hits = re.findall(rf"(?m)^\s*{re.escape(selector)}\s*\{{", css)
         assert len(hits) == 1, f"{selector} declared {len(hits)}x outside @media"

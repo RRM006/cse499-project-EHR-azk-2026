@@ -16,6 +16,81 @@
 
 ---
 
+## Session 35 — 2026-08-12 — **Voice-first confirmation (yes/no by speech), the header clock, context-aware questions, TTS pacing** — 547 → 622 tests
+- Did: worked all 8 findings of the second manual-testing round in one pass, loop-engineered
+  (reproduce → root cause → smallest fix → targeted tests → browser measurement → next). **ADR-0056.**
+  **Alembic stays 0012** — no schema change, no migration, no new dependency, **no module status changed**.
+- **⚠ Finding 1 began with a correction to the brief.** It said the phone read-back "currently
+  auto-accepts after approximately 10 seconds". **It did not** — there was no timer on that panel at
+  all; ADR-0053 deliberately required a tap. Verified by inspection before touching anything. So the
+  10-second window is NEW behaviour, built as asked: the number is still shown at the largest size on
+  the screen and still read back digit by digit, only the DEFAULT when the patient does nothing has
+  changed, and `VOICE_PHONE_CONFIRM_MS=0` restores ADR-0053's rule exactly.
+- **Findings 1 + 8 — ONE clock, moved into the portal header.** S34's clock lived inside the review
+  layout, so it existed only on that screen and only while it was scrolled to the top. The header
+  sits OUTSIDE `.screen` (the element that scrolls since ADR-0055 i), so the clock is now top-right
+  at all times, cannot be scrolled away from, and cannot overlap — it is a flex item and the row
+  reserves its width. Both countdowns (phone 10 s, review 60 s) write it through one renderer with a
+  PER-COUNTDOWN label. `position: fixed` was rejected on purpose.
+- **Findings 2 + 7 — the patient confirms by SPEAKING, in both places.** One vocabulary
+  (`CONFIRM_YES` / `CONFIRM_NO` / `CONFIRM_FILLER`) and one parser serve the per-answer read-back and
+  the final review. Two rules make it safe: an utterance is a verdict only when EVERY word in it is
+  known, and where a YES word and a negation both appear NO wins. So `ঠিক আছে`→yes, `ঠিক নাই`/`ঠিক
+  না`/`আবার বলি`→no, and `আমার নাম রহিম না মানে রহিমা`→**ambiguous, ask again** — the direct answer
+  to "do not assume every sentence containing না means NO". Buttons remain as the fallback.
+  Review NO re-opens the EXISTING resume dock with an open correction question — no new pipeline.
+- **Finding 3 — "is it listening?" answered without reading.** `applyAvatarState()` publishes the
+  ONE derived state on `<body data-kiosk-state>`; CSS makes the mic pulse and the dock hint jump from
+  13.12px to 16.8px and turn red while the mic is open. No second state machine, so these cues can
+  never disagree with the robot's face or the microphone.
+- **Finding 4 — M7 is told what it already knows.** NEW `collected_context()`, the exact mirror of
+  `missing_summary_fields()` (same keys, same `field_has_text`), plus a system-prompt clause
+  forbidding re-asking anything in it or in PATIENT CONTEXT (age/sex/area) and asking for
+  CLARIFICATION of that same item when something is vague. Deliberately NOT a decision system: it
+  ranks nothing, names no condition and does not choose the next field — a test asserts the block
+  carries no evaluative language at all.
+- **Finding 6 — TTS pacing, not a new TTS.** NEW `services/tts/prosody.py`: `speech_text()` adds a
+  sentence-final `।`/`.` and turns the em dashes and ellipses this project already uses as pauses
+  into commas. Applied ONCE in the service so the primary and the fallback read the identical line.
+  ⚠ It may never change a WORD — the read-back sends the patient's own captured words down this path.
+  `tts_edge_pitch`/`tts_edge_volume` added but NEUTRAL by default.
+- Decided: **ADR-0056** (a)-(h). It **supersedes ADR-0055's "Rejected (1)"** (spoken yes/no was
+  turned down there as Step-S5 territory — wrong on the facts: S5 is timers and permission recovery)
+  and **amends ADR-0053** (the phone tap becomes a window, with the tap-required mode kept selectable).
+- Broke / problem: **one real defect created and caught by reasoning through the wiring, plus one
+  measured layout fault.** (1) S34's `hideAnswerConfirm()` inside `toggleListening()` — "speaking
+  again means say-it-again" — would have cleared `state.pendingAnswer` between the mic opening for
+  the verdict and the word "হ্যাঁ" arriving, storing the verdict as the patient's symptom. Removed,
+  with the reason left in place so it is not re-added; its rule became an explicit word instead.
+  (2) `setResumeMode()` called `updateSubmitVisibility()` BEFORE its own `cancelPendingMic()`, which
+  cancelled the very microphone the new review approval had just armed — the prompt would have been
+  spoken with nothing listening. The call moved to the end of the function.
+  (3) At 375px the clock landed at the LEFT of the wrapped header row: the right-hand group exactly
+  fills the line (320px of 319px available), so `margin-left:auto` had no free space. Fixed with
+  `order: 1` in the narrow query — measured back at x 264–348 against a 348px content edge.
+- Six existing tests updated, none weakened: two `/api/config` whole-contract key sets (a new knob
+  must be declared in both, by design); `test_kiosk_answer_confirm.py`'s retraction test, which now
+  pins the REMOVAL above and explains it; the tokenizer assertions in `test_voice_digits.py`,
+  retargeted from `digitsFromSpeech` to the extracted `speechTokens()` that both vocabularies now
+  share; and four review-clock assertions retargeted from the review-scoped element to the header one.
+- Verified: **622 passed, 2 skipped, 0 failures** (was 547). New files: `test_question_context.py`
+  (12), `test_tts_prosody.py` (29), `test_kiosk_voice_confirmation.py` (17), `test_kiosk_phone_timer.py`
+  (17). **Live browser run (no microphone — the recogniser's own buffer, S33's method):** all 9 YES
+  phrases → yes, all 8 NO phrases → no, all 8 ambiguous/unrelated → null; phone clock 10s→8s→7s in
+  the header with a triple tap sending EXACTLY ONE lookup and the timeout sending exactly one; a
+  spoken answer held with 0 turns stored, ambiguous reply decided nothing, `না ঠিক নাই` stored
+  nothing and re-asked, `হ্যাঁ ঠিক আছে` stored the answer and advanced **with the verdict itself
+  absent from the transcript**; review NO re-opened the correction question with 0 submits, review
+  YES racing a manual tap produced **exactly 1 submit**; no overflow or overlap at 1280x720,
+  1024x600 or 375x812, the clock still visible after scrolling the review to the bottom, and the
+  clock appearing shifts the review heading/title/grid by **0 pixels**.
+- Deferred: **Step S5 — NOT implemented** (`no_speech_ms` watchdog, `max_answer_ms` cap,
+  permission/visibility recovery all untouched). Also still open: the **real-microphone run**,
+  rotating the **3 API keys** (human-only), Chrome + Edge comparison, formal **WER**, the acoustic
+  judgement on the paced TTS, and the mid-turn word-loss rule #1 decision.
+- Next: **REAL MICROPHONE VALIDATION.** What a `bn-BD` recogniser returns for a spoken "হ্যাঁ" is now
+  on the critical path — an unrecognised yes/no blocks every confirmation in the flow.
+
 ## Session 34 — 2026-08-12 — **S34 manual-testing cycle: spoken-answer read-back, English digit words in Bangla script, review read-aloud + floating assistant, auto-scroll, the 60 s review clock** — 480 → 547 tests
 - Did: worked the human's manual-testing findings end to end in one pass (their explicit
   instruction: no per-phase stop). **ADR-0055.** No schema change — **Alembic stays 0012**, no

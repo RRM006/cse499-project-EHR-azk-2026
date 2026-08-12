@@ -29,6 +29,9 @@ EXPECTED_KEYS = {
     "answer_confirm",
     # S34 (ADR-0055): how long the review screen waits before submitting itself.
     "review_timeout_ms",
+    # S35 (ADR-0056): how long the spoken phone number is read back before it is
+    # accepted on its own.
+    "phone_confirm_ms",
 }
 
 

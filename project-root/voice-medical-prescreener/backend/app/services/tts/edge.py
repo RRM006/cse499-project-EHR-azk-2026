@@ -57,9 +57,18 @@ class EdgeTtsProvider(TtsProvider):
         voice_en: str = "en-US-AriaNeural",
         rate: str = "+0%",
         timeout_s: int = REQUEST_TIMEOUT_S,
+        pitch: str = "+0Hz",
+        volume: str = "+0%",
     ) -> None:
         self._voices = {"bn": voice_bn, "en": voice_en}
         self._rate = rate
+        # S35: edge-tts accepts pitch and volume alongside rate. Defaults are NEUTRAL on
+        # purpose — the voice is already neural, and pushing prosody around is how a
+        # synthesizer starts sounding like a cartoon rather than like a calm assistant.
+        # These exist so a clinic can compensate for a noisy waiting room or a patient
+        # who finds the default pitch hard to hear, not as a "naturalness" dial.
+        self._pitch = pitch
+        self._volume = volume
         self._timeout_s = timeout_s
 
     def available(self) -> bool:
@@ -93,7 +102,9 @@ class EdgeTtsProvider(TtsProvider):
             ) from exc
 
         async def _render() -> bytes:
-            communicate = edge_tts.Communicate(text, voice, rate=self._rate)
+            communicate = edge_tts.Communicate(
+                text, voice, rate=self._rate, pitch=self._pitch, volume=self._volume,
+            )
             chunks: list[bytes] = []
             async for chunk in communicate.stream():
                 if chunk["type"] == "audio":

@@ -4,7 +4,63 @@
 > re-exploring the whole project each session. Update it whenever you add or move
 > a folder/file. Keep each note to one line.
 
-**Last updated:** 2026-08-12 (**Session 34 — THREE new test files, NO new production file, no
+**Last updated:** 2026-08-12 (**Session 35 — ONE new production file, FOUR new test files, no schema
+change (Alembic stays 0012), no dependency change. One element MOVED (see below).**
+
+**NEW production file — `backend/app/services/tts/prosody.py`** (Finding 6). `speech_text(text, lang)`
+punctuates a line for SPEECH: a sentence-final `।` (bn) / `.` (en) so the engine applies a closing
+contour instead of stopping mid-breath, and a real comma where this project's own strings already
+imply a pause (em dash, ellipsis). Applied ONCE, in `tts/service.synthesize()`, so the primary
+provider and the espeak fallback read the identical line. ⚠ **It may never change a WORD** — the
+S34/S35 read-back sends the PATIENT's own captured words down this path, and a rewrite there would
+read back something they did not say. Also exports `SENTENCE_ENDINGS`.
+
+**NEW test files** (all under `backend/tests/`):
+- **`test_question_context.py`** (12) — Finding 4. `collected_context()` is the exact complement of
+  `missing_summary_fields()` over the same 10 keys; a blank field counts as missing; a Bangla-only
+  answer counts as collected; the block reaches the model AHEAD of the conversation; and it contains
+  **no evaluative language at all** (the "this is not a decision system" guard).
+- **`test_tts_prosody.py`** (29) — Finding 6. The two prosodic cues, the empty/dangling-comma edge
+  cases, that every provider gets the SAME paced line, the neutral pitch/volume defaults reaching
+  edge-tts, and — the safety property — that **no word is changed, added, removed or reordered**.
+  Its docstring states plainly that acoustic quality is neither tested nor claimed.
+- **`test_kiosk_voice_confirmation.py`** (17) — Findings 2 + 7 (ADR-0056). The shipped vocabularies
+  parsed OUT of kiosk.js, the two safety rules (unknown word → ambiguous; NO beats YES), the routing
+  that keeps a verdict from being stored as an answer, and the REMOVAL of S34's retraction-on-listen.
+- **`test_kiosk_phone_timer.py`** (17) — Findings 1 + 3 + 8. The 10-second window on the shared
+  ticker, its single-send guard, the ONE header clock (and that `#review-timer` is gone rather than
+  duplicated), the `order: 1` narrow-screen fix, and the derived `body[data-kiosk-state]` cues.
+
+**Edited production files:**
+- **`frontend/kiosk.js`** — `speechTokens()` **extracted** as the ONE tokenizer (⚠ `digitsFromSpeech`
+  now calls it; the NFC fold and the `\p{M}` split class moved WITH it, and two tests were retargeted
+  accordingly). NEW `CONFIRM_YES`/`CONFIRM_NO`/`CONFIRM_FILLER` + `parseConfirmation()`;
+  `applySpokenConfirmation()` / `askConfirmationAloud()` / `CONFIRM_NOT_UNDERSTOOD`;
+  `state.reviewConfirm` + `startReviewConfirmation()` / `stopReviewConfirmation()` /
+  `applyReviewConfirmation()` / `rejectReview()` + `REVIEW_CONFIRM_PROMPT` / `REVIEW_CORRECTION`;
+  `renderClock()` / `hideClock()` / `CLOCK_LABELS` replacing the review-scoped renderer;
+  `startPhoneTimer()` / `cancelPhoneTimer()` / `phoneConfirmMs()`; `body.dataset.kioskState` in
+  `applyAvatarState()`.
+  ⚠ **`setResumeMode()` now calls `updateSubmitVisibility()` LAST**, not before its branch — the
+  `cancelPendingMic()` on the else path was cancelling the microphone the review approval had just
+  armed. ⚠ **`toggleListening()` must NOT clear the read-back** (see the comment left in place).
+- **`frontend/kiosk.html`** — `#kiosk-clock` **moved into `.portal-header`** (the element outside the
+  scrolling `.screen`); `#review-timer` removed; `.confirm-say` lines on all three confirmations;
+  `#phone-confirm-hint`; the mic-pulse + loud-hint CSS keyed on `body[data-kiosk-state]`; `order: 1`
+  on the clock in the narrow query. ⚠ There must stay exactly ONE
+  `@media (prefers-reduced-motion: reduce)` block — a second one would hide the first from any reader.
+- **`backend/app/services/followup.py`** — NEW `collected_context()` + `_COLLECTED_VALUE_CHARS`; two
+  new clauses in `_QUESTION_SYSTEM`; the block inserted between `patient_context()` and
+  `CONVERSATION:` (⚠ that position is load-bearing — everything after `CONVERSATION:` is pinned
+  identical across two patients differing only in age).
+- **`backend/app/services/tts/service.py`** — `speech_text()` applied once; `_make_edge()` passes
+  pitch/volume. **`tts/edge.py`** — `pitch`/`volume` constructor args reaching `Communicate`.
+- **`backend/app/core/config.py`** — `voice_phone_confirm_ms: int = 10000`, `tts_edge_pitch`,
+  `tts_edge_volume`. **`schemas/kiosk_config.py`** + **`api/routes_config.py`** — `phone_confirm_ms`
+  (clamped at 0). **`backend/.env.example`** — all three documented.
+→ suite **547 → 622 passing, 2 skipped**.
+
+Prior: 2026-08-12 (**Session 34 — THREE new test files, NO new production file, no
 schema change (Alembic stays 0012), no dependency change, nothing moved or renamed.**
 
 **NEW test files** (all under `backend/tests/`):

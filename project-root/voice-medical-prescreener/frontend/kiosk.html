@@ -102,6 +102,32 @@
     .dock-row { display: flex; align-items: center; gap: 18px; width: 100%; justify-content: space-between; }
     .mic-btn { width: 68px; height: 68px; border-radius: 50%; background: var(--secondary-color); border: none; color: #fff; font-size: 1.6rem; cursor: pointer; box-shadow: var(--shadow-md); }
     .mic-btn.listening { background: var(--danger-color); }
+
+    /* ============================================================
+       S35 / Finding 3 — "is it listening?", answered without reading anything.
+       Driven by `body[data-kiosk-state]`, which applyAvatarState() writes from the ONE
+       derived avatar state (ADR-0054). No second state machine, so these cues can never
+       disagree with the robot's face or with the microphone itself.
+       ============================================================ */
+    .mic-btn.listening { animation: mic-listening 1.4s ease-out infinite; }
+    @keyframes mic-listening {
+      0%   { box-shadow: 0 0 0 0 rgba(220,38,38,.55), var(--shadow-md); }
+      70%  { box-shadow: 0 0 0 18px rgba(220,38,38,0), var(--shadow-md); }
+      100% { box-shadow: 0 0 0 0 rgba(220,38,38,0), var(--shadow-md); }
+    }
+    /* The hint under the dock is the sentence that tells the patient what to do NOW, so
+       it grows and takes the accent colour at the exact moment it matters. */
+    body[data-kiosk-state="listening"] #listening-hint,
+    body[data-kiosk-state="listening"] #resume-hint,
+    body[data-kiosk-state="listening"] #phone-hint,
+    body[data-kiosk-state="listening"] #otp-hint {
+      font-size: 1.05rem !important; color: var(--danger-color) !important; font-weight: 700 !important;
+    }
+    /* ⚠ The reduced-motion opt-out for this pulse lives in the ONE
+       @media (prefers-reduced-motion: reduce) block further down, with the avatar's.
+       A second block here would work, but it would also split the page's accessibility
+       rules across two places — and the tests that read "what happens under reduced
+       motion" would then read only the first one they found. */
     .fallback-row { display: none; gap: 10px; width: 100%; max-width: 540px; }
     /* S4 (ADR-0048): the CONFIRMATION countdown. Deliberately large and high-contrast —
        the target patient is elderly or non-technical and must be able to see, at a
@@ -211,7 +237,10 @@
       /* S34: the float bob and the clock blink are decoration on top of information
          that is still fully carried without them — the status text, and a number that
          changes once a second. Removing the motion removes nothing the patient needs. */
-      .doctor-float-inner, .review-timer, .review-timer-value { animation: none !important; }
+      .doctor-float-inner, .kiosk-clock, .kiosk-clock-value { animation: none !important; }
+      /* S35: the mic's listening pulse. Its meaning survives without it — the button is
+         still red, the hint is still large and red, and the avatar still says so. */
+      .mic-btn.listening { animation: none !important; }
     }
 
     /* S34 — the live digit read-out under the identification transcript. Tabular
@@ -232,6 +261,13 @@
       background: #E6F7F3; border: 1px solid #B8E5DC;
     }
     .answer-confirm-head { font-size: .95rem; font-weight: 700; color: var(--primary-color); }
+    /* S35: the spoken option, presented as the main one. Bigger than the button labels
+       under it on purpose — a patient who reads the buttons first will reach for a
+       mouse they may not know how to use. */
+    .confirm-say {
+      font-size: 1.05rem; font-weight: 700; color: var(--secondary-color);
+      text-align: center; line-height: 1.5;
+    }
     /* The patient's own words. Large, never italic (that reads as "provisional"), and
        selectable-looking so it is obviously a quotation of them, not of us. */
     .answer-text {
@@ -334,25 +370,31 @@
     /* the per-card 🔊 sits at the right edge of the card head, like the "needs info" chip */
     .summary-item-head .bubble-speak { margin-left: auto; }
 
-    /* S34 (ADR-0055) — the review clock. A small digital display: monospaced-looking
-       tabular numerals, a steady blink so it reads as RUNNING rather than as a static
-       label, and a louder red pulse under 10 s. Never overlaps the heading — it is a
-       grid/absolute corner item, and it becomes a normal inline chip on narrow screens
-       where there is no corner to spare. */
-    .review-timer {
+    /* S35 (ADR-0056) — THE kiosk clock. One element, in the portal header, used by
+       every countdown the patient can see: the phone read-back's 10 s and the review's
+       60 s. A small digital display — tabular numerals, a steady blink so it reads as
+       RUNNING rather than as a static label, and a louder red pulse under 10 s.
+
+       Why the header. It was previously inside the review layout, which meant it could
+       only be seen on that screen and only while that screen was scrolled to the top.
+       The header sits OUTSIDE `.screen` (the element that scrolls, since S34), so here
+       it is at the top right of the page at ALL times, cannot be scrolled away from,
+       and cannot overlap anything: it is a flex item in the header row and the row
+       reserves its width. */
+    .kiosk-clock {
       display: none; flex: none; align-items: baseline; gap: 6px; white-space: nowrap;
-      padding: 8px 14px; border-radius: 10px;
+      padding: 7px 13px; border-radius: 10px;
       background: #0B3F3C; color: #E6F7F3;
       border: 1px solid var(--primary-color); box-shadow: var(--shadow-sm);
       font-variant-numeric: tabular-nums; letter-spacing: .06em;
     }
-    .review-timer-value {
-      font-size: 1.45rem; font-weight: 700; line-height: 1;
+    .kiosk-clock-value {
+      font-size: 1.3rem; font-weight: 700; line-height: 1;
       animation: clock-blink 1s steps(1, end) infinite;
     }
-    .review-timer-label { font-size: .8rem; font-weight: 600; opacity: .85; }
+    .kiosk-clock-label { font-size: .78rem; font-weight: 600; opacity: .85; }
     @keyframes clock-blink { 0%, 60% { opacity: 1; } 61%, 100% { opacity: .45; } }
-    .review-timer.urgent {
+    .kiosk-clock.urgent {
       background: #7F1D1D; border-color: var(--danger-color); color: #FEE2E2;
       animation: clock-urgent .9s ease-in-out infinite;
     }
@@ -360,6 +402,8 @@
       0%, 100% { transform: scale(1); box-shadow: 0 0 0 rgba(220,38,38,0); }
       50%      { transform: scale(1.06); box-shadow: 0 0 14px rgba(220,38,38,.55); }
     }
+    /* The header must never wrap or scroll sideways once the clock joins it. */
+    .portal-header { flex-wrap: wrap; row-gap: 8px; }
 
     .resume-dock { display: none; flex-direction: column; gap: 12px; border-left: 4px solid var(--secondary-color); }
     .resume-q-row { display: flex; align-items: flex-start; gap: 12px; }
@@ -422,9 +466,16 @@
       .doctor-float { position: static; }
       .doctor-float-inner { flex-direction: row; flex-wrap: wrap; justify-content: center; text-align: left; }
       .doctor-float .btn { width: auto; }
-      .review-timer { justify-content: center; margin: 0 auto 8px; width: max-content; }
-      .summary-head { flex-direction: column-reverse; align-items: center; }
       .confirm-row .btn { width: 100%; }
+      /* The clock keeps its header seat at every width — it just gets more compact.
+         `order` is what keeps it TOP-RIGHT once the header wraps: measured at 375px,
+         the header's right-hand group exactly fills the line (320px of 319px available),
+         so `margin-left:auto` has no free space to work with and the clock, being first
+         in the group, landed at the LEFT of the wrapped row. Ordering it last puts it
+         back at the right edge where the patient is told to look for it. */
+      .kiosk-clock { padding: 5px 10px; order: 1; }
+      .kiosk-clock-value { font-size: 1.1rem; }
+      .kiosk-clock-label { font-size: .7rem; }
     }
   </style>
 </head>
@@ -432,7 +483,22 @@
   <div class="portal-header">
     <div><span class="portal-title">Niramoy Pre-Screening</span>
       <span class="portal-subtitle" data-en="Patient Portal" data-bn="রোগী পোর্টাল">Patient Portal</span></div>
-    <div style="display:flex; align-items:center; gap:14px;">
+    <!-- `margin-left:auto` keeps this group hard right EVEN WHEN THE HEADER WRAPS.
+         Measured at 375px: without it the wrapped second row starts at the left edge,
+         and the clock stopped being "top right" exactly where space is tightest. -->
+    <div style="display:flex; align-items:center; gap:14px; margin-left:auto;">
+      <!-- S35 (ADR-0056), Findings 1 + 8: ONE countdown clock for the whole kiosk, in
+           the header. The header sits OUTSIDE .screen, which is the element that
+           scrolls (S34) — so the clock is at the top right of the page at all times,
+           cannot be scrolled away from, and cannot overlap a heading, an avatar or a
+           button, because it occupies its own space in the header's flex row. It is
+           driven by whichever countdown is running: the phone read-back's 10 s, or the
+           review's 60 s. Never both — they are on different screens. -->
+      <div class="kiosk-clock" id="kiosk-clock" role="timer" aria-live="off">
+        <span class="kiosk-clock-value" id="kiosk-clock-value">60s</span>
+        <span class="kiosk-clock-label" id="kiosk-clock-label"
+              data-en="left" data-bn="সেকেন্ড বাকি">left</span>
+      </div>
       <div class="lang-toggle">
         <button class="lang-btn" data-lang="en" onclick="setLanguage('en')">English</button>
         <button class="lang-btn" data-lang="bn" onclick="setLanguage('bn')">বাংলা</button>
@@ -494,10 +560,15 @@
           </div>
         </div>
 
-        <!-- F5b: a spoken number is NEVER sent on the recogniser's say-so. -->
+        <!-- F5b: a spoken number is NEVER sent on the recogniser's say-so. S35 adds a
+             VISIBLE 10-second window (the header clock) after which it is accepted —
+             the patient can still correct or confirm it at any point before that. -->
         <div class="phone-confirm" id="phone-confirm">
           <div style="font-weight:600;" data-en="Is this your number?" data-bn="এটি কি আপনার নম্বর?">Is this your number?</div>
           <div class="phone-readback" id="phone-readback"></div>
+          <div class="confirm-say" id="phone-confirm-hint"
+               data-en="Sending automatically — tap ✖ if it is wrong"
+               data-bn="নিজে থেকেই পাঠানো হবে — ভুল হলে ✖ চাপুন">Sending automatically — tap ✖ if it is wrong</div>
           <div class="confirm-row">
             <button class="btn btn-accent" onclick="confirmPhone()"
                     data-en="✔ Yes — send the code" data-bn="✔ হ্যাঁ — কোড পাঠান">✔ Yes — send the code</button>
@@ -589,6 +660,11 @@
         <div class="answer-confirm" id="dock-answer-confirm">
           <div class="answer-confirm-head" data-en="I heard you say:" data-bn="আমি শুনেছি আপনি বলেছেন:">I heard you say:</div>
           <div class="answer-text" id="dock-answer-text" aria-live="polite"></div>
+          <!-- S35 (ADR-0056): VOICE is the primary answer here. The line says the two
+               words out loud so the patient knows they may simply speak; the buttons
+               stay underneath as the accessibility fallback, never as the instruction. -->
+          <div class="confirm-say" data-en="🎤 Just say “yes” or “no”"
+               data-bn="🎤 শুধু বলুন “হ্যাঁ” অথবা “না”">🎤 Just say “yes” or “no”</div>
           <div class="confirm-row">
             <button class="btn btn-accent" onclick="acceptAnswer()"
                     data-en="✔ Yes — that is right" data-bn="✔ হ্যাঁ — এটাই ঠিক">✔ Yes — that is right</button>
@@ -638,13 +714,6 @@
           <div class="welcome-title" data-en="Please Review Your Pre-Screening Summary" data-bn="দয়া করে আপনার প্রাক-পরীক্ষার বিবরণীটি পর্যালোচনা করুন">Please Review Your Pre-Screening Summary</div>
           <div class="welcome-sub" data-en="Compiled from your voice answers. It will be sent to the doctor." data-bn="আপনার ভয়েস উত্তর থেকে সংকলিত। এটি ডাক্তারের কাছে পাঠানো হবে।">Compiled from your voice answers. It will be sent to the doctor.</div>
           <span class="progress-chip" id="summary-progress"></span>
-        </div>
-        <!-- S34 (ADR-0055): the 60-second review clock. Digital, blinking, and louder
-             as it runs down. Shown ONLY while Confirm & Submit is actually pressable —
-             updateSubmitVisibility() owns both. -->
-        <div class="review-timer" id="review-timer" role="timer" aria-live="off">
-          <span class="review-timer-value" id="review-timer-value">60s</span>
-          <span class="review-timer-label" data-en="left" data-bn="সেকেন্ড বাকি">left</span>
         </div>
       </div>
 
@@ -703,6 +772,11 @@
         <div class="answer-confirm" id="resume-answer-confirm">
           <div class="answer-confirm-head" data-en="I heard you say:" data-bn="আমি শুনেছি আপনি বলেছেন:">I heard you say:</div>
           <div class="answer-text" id="resume-answer-text" aria-live="polite"></div>
+          <!-- S35 (ADR-0056): VOICE is the primary answer here. The line says the two
+               words out loud so the patient knows they may simply speak; the buttons
+               stay underneath as the accessibility fallback, never as the instruction. -->
+          <div class="confirm-say" data-en="🎤 Just say “yes” or “no”"
+               data-bn="🎤 শুধু বলুন “হ্যাঁ” অথবা “না”">🎤 Just say “yes” or “no”</div>
           <div class="confirm-row">
             <button class="btn btn-accent" onclick="acceptAnswer()"
                     data-en="✔ Yes — that is right" data-bn="✔ হ্যাঁ — এটাই ঠিক">✔ Yes — that is right</button>

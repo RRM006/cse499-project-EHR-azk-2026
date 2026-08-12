@@ -72,6 +72,86 @@ transcribed by hand (the "ground truth"). Record the model + machine each time.
 
 ## Test entries (newest first)
 
+## 2026-08-12 — Session 35 — voice yes/no, header clock, question context, TTS pacing — suite **547 → 622**
+- Setup: Windows 11, Python 3.13.3 (venv), FastAPI TestClient + pytest; uvicorn on port 8001;
+  browser validation in the in-app Chromium engine. SQLite, Alembic head **0012** (verified from the
+  DB: `alembic_version = 0012_otp_codes`, 12 migration files, 17 data tables + `alembic_version`).
+- Metric(s): automated test pass/fail (not an ML metric); the shipped parsers executed against real
+  utterances in a browser engine; measured page geometry at three viewports.
+  **No microphone, no audio, no WER, and no acoustic judgement of any kind.**
+- **Baseline, re-measured before any change: 547 passed, 2 skipped, 0 failures** (~34 s).
+- **Final: 622 passed, 2 skipped, 0 failures** (~33 s). The 2 skips are unchanged and opt-in by
+  design (`TTS_LIVE=1` network test, `M7_LIVE=1` model probe).
+- Targeted counts: **4 new test files, +75 tests** — `test_question_context.py` (12),
+  `test_tts_prosody.py` (29), `test_kiosk_voice_confirmation.py` (17), `test_kiosk_phone_timer.py` (17).
+- **6 existing tests updated, none weakened**, each for a contract this session deliberately changed:
+  `test_kiosk_config.py` + `test_tts_provider.py` (both assert the COMPLETE `/api/config` key set, so
+  a new knob must be declared in both — that is the guard working, not failing);
+  `test_kiosk_answer_confirm.py::test_the_panel_is_retracted_by_every_action_that_ends_its_turn`
+  (now pins the REMOVAL of S34's retraction-on-listen and explains why it was a defect once the
+  read-back is answered by speech); two tokenizer assertions in `test_voice_digits.py` retargeted
+  from `digitsFromSpeech` to the extracted `speechTokens()` the two vocabularies now share (the rule
+  is unchanged and now covers strictly more); and four clock assertions in
+  `test_kiosk_review_timer.py` retargeted from the review-scoped element to the header one.
+
+### Live browser verification (no microphone — the recogniser's own buffer, S33's method)
+
+**The yes/no vocabulary — the shipped `parseConfirmation()`, executed:**
+
+| said | verdict | | said | verdict |
+|---|---|---|---|---|
+| হ্যাঁ · জি · ঠিক আছে · ঠিক | `yes` | | না · ঠিক নাই · ঠিক না · ঠিক নেই | `no` |
+| হ্যাঁ ঠিক আছে · ঠিক আছে ঠিক | `yes` | | ভুল · আবার বলি · না, আবার বলি | `no` |
+| yes · okay · ok | `yes` | | no | `no` |
+
+Ambiguous / unrelated, all `null` (ask again, decide nothing): `আমার পেটে ব্যথা` ·
+**`আমার নাম রহিম না মানে রহিমা`** (contains না, is not a rejection) · `হ্যাঁ আমার পেটে ব্যথা` ·
+`তিন দিন ধরে` · `ব্যথা আছে` · `doctor` · `"   "` · `"..."`. **9/9 yes, 8/8 no, 8/8 ambiguous.**
+
+**Phone read-back window (Finding 1):** clock ran 10s → 8s → 7s in the header, `urgent` from the
+start (≤10 s); re-showing the panel returned the SAME ticker handle (no stacking); **a triple
+`confirmPhone()` racing the clock produced exactly ONE `/patients/lookup`**; reject produced **zero**;
+letting it run to zero produced exactly one and advanced to the OTP screen with the clock hidden.
+
+**Answer confirmation (Finding 2):** a captured answer showed the panel with **0 turns stored**; an
+ambiguous reply decided nothing and left it pending with the banner shown; `না ঠিক নাই` stored
+nothing and re-asked the SAME question; `হ্যাঁ ঠিক আছে` stored the answer and advanced — and the
+verdict itself **never appeared in the transcript**.
+
+**Review confirmation (Finding 7):** armed together with the submit button (clock 59s "left", float
+visible); an ambiguous reply → **0 submits**, still waiting; `না ঠিক নাই` → the resume dock re-opened
+with *"What would you like to correct?"*, clock stopped, **0 submits**, patient still on the review;
+after the correction and the loop closing, `হ্যাঁ ঠিক আছে` **racing a manual `confirmSubmit()`
+produced exactly 1 submit**, avatar `done`, logout modal shown.
+
+**Layout (Findings 5 + 8), measured at three viewports:**
+
+| viewport | page overflow-X | layout overflow-X | header overflow-X | clock overlaps title / avatar | clock visible w/o scroll |
+|---|---|---|---|---|---|
+| 1280x720 | no | no | no | no / no | yes |
+| 1024x600 | no | no | no | no / no | yes |
+| 375x812 | no | no | no | no / no | yes (and still visible after scrolling the review to the bottom) |
+
+Heading and subtitle inside their container at all three. **First render: 0 px of shift** — with the
+clock hidden vs shown, `.summary-head` top, title left, title width and grid top were identical
+(93/178/909/168 both times). At 375px the clock measured x 264–348 against a 348px content edge
+after the `order: 1` fix (it had been x 28–112, i.e. the left of the wrapped row).
+
+**Listening cues (Finding 3):** while listening, `body[data-kiosk-state]="listening"`, the dock hint
+went **13.12px → 16.8px**, `rgb(239,68,68)`, weight 700, and the mic ran `mic-listening`; idle
+reverted all three. Avatar and body state agreed at every point.
+
+**Regression sweep, all unchanged:** Bangla digit words, English digit words, the S34 Bangla
+transliterations and a mixed/filler number all → `1715984632`; `তিনি বলেছেন` → `""`; Unicode OTP
+digits fold; `countdown_ms` 3000 and the S4 endpointer intact; all five `TERMINAL_STT_ERRORS` keys
+present; six avatar states; shared tokenizer live. **Zero JS errors**; the only console 404s are the
+pre-existing `/favicon.ico` and `/api/visits/null/...` from the synthetic no-visit test scenario.
+- Notes: **nothing here is a microphone result, and nothing here is an acoustic result.**
+  `test_tts_prosody.py` proves the text handed to the engine is punctuated for speech and that no
+  WORD can change — it says nothing about how it sounds. Whether a real `bn-BD` recogniser returns
+  a recognisable "হ্যাঁ" is now the most load-bearing unproven claim in the build, because every
+  answer and the final submit pass through it.
+
 ## 2026-08-12 — Session 34 — S34 manual-testing cycle: read-back gate, digit vocabulary, review clock — suite **480 → 547**
 - Setup: Windows 11, Python 3.13.3 (venv), FastAPI TestClient + pytest; uvicorn on port 8001;
   browser validation in the in-app Chromium engine. SQLite, Alembic head **0012** (verified from the

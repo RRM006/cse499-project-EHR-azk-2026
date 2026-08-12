@@ -170,6 +170,8 @@ def test_config_still_leaks_no_paths_keys_or_provider_names(monkeypatch):
         # and the review auto-submit delay. Both are pure UX behaviour, exactly like
         # the timings above; nothing here names a provider, a path or a credential.
         "answer_confirm", "review_timeout_ms",
+        # S35 (ADR-0056): the phone read-back window. Behaviour, like the rest.
+        "phone_confirm_ms",
     }
     raw = client.get("/api/config").text
     for leak in ("espeak", "secret", "path", ".exe"):

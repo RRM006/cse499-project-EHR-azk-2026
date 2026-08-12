@@ -185,9 +185,12 @@ def test_both_encodings_of_the_ya_phala_words_resolve():
         assert precomposed != nfc, "the two spellings must really be different strings"
         assert shipped.get(nfc) == digit, "the shipped keys must be NFC"
         assert precomposed not in shipped, "a non-NFC key could never be hit after the fold"
-    # …and the fold itself must be in the shipped lookup, or the keys' form is moot.
-    lookup = kiosk_js().split("function digitsFromSpeech(text) {")[1].split("\n}")[0]
+    # …and the fold itself must be in the shipped tokenizer, or the keys' form is moot.
+    # S35 moved the tokenizer into speechTokens(), which digitsFromSpeech() and the new
+    # yes/no parser now share — one fold, one split, for every spoken vocabulary.
+    lookup = kiosk_js().split("function speechTokens(text) {")[1].split("\n}")[0]
     assert ".normalize('NFC')" in lookup
+    assert "for (const token of speechTokens(text))" in kiosk_js()
 
 
 def test_all_ten_english_digit_words_are_spoken_vocabulary():
@@ -298,7 +301,10 @@ def test_the_tokeniser_keeps_combining_marks_inside_a_word():
     at_risk = [w for w in BANGLA_DIGIT_WORDS
                if any(unicodedata.category(c).startswith("M") for c in w)]
     assert len(at_risk) == 8, "8 of the 10 Bangla digit words contain a combining mark"
-    assert "\\p{M}" in kiosk_js().split("function digitsFromSpeech(text) {")[1][:400]
+    # S35: the split lives in speechTokens(), the ONE tokenizer digitsFromSpeech() and
+    # the yes/no parser both call. The rule is unchanged and now covers strictly more:
+    # a shredded word would break the confirmation vocabulary the same way.
+    assert "\\p{M}" in kiosk_js().split("function speechTokens(text) {")[1][:300]
 
 
 def test_zero_width_joiners_are_stripped_before_lookup():

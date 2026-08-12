@@ -6,7 +6,56 @@
 
 **Status keys:** ⬜ Not started · 🟨 In progress · 🟦 Blocked · ✅ Done · ⛔ Retired
 
-**Last updated:** 2026-08-12 (**Session 34 — the manual-testing cycle the human reported is
+**Last updated:** 2026-08-12 (**Session 35 — the SECOND manual-testing cycle is closed; all 8
+findings shipped in one pass. 547 → 622 tests pass, 2 skipped, 0 failures.** New ADR **0056**
+(supersedes ADR-0055's "Rejected (1)", amends ADR-0053). **Alembic stays 0012 — no schema change,
+no migration, no new dependency.**
+⚠ **NO MODULE CHANGED STATUS.** Refinements inside modules already ✅ (M1 speech input, M7 follow-up,
+M13 storage, M14 presentation) plus three bug fixes. **M15 stays 🟨.**
+**⚠ One correction to the brief, recorded because it matters:** the finding said the phone read-back
+"currently auto-accepts after ~10 seconds". **It did not** — there was no timer on that panel at
+all; ADR-0053 deliberately required a tap. Verified by inspection before anything changed. The
+10-second window is therefore NEW behaviour, and the safety property ADR-0053 actually protected —
+that the patient can SEE and HEAR the number before it goes — is untouched.
+**Confirmation is now SPOKEN, everywhere (Findings 2 + 7).** ONE vocabulary and ONE parser serve the
+per-answer read-back and the final review. Two rules make it safe: an utterance is a verdict only
+when EVERY word in it is known, and where a YES word and a negation both appear NO wins — so
+`ঠিক আছে`→yes, `ঠিক নাই`/`আবার বলি`→no, and `আমার নাম রহিম না মানে রহিমা`→**ambiguous, ask again**.
+A verdict is routed before the clinical branches and is NEVER stored. Rejecting the review re-opens
+the EXISTING KIOSK-7 resume dock with an open correction question — no second pipeline. Buttons
+remain as the accessibility fallback.
+**ONE clock, in the portal header (Findings 1 + 8).** S34's clock lived inside the review layout, so
+it existed only on that screen and only while it was scrolled to the top. The header sits OUTSIDE
+`.screen` (the element that scrolls since ADR-0055 i), so it is top-right at all times, cannot be
+scrolled away from, and cannot overlap — it is a flex item and the row reserves its width. Both
+countdowns write it through one renderer with a per-countdown label. Measured consequence, and the
+answer to Finding 5's "first render jumps": **the clock appearing now shifts the review heading,
+title and grid by 0 pixels.**
+**Questions follow what is already collected (Finding 4).** `collected_context()` is the exact mirror
+of `missing_summary_fields()` (same keys, same `field_has_text`), plus prompt clauses forbidding
+re-asking anything in it or in PATIENT CONTEXT and asking for CLARIFICATION when something is vague.
+⚠ Deliberately NOT a decision system: it ranks nothing, names no condition, and does not choose the
+next field — the M6 gap list and the server-named field (ADR-0052) still own that. **Whether the
+model OBEYS is Tier 3 and is NOT claimed** (the ADR-0054 f rule).
+**TTS pacing, not a new TTS (Finding 6).** NEW `services/tts/prosody.py`: a sentence-final `।`/`.`
+and real commas where the text already implies a pause, applied ONCE in the service so the primary
+and the fallback read the identical line. ⚠ It may never change a WORD — the read-back sends the
+patient's own captured words down this path. Pitch/volume exposed but NEUTRAL.
+⚠ **ACOUSTIC QUALITY IS NOT TESTED AND NOT CLAIMED** — whether it sounds more natural is a human
+listening judgement.
+**Three defects found on the way, two by reasoning through the wiring and one by measurement:**
+S34's `hideAnswerConfirm()` in `toggleListening()` would have cleared the pending answer between the
+mic opening for the verdict and the word "হ্যাঁ" arriving (storing the verdict as the symptom);
+`setResumeMode()` cancelled the very microphone the new review approval had just armed; and at 375px
+the clock landed at the LEFT of the wrapped header row because the right-hand group exactly fills the
+line (320px of 319px available), so `margin-left:auto` had no free space.
+⚠ **STILL NO MICROPHONE, in any session** — and the stakes rose: **every answer and the final submit
+now pass through a spoken yes/no**, so what a real `bn-BD` recogniser returns for "হ্যাঁ" is the
+single most load-bearing unproven claim in the build.
+⛔ **Step S5 was NOT implemented** — `no_speech_ms` watchdog, `max_answer_ms` cap and
+permission/visibility recovery are all untouched. ADR-0056 also corrects ADR-0055 in passing: a
+spoken yes/no is **not** S5 content.
+Prior: 2026-08-12 (**Session 34 — the manual-testing cycle the human reported is
 CLOSED; all twelve phases shipped in one pass. 480 → 547 tests pass, 2 skipped, 0 failures.**
 New ADR **0055**. **Alembic stays 0012 — no schema change, no migration, no new dependency.**
 ⚠ **NO MODULE CHANGED STATUS.** Everything here is a refinement inside modules already ✅

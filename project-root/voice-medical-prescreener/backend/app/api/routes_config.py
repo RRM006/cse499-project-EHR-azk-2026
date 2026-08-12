@@ -29,6 +29,7 @@ def kiosk_config() -> KioskConfigOut:
         # S34 (ADR-0055): the spoken-answer read-back gate and the review auto-submit.
         answer_confirm=settings.voice_answer_confirm,
         review_timeout_ms=max(0, settings.voice_review_timeout_ms),
+        phone_confirm_ms=max(0, settings.voice_phone_confirm_ms),
         # Capability, not configuration: reports whether the engine is really installed.
         server_tts=server_tts_available(),
     )
