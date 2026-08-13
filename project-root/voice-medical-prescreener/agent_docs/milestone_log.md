@@ -6,7 +6,47 @@
 
 **Status keys:** ⬜ Not started · 🟨 In progress · 🟦 Blocked · ✅ Done · ⛔ Retired
 
-**Last updated:** 2026-08-13 (**Session 36 — the post-S35 hardening cycle is CLOSED; all seven items
+**Last updated:** 2026-08-13 (**Session 37 — the two STAFF portals were audited as ROLES and given
+the layers each role was missing. 723 → 767 tests pass, 2 skipped, 0 failures.** New ADRs
+**0058** (features + data ownership) and **0059** (the staff depth/motion layer). **Alembic stays
+0012 — `models.py` and `migrations/` are UNTOUCHED: no new table, no new column, no migration, no
+new dependency.** New reference doc: **`agent_docs/portal_roles.md`** — what each portal is for, the
+data-ownership matrix, and what was deliberately NOT built.
+⚠ **NO MODULE CHANGED STATUS.** The work lands inside **M14 (Doctor Dashboard)** and the medic side
+of the same staff layer, both already ✅; M13 storage is untouched. **M15 stays 🟨.**
+**MEDIC — an operations layer, all derived (ADR-0058):** the queue is now ordered by **urgency**
+(worst tier first, then longest wait) instead of newest-first, which had a Critical patient waiting
+40 minutes sorting BELOW a Low-risk one who submitted seconds ago; an **unassessed** case sorts
+between High and Medium, not last. Rows carry wait time, a red-flag chip and an intake-completeness
+meter. A **floor-load strip** shows waiting / critical / high / not-assessed / longest wait.
+⚠ **The clearest defect of the session:** the medic's vitals + identity editor lived ONLY on the
+post-referral screen, so the medic could record weight and BP only AFTER handing the case over —
+every case reached the doctor with none. The same endpoint and the same `patients` row now sit in
+the case workspace, before the referral. A new **handover check** reports what the doctor is about
+to be missing and is **ADVISORY — it can never block a forward**, because a Critical patient must
+reach a doctor with incomplete paperwork rather than wait for it. The referral is now attributed to
+the forwarding medic in `audit_log.actor_id` (it was the one staff write with no actor).
+**DOCTOR — a longitudinal layer (ADR-0058):** `prescriptions` was a **write-only table** — rows were
+created and nothing ever read one back, so a repeat medication was undetectable from inside the
+portal, and the doctor could see only the one visit in front of them. A **patient timeline** now
+shows prior visits and prior prescriptions from EVERY doctor. ⚠ It carries **no transcript** (a
+prior visit is opened through the existing `GET /api/visits/{uuid}` and read from the one immutable
+copy — rule #1) and it ranks, trends and interprets **nothing** (rule #2). Reviewing a case used to
+make it VANISH (the queue lists only `awaiting_doctor`), so a doctor who accepted a case and then
+wanted to write its prescription had no route back; the case now stays open, changes state, and a
+**Completed** scope lists their finished consultations.
+**UI/UX (ADR-0059):** `frontend_shared/motion.css`, staff portals only — depth, tier rails, a
+stagger that follows the triage ranking, skeleton loading rows, and role identity that stops the two
+portals reading as one screen (medic = amber `TRIAGE` desk, doctor = indigo `CLINICAL` workspace).
+⚠ **Accessibility outranks the effect:** every `animation` and `@keyframes` is inside
+`@media (prefers-reduced-motion: no-preference)`, proven by two tests that parse the shipped file,
+and nothing is conveyed by movement alone.
+⚠ **Real-microphone status, corrected (Phase 1 of the S37 brief):** the human has confirmed the
+real-mic run of the **S33-S36** voice changes **was carried out**. Recorded exactly that far —
+**no per-claim results were supplied and none are documented**, and no defects came back. Do NOT
+repeat "no microphone has exercised S33-S36" (no longer true) and do NOT upgrade the three specific
+S36 claims to "verified" (no evidence). S25's itemised evidence stands unchanged.
+Prior: 2026-08-13 (**Session 36 — the post-S35 hardening cycle is CLOSED; all seven items
 shipped in one pass. 622 → 723 tests pass, 2 skipped, 0 failures.** New ADR **0057**. **Alembic stays
 0012 — no schema change, no migration, no new dependency.**
 ⚠ **NO MODULE CHANGED STATUS.** Refinements inside modules already ✅ (M1 speech input, M7 follow-up,
@@ -630,7 +670,7 @@ DOCTOR-1..7 targets are now all built (final `context_fixed_problem` flips happe
 | 11 | Explainable AI (XAI) | ✅ | Every risk output has a plain-language reason listing the contributing factors. **Built** (`services/risk.py`, M11; deterministic fallback so no risk row is ever reason-less). |
 | 12 | Structured Clinical Report | ✅ | A full report (all sections) is generated and exportable as PDF + dashboard view; contains **no diagnosis**; includes a **Red Flags** section sourced from M10. **Built** (`services/report.py`, LOCAL assembly + disclaimer; shown in doctor portal). Per-visit `.docx` export of the summary report + raw transcript SHIPPED (S9 step 3, `visit_docx.py`); S12: summary_report carries the C1 possible-condition block + vitals and regenerates FRESH at download (ADR-0037). PDF still pending. |
 | 13 | EHR Database | ✅ | Transcripts, profiles, reports, and audit logs are stored and retrievable by patient ID/date; data encrypted. **Built** (all 15 tables, Alembic head `0009`; retrieval by phone + status; `audit_log` on every state change). Encryption-at-rest still pending. |
-| 14 | Doctor Dashboard | ✅ | Web UI shows report, risk, flags, XAI; doctor can override/annotate; high/critical cases alerted. **Built** (`frontend_doctor/`: queue, risk/red-flags/XAI panel, field edit, Override/Accept; S12: fully bilingual, ↻ Queue removed, print CSS. Medic side: C1 condition card + post-referral summary + .docx download, S12). |
+| 14 | Doctor Dashboard | ✅ | Web UI shows report, risk, flags, XAI; doctor can override/annotate; high/critical cases alerted. **Built** (`frontend_doctor/`: queue, risk/red-flags/XAI panel, field edit, Override/Accept; S12: fully bilingual, ↻ Queue removed, print CSS. Medic side: C1 condition card + post-referral summary + .docx download, S12). **S37 (ADR-0058/0059) — the two staff portals were audited as ROLES and given the layers each was missing:** medic = urgency-ordered queue + wait/red-flag/completeness on every row + floor-load strip + **vitals captured BEFORE the referral** (they had been recordable only after it) + an **advisory** handover check that can never block a forward + referral attribution in `audit_log`; doctor = **patient timeline + prescription history** (`prescriptions` had been a write-only table) + a **Completed** scope so a reviewed case stays reachable + review controls that hide once the case is reviewed. Plus `frontend_shared/motion.css` (depth/motion, staff-only, every animation behind `prefers-reduced-motion`). All views are **derived and read-only — no new table, no new column, Alembic still 0012**. Full role/ownership reference: `agent_docs/portal_roles.md`. |
 | 15 | Feedback & Continuous Learning | 🟨 | Doctor feedback is collected and usable to retrain/fine-tune; regression check before deploying updates. **Built** (feedback stored via `POST /api/visits/{uuid}/feedback`); retrain/regression pipeline still future. |
 
 ---

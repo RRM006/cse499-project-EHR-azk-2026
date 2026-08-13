@@ -4,7 +4,34 @@
 > re-exploring the whole project each session. Update it whenever you add or move
 > a folder/file. Keep each note to one line.
 
-**Last updated:** 2026-08-13 (**Session 36 — ONE new production file, SEVEN new test files, no
+**Last updated:** 2026-08-13 (**Session 37 — FIVE new production files + ONE new agent doc, THREE
+new test files, no schema change (Alembic stays 0012 — `db/models.py` and `migrations/` are
+UNTOUCHED), no dependency change.**
+
+**NEW in S37 — the two STAFF portals audited as ROLES (ADR-0058 features/ownership, ADR-0059 UI):**
+
+| File | What it is |
+|---|---|
+| `backend/app/services/triage.py` | **NEW.** The MEDIC's operational view, entirely DERIVED: `waiting_minutes()` (pins offset-less SQLite UTC first — subtracting naive from aware is a TypeError), `TIER_ORDER` (unassessed sorts BETWEEN high and medium), `triage_sort_key()`, `empty_field_keys()` / `human_verified_count()` (share M9's `field_has_text`), `handoff_checks()` (**advisory — can never block a forward**) and `queue_stats()`. Writes nothing. |
+| `backend/app/services/history.py` | **NEW.** The DOCTOR's longitudinal view: `patient_history()` assembles prior visits + prior prescriptions from existing rows. Carries **no transcript** (rule #1) and interprets nothing (rule #2). `_medicine_names()` survives any payload shape. Writes nothing. |
+| `backend/app/schemas/triage.py` | **NEW.** `HandoffOut` / `HandoffCheckOut` / `QueueStatsOut`. Codes on the wire, labels in the frontend (ADR-0030 f). |
+| `backend/app/schemas/history.py` | **NEW.** `PatientHistoryOut` / `HistoryVisitOut` / `HistoryPrescriptionOut`. |
+| `backend/app/api/routes_history.py` | **NEW.** `GET /api/patients/{id}/history` (read-only). Registered in `main.py`. |
+| `frontend_shared/motion.css` | **NEW.** Depth + motion for `/medic/` and `/doctor/` ONLY (the kiosk must not load it). Every `animation`/`@keyframes` sits inside `@media (prefers-reduced-motion: no-preference)`; role identity (`body.portal-medic` amber TRIAGE vs `body.portal-doctor` indigo CLINICAL); staff-only responsive breakpoints; pins the staff portals to the viewport so the two panes scroll independently. |
+| `agent_docs/portal_roles.md` | **NEW doc.** What each portal is for, per-role feature tables (existing vs S37), use cases, how the roles connect, the **data-ownership matrix**, and everything considered and deliberately NOT built with the reason. |
+
+**CHANGED in S37:** `api/routes_dashboard.py` (`scope` + `sort` params, `_queue_visits()` as the ONE
+queue definition, `GET /api/dashboard/stats`, `GET /api/visits/{uuid}/handoff`, assign records the
+forwarding medic) · `schemas/dashboard.py` (`DashboardItemOut` gains `waiting_minutes`,
+`fields_filled/total/verified`, `assigned_doctor_name`; `AssignRequest` gains optional `editor_id`) ·
+`main.py` (registers the history router) · `frontend_shared/staff.js` (skeleton/empty/error/search-miss
+states, `waitLabel()`, queue chips + tier rails, `setQueueScope()`) · `frontend_medic/index.html`
+(load strip, Intake & Vitals card BEFORE the referral, handover check, attributed forward) ·
+`frontend_doctor/index.html` (patient timeline + prescription history, Queue/Completed scope,
+review-state bar, `STATUS_LABELS`). **NEW tests:** `test_medic_triage.py` (18),
+`test_doctor_history.py` (10), `test_staff_portal_ui.py` (16).
+
+Prior: 2026-08-13 (**Session 36 — ONE new production file, SEVEN new test files, no
 schema change (Alembic stays 0012), no dependency change.**
 
 **NEW production file — `backend/app/services/question_tools.py`** (Finding 3). The session-scoped
@@ -531,7 +558,13 @@ voice-medical-prescreener/
 │   │                              #   staffLanguageRefresh() hook) — raw text re-rendered, never translated;
 │   │                              #   S12: renderConditionCard() (C1 — portals opt in via #condition-card mount;
 │   │                              #   the kiosk never has one)
-│   └── tts.js                    # speak() via speechSynthesis bn-BD (Step A1); text stays the fallback
+│   ├── tts.js                    # speak() via speechSynthesis bn-BD (Step A1); text stays the fallback
+│   └── motion.css                # NEW S37 (ADR-0059): depth/motion for the STAFF portals only (kiosk never
+│                                  #   loads it). Elevation ladder, .fx-card 3D lift, queue tier rails + wait/
+│                                  #   flag/meter chips, stat tiles, handover check rows, doctor timeline spine,
+│                                  #   skeletons, role identity (portal-medic amber TRIAGE / portal-doctor indigo
+│                                  #   CLINICAL), staff-only breakpoints, body pinned to 100vh (released in print).
+│                                  #   EVERY animation + @keyframes is inside prefers-reduced-motion:no-preference.
 ├── frontend_medic/index.html     # NEW medic portal (at /medic/): login→queue→verbatim+fields→Assign & Forward;
 │                                  #   S11: EN/বাংলা toggle (MEDIC-1), ↻ Refresh Queue (MEDIC-5), risk panel
 │                                  #   with C2 bands + override control (MEDIC-3); S12: #condition-card mount

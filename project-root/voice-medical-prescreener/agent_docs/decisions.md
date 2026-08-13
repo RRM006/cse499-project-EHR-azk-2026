@@ -1651,3 +1651,165 @@ separate, still-**unproven** question tracked in `current_task.md`.
   **is** proven for the S25-era flow (S25's human live run passed on Windows 11 + Chrome + a real
   mic). What is unproven is everything voice-related added SINCE, in S33-S36. Acoustic quality is likewise not claimed. Whether the M7 model OBEYS the bounded context
   is Tier-3 and is not claimed either; only the guard on its OUTPUT is.
+  > **UPDATE (S37, 2026-08-13):** the human has since confirmed that the **real-microphone run of
+  > the S33-S36 voice changes was carried out**, so "no microphone has exercised this" is no longer
+  > true. ⚠ Exactly that far and no further: **no per-claim results were supplied and none are
+  > recorded**, and no defects were reported back. So the three specific S36 claims above (what a
+  > real `bn-BD` recogniser returns for `সব ঠিক আছে` / `all right`, whether the eleven-digit stop
+  > fires at the right moment, and audibility) are **exercised but not itemised** — do not upgrade
+  > them to "verified" without evidence, and do not repeat the old "never exercised" phrasing either.
+
+---
+
+## ADR-0058 — 2026-08-13 — S37: the medic gets an OPERATIONS layer and the doctor a LONGITUDINAL one, both derived — no new table, no new column
+
+- Context: both staff portals were feature-complete against their original specs and had never been
+  examined as *roles*. Reading the real code (not the docs) turned up four gaps that are not
+  cosmetic, plus one architectural question — where does new staff data live? The rule the brief set,
+  and the rule this ADR adopts, is that a new staff view is **a different QUESTION asked of existing
+  rows**, never a new copy of them.
+
+- Decision (a) — **the medic queue is ordered by URGENCY, not by arrival.** `list_visits` returns
+  `started_at DESC`, so a Critical patient who submitted 40 minutes ago sorted BELOW a Low-risk
+  patient who submitted seconds ago. Triage order is worst tier first, then longest wait first
+  (FIFO fairness within a tier). `sort=recent` still selects the old ordering, and a **phone search
+  is never re-sorted** — that list is a patient's chronology, not a work list.
+- Decision (a2) — **an UNASSESSED case sorts between High and Medium**, not last. "We do not know
+  yet" is not "we know it is fine", and burying it under every Low row is how an unassessed
+  Critical gets found late. Pinned by a test on `TIER_ORDER` itself.
+- Decision (b) — **the queue row carries the three operational facts a medic needs before opening
+  the case**: how long the patient has waited, whether a red flag fired, and how much of the intake
+  is actually filled (`fields_filled` / `fields_total` / `fields_verified`). All THREE are computed
+  server-side from the predicates the rest of the system already uses — `empty_field_keys` shares
+  M9's `field_has_text` — so "7/10" on a row is the same arithmetic the kiosk resume loop was gated
+  on. The row must never derive urgency of its own; two places computing "how urgent" is precisely
+  the disagreement S35 spent a session removing.
+- Decision (c) — **vitals and identity are captured BEFORE the referral, not after.** This was the
+  session's clearest workflow defect and it was invisible in the docs: the medic's weight/BP/identity
+  editor existed only inside `renderPostReferral()`, i.e. on the screen shown AFTER the case had
+  already been forwarded. The doctor therefore received every case with no weight and no BP.
+  Nothing about the data moved — the same `PATCH /patients/{id}/vitals`, the same `patients` row,
+  the same audit action. Only the moment moved.
+- Decision (d) — **the handoff check is ADVISORY and can never block a referral.**
+  `GET /visits/{uuid}/handoff` reports what the doctor is about to be missing (`warn` = a medic
+  could still supply it; `info` = context). The assign route does not consult it and must not:
+  **a medic has to be able to push a Critical patient to a doctor immediately, incomplete paperwork
+  and all.** Gating triage on data completeness would make the system less safe, not more. Two tests
+  pin this — one behavioural (a not-ready case still forwards) and one static (the readiness is not
+  referenced before the POST inside `submitForward`).
+- Decision (d2) — **a red flag is `info`, never `warn`.** It is the model's finding about the
+  patient, not paperwork a medic can complete, so it must never make a case read as "not ready".
+- Decision (e) — **the doctor gets the patient's prior encounters and prior prescriptions.** Every
+  row already existed and nothing ever read it back; `prescriptions` was a **write-only table**, so
+  a repeat medication was undetectable from inside the portal. `GET /patients/{id}/history` returns
+  visits + prescriptions, newest first, and prescriptions from **every** doctor — a repeat is only
+  detectable if the other doctor's prescription is visible too. The patient owns their medication
+  history; no single doctor does.
+- Decision (e2) — **the history carries NO transcript (rule #1).** A prior visit is opened through
+  the existing `GET /api/visits/{uuid}` and read from the one immutable copy. A summarised history
+  row would be a second, lossy rendering of the patient's words. Pinned by a test.
+- Decision (e3) — **the history interprets nothing (rule #2).** Two visits with the same complaint
+  are two rows with two dates. It ranks nothing, trends nothing and names no condition.
+- Decision (f) — **a reviewed case stays reachable.** `POST /review` used to end with the case being
+  dropped from the workspace, and since the doctor queue lists only `awaiting_doctor` the case then
+  had no route back except a phone search — while writing the prescription AFTER accepting is the
+  normal clinical order. Now the case stays open and changes state, the review controls are replaced
+  by a statement of what happened (`POST /review` would 409 on a reviewed visit), the prescription
+  form stays available, and `scope=recent` lists the doctor's completed consultations.
+- Decision (f2) — **`scope=recent` requires `doctor_id` and 400s without it.** A completed-
+  consultation list is personal; served unfiltered it would hand every doctor's finished cases to
+  whoever asked.
+- Decision (g) — **the referral is attributed to the forwarding medic.** `AssignRequest.editor_id`
+  is optional (walk-in/dev callers never had an editor) and lands in `audit_log.actor_id`. This was
+  the one staff write that recorded who RECEIVED a case and never who sent it. An unknown or
+  non-staff `editor_id` is a 403 — a wrong actor in an audit trail is worse than no actor.
+- Decision (h) — **DATA OWNERSHIP: nothing new is stored.** `models.py` and `migrations/` are
+  untouched; Alembic head stays **0012**. Every S37 view is read-only and resolves identity per
+  request (a test renames a patient and a doctor and asserts the queue changes immediately, which is
+  what proves nothing cached an identity it does not own). A second behavioural test asserts that
+  calling every new endpoint creates ZERO rows across six tables.
+
+- Rejected (1) — **a `forwarded_by` column on visits, and a medic "recent" list.** Nothing records
+  which medic forwarded a case, so a medic completed-list would either show every medic's work as
+  one person's or need a new column to invent the attribution. `scope=recent` for `role=medic` is
+  therefore a **400 with the reason in the message**, not a guess. The cheaper half of the same need
+  — knowing who forwarded — is met by decision (g), which spends an existing nullable column instead
+  of a migration.
+- Rejected (2) — **a `verified` flag per summary field.** A medic cannot currently record "I read
+  this and it is correct" without editing the value. It is a real gap, but it needs new per-field
+  state and a new UI vocabulary, and `source == 'human'` already carries a usable weaker signal
+  (`fields_verified`). Deferred rather than half-built.
+- Rejected (3) — **blocking the forward on readiness.** See decision (d): unsafe.
+- Rejected (4) — **a numeric triage SCORE.** The queue ranks by tier + wait, both of which a human
+  can see on the row and check. A blended score would be a new number nobody could verify, and it
+  would collide with decision C2 (no per-case percentages are generated or stored).
+- Rejected (5) — **caching the wait/completeness onto the visit row.** It is one JSON read per row
+  already loaded for the queue. Storing it would create the second source of truth this ADR exists
+  to avoid, and it would go stale the moment a medic edits a field.
+- Rejected (6) — **duplicating vitals editing away from the doctor.** The doctor's DOCTOR-3 vitals
+  card stays. Medic and doctor write the SAME `patients` row through the SAME endpoint at two
+  different moments of one workflow — that is one source of truth used twice, not duplication.
+
+- Status: Accepted (S37, 2026-08-13). Suite 723 → 767. No migration, no new dependency.
+
+---
+
+## ADR-0059 — 2026-08-13 — S37: a shared depth/motion layer for the STAFF portals, with accessibility as the outranking rule
+
+- Context: the two staff portals were flat, and the brief asked for a modern 3D/animated clinical
+  UI that stays professional, readable, fast and usable in a real clinic. The risk in that request
+  is obvious — decorative motion in a medical tool is a hazard, not a feature.
+
+- Decision (a) — **`frontend_shared/motion.css`, loaded by `/medic/` and `/doctor/` only, AFTER
+  shared.css.** The patient kiosk deliberately does not load it: its motion language is the avatar
+  and the countdown, and a clinic kiosk on old hardware must not pay for staff chrome. A test
+  asserts the kiosk does not link it, and that both portals load it after `shared.css` (several
+  rules override shared.css defaults and would lose the cascade otherwise).
+- Decision (b) — **accessibility outranks the effect.** Every `animation` declaration and every
+  `@keyframes` lives inside `@media (prefers-reduced-motion: no-preference)`, so a user whose OS
+  asks for less motion gets a completely static portal with identical layout, colour and
+  information. **Nothing is conveyed by movement alone** — every animated cue also has a colour, an
+  icon or a number. Two tests parse the shipped stylesheet and prove the containment, because a
+  single stray `animation:` breaks the promise while still looking right to the author.
+- Decision (c) — **only composited properties are animated** (`transform`, `opacity`, plus
+  `box-shadow` / `background-position` in the shadow and shimmer keyframes), durations 120-320ms,
+  and the "3D" is real CSS `perspective` on flat clinical cards — no canvas, no WebGL, no 3D
+  geometry. The project's hardware constraint is a standing rule (CPU-only, integrated graphics),
+  and animating layout properties on a 50-row queue is exactly what would make the portal feel slow.
+  A test enumerates the properties inside each keyframe block.
+- Decision (d) — **motion must mean something.** Depth = interactivity (a card that lifts opens);
+  entrance/stagger = arrival AND order (the queue's stagger follows the triage ranking); a pop = a
+  number that changed; and a repeating pulse is reserved for **urgency alone** (the red-flag chip is
+  the only looping animation in the file).
+- Decision (e) — **the two portals must not read as one screen.** Medic = operations desk (amber
+  header edge, a `TRIAGE` chip, a load strip, a queue that ranks). Doctor = clinical workspace
+  (indigo edge, a `CLINICAL` chip, a timeline spine, calmer motion, a Queue/Completed segmented
+  control). A test asserts both role classes and both chips exist, and that neither portal contains
+  the other's endpoints.
+- Decision (f) — **the staff portals are pinned to the viewport** (`height: 100vh; overflow:
+  hidden`), released again under `@media print`. shared.css sets only `min-height: 100vh`, so a long
+  case grew the whole page instead of the two panes scrolling independently — measured, the queue
+  sidebar had stretched to **3,399px** and scrolled out of reach while a doctor read a case, which
+  defeats the entire point of `overflow-y: auto` on both panes.
+- Decision (g) — **narrow screens are handled in this layer, not in shared.css.** `.staff-grid` is a
+  fixed `340px 1fr` with no breakpoint, so at 768px the queue took 340px and left 413px for the
+  whole clinical workspace; below 900px the panes now stack. A handful of `!important` overrides
+  relax specific INLINE pixel widths (a 280px search box, a 220px doctor picker) — inline styles
+  outrank every selector, so that is the only way to fix them without unpicking markup that is
+  correct on the desktop screens these portals actually run on. Measured at 375px: no page-level
+  horizontal scroll and no overflowing element, in both languages.
+- Decision (h) — **the tier rail survives selection.** shared.css paints the active row
+  `border-left: 4px solid var(--secondary-color)`, which repainted the tier rail teal the moment a
+  medic selected the case (measured: a Critical row went #EF4444 → #0D9488 on click). On a triage
+  board the tier must outlive selection, so the colour is restored and selection is signalled by the
+  lift, the tint and a right-hand edge instead.
+
+- Rejected (1) — **a 3D library / WebGL / animated 3D objects.** Cost with no clinical benefit, on
+  hardware that has no discrete GPU.
+- Rejected (2) — **animating the queue's REORDER (FLIP).** Rows would move under a medic's cursor
+  while they reach for one. The ranking is communicated by position, rail colour and badge instead.
+- Rejected (3) — **a global `prefers-reduced-motion: reduce` override block.** Guarding the
+  animations positively (`no-preference`) makes the static version the DEFAULT rather than a
+  correction applied afterwards, and it is mechanically checkable.
+
+- Status: Accepted (S37, 2026-08-13).

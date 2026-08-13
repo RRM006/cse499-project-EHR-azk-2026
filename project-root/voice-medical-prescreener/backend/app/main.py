@@ -20,6 +20,7 @@ from backend.app.api.routes_tts import router as tts_router
 from backend.app.api.routes_documents import router as documents_router
 from backend.app.api.routes_dashboard import router as dashboard_router
 from backend.app.api.routes_followup import router as followup_router
+from backend.app.api.routes_history import router as history_router
 from backend.app.api.routes_prescription import router as prescription_router
 from backend.app.api.routes_report import router as report_router
 from backend.app.api.routes_risk import router as risk_router
@@ -68,6 +69,7 @@ app.include_router(documents_router)
 app.include_router(visits_router)
 app.include_router(visit_documents_router)
 app.include_router(followup_router)
+app.include_router(history_router)
 app.include_router(risk_router)
 app.include_router(dashboard_router)
 app.include_router(report_router)

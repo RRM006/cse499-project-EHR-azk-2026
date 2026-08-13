@@ -20,34 +20,133 @@ const STAFF_FIELD_LABELS = {
 
 let currentCase = null;   // { uuid, detail, profile }
 let lastQueueItems = [];  // kept so the queue re-renders on language toggle
+let queueLoadedOnce = false;  // S37: skeletons only before the FIRST paint
+
+/* S37 — which list the sidebar is showing. 'queue' is the working list; 'recent' is
+   the doctor's own completed consultations (ADR-0058). The medic has no 'recent'
+   (nothing attributes a referral to an individual medic) and the server refuses it,
+   so this only ever leaves 'queue' in the doctor portal. */
+let queueScope = 'queue';
+
+function setQueueScope(scope) {
+  queueScope = scope;
+  queueLoadedOnce = false;   // a scope change is a new list, so show its skeleton
+  loadQueue();
+}
 
 async function loadQueue() {
-  const params = new URLSearchParams({ role: PORTAL.role });
+  const params = new URLSearchParams({ role: PORTAL.role, scope: queueScope });
   if (PORTAL.role === 'doctor' && PORTAL.userId) params.set('doctor_id', PORTAL.userId);
-  const items = await api('GET', `/api/dashboard?${params}`);
-  renderQueue(items);
+  if (!queueLoadedOnce) renderQueueSkeleton();
+  try {
+    const items = await api('GET', `/api/dashboard?${params}`);
+    queueIsSearchResult = false;
+    renderQueue(items);
+  } catch (e) {
+    // Handled here rather than re-thrown: loadQueue runs on a 15s timer and from
+    // several callers, and an unhandled rejection in a timer is invisible to staff.
+    // The failure is shown IN the sidebar, where the missing list actually is.
+    queueLoadedOnce = true;
+    renderQueueMessage(t('Could not load the queue.', 'তালিকা লোড করা যায়নি।'), e.message);
+    return;
+  }
+  if (typeof onQueueLoaded === 'function') onQueueLoaded(lastQueueItems);
 }
+
+/* S37 — a processing state that says "fetching", not "empty". Without it the first
+   paint of a slow queue is indistinguishable from a clinic with no patients. */
+function renderQueueSkeleton() {
+  const box = document.getElementById('queue-list');
+  if (!box) return;
+  box.innerHTML = Array.from({ length: 4 }, () =>
+    `<div class="skeleton-row">
+       <div class="skeleton skeleton-line" style="width:42%;"></div>
+       <div class="skeleton skeleton-line" style="width:70%;"></div>
+       <div class="skeleton skeleton-line" style="width:55%; margin-bottom:0;"></div>
+     </div>`).join('');
+}
+
+function renderQueueMessage(title, detail, glyphChar) {
+  const box = document.getElementById('queue-list');
+  if (!box) return;
+  box.innerHTML = '';
+  const wrap = document.createElement('div');
+  wrap.className = 'empty-state';
+  const glyph = document.createElement('div');
+  glyph.className = 'glyph';
+  glyph.textContent = glyphChar || (detail ? '⚠️' : '✅');
+  const head = document.createElement('div');
+  head.style.cssText = 'font-weight:600; font-size:.86rem;';
+  head.textContent = title;
+  wrap.appendChild(glyph);
+  wrap.appendChild(head);
+  if (detail) {
+    const sub = document.createElement('div');
+    sub.style.cssText = 'font-size:.78rem;';
+    sub.textContent = detail;      // server text — textContent only
+    wrap.appendChild(sub);
+  }
+  box.appendChild(wrap);
+}
+
+/* S37 — minutes -> a short, tabular label. Bands are clinical judgement, not
+   animation: >=15 min amber, >=30 min red (the tier still outranks both). */
+function waitLabel(minutes) {
+  if (minutes === null || minutes === undefined) return null;
+  const band = minutes >= 30 ? 'late' : (minutes >= 15 ? 'warn' : '');
+  if (minutes < 60) return { text: `${minutes}${t('m', 'মি')}`, band };
+  const h = Math.floor(minutes / 60);
+  const m = minutes % 60;
+  if (h < 48) {
+    return { text: m ? `${h}${t('h', 'ঘ')} ${m}${t('m', 'মি')}` : `${h}${t('h', 'ঘ')}`, band };
+  }
+  // Beyond two days, hours stop being readable: a demo/dev row can legitimately
+  // show "536h 50m", which no one parses. Days + hours is the same fact, legibly.
+  const d = Math.floor(h / 24);
+  const rh = h % 24;
+  return { text: rh ? `${d}${t('d', 'দি')} ${rh}${t('h', 'ঘ')}` : `${d}${t('d', 'দি')}`, band };
+}
+
+/* S37: which question the current list answers. A phone search that finds nothing
+   is a search miss, not an empty clinic — saying "no cases in the queue" there told
+   staff the wrong thing about their own workload. */
+let queueIsSearchResult = false;
 
 async function searchPhone() {
   const phone = document.getElementById('phone-search').value.trim();
   if (!phone) return loadQueue();
   try {
-    renderQueue(await api('GET', `/api/dashboard?phone=${encodeURIComponent(phone)}`));
+    const items = await api('GET', `/api/dashboard?phone=${encodeURIComponent(phone)}`);
+    queueIsSearchResult = true;
+    renderQueue(items);
   } catch (e) { showError(e.message); }
 }
 
 function renderQueue(items) {
   lastQueueItems = items;
+  queueLoadedOnce = true;
   const box = document.getElementById('queue-list');
   box.innerHTML = '';
   document.getElementById('queue-count').textContent = items.length;
   if (!items.length) {
-    box.innerHTML = `<div style="padding:20px; color:var(--text-muted); font-size:.85rem;">${t('No cases in the queue.', 'তালিকায় কোনো কেস নেই।')}</div>`;
+    renderQueueMessage(
+      queueIsSearchResult
+        ? t('No patient found for that number.', 'ঐ নম্বরে কোনো রোগী পাওয়া যায়নি।')
+        : (queueScope === 'recent'
+            ? t('No completed consultations yet.', 'এখনো কোনো সম্পন্ন পরামর্শ নেই।')
+            : t('No cases in the queue.', 'তালিকায় কোনো কেস নেই।')),
+      null,
+      queueIsSearchResult ? '🔍' : '✅');
     return;
   }
-  items.forEach((item) => {
+  items.forEach((item, idx) => {
     const div = document.createElement('div');
-    div.className = 'queue-item' + (currentCase && currentCase.uuid === item.visit_uuid ? ' active' : '');
+    // S37: the tier is on the row itself (a colour rail) as well as in the badge,
+    // so the ranking is legible while scrolling, not only when reading each row.
+    div.className = 'queue-item fx-queue tier-' + (item.tier || 'none')
+      + (currentCase && currentCase.uuid === item.visit_uuid ? ' active' : '');
+    div.style.setProperty('--i', idx);
+    div.tabIndex = 0;   // the queue is keyboard-reachable, like every other control
     // P2-1: always Bangladesh time (shared.js dhakaTime pins offset-less UTC
     // strings to UTC first — the old bare new Date() read them as local time).
     // P3-1: a queue row's time is the patient's SUBMISSION moment; started_at
@@ -55,14 +154,64 @@ function renderQueue(items) {
     const when = dhakaTime(item.submitted_at || item.started_at);
     div.innerHTML =
       `<div class="queue-item-meta"><span>${when}</span>${tierBadge(item.tier)}</div>` +
-      `<div class="queue-item-name"></div><div class="queue-item-problem"></div>`;
+      `<div class="queue-item-name"></div><div class="queue-item-problem"></div>` +
+      `<div class="queue-chips"></div>`;
     div.querySelector('.queue-item-name').textContent =
       item.patient_name || item.patient_phone
       || `${t('Visit', 'ভিজিট')} ${item.visit_uuid.slice(0, 8)}`;
     div.querySelector('.queue-item-problem').textContent = item.main_problem || item.summary || '—';
+    renderQueueChips(div.querySelector('.queue-chips'), item);
     div.onclick = () => openCase(item.visit_uuid);
+    div.onkeydown = (e) => {
+      if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); openCase(item.visit_uuid); }
+    };
     box.appendChild(div);
   });
+}
+
+/* S37 — the three operational facts a staff member needs BEFORE opening a case:
+   how long this patient has waited, whether a red flag fired, and how much of the
+   intake is actually filled in. All three are server-derived (ADR-0058); nothing
+   here recomputes them, so a row can never disagree with the case it opens. */
+function renderQueueChips(box, item) {
+  if (!box) return;
+  box.innerHTML = '';
+
+  const wait = waitLabel(item.waiting_minutes);
+  if (wait) {
+    const chip = document.createElement('span');
+    chip.className = 'wait-chip' + (wait.band ? ' ' + wait.band : '');
+    chip.textContent = `⏱ ${wait.text}`;
+    chip.title = t('Waiting since the patient submitted', 'রোগী জমা দেওয়ার পর থেকে অপেক্ষা');
+    box.appendChild(chip);
+  }
+
+  if (item.red_flags && item.red_flags.length) {
+    const flag = document.createElement('span');
+    // Pulses ONLY here: urgency is the one thing worth repeating motion for.
+    flag.className = 'flag-chip pulse';
+    flag.textContent = `▲ ${t('Red flag', 'বিপদ সংকেত')}`;
+    flag.title = item.red_flags.join(', ');   // attribute, never innerHTML
+    box.appendChild(flag);
+  }
+
+  const total = item.fields_total || 10;
+  const filled = item.fields_filled || 0;
+  const meter = document.createElement('span');
+  meter.className = 'meter';
+  meter.title = t('Pre-screening fields with an answer', 'উত্তরসহ প্রাক-পরীক্ষার ঘর');
+  const track = document.createElement('span');
+  track.className = 'meter-track';
+  const fill = document.createElement('span');
+  fill.className = 'meter-fill' + (filled >= total ? ' full' : (filled <= total / 2 ? ' low' : ''));
+  fill.style.width = `${Math.round((filled / total) * 100)}%`;
+  track.appendChild(fill);
+  const num = document.createElement('span');
+  num.className = 'meter-num';
+  num.textContent = `${filled}/${total}`;
+  meter.appendChild(track);
+  meter.appendChild(num);
+  box.appendChild(meter);
 }
 
 async function openCase(uuid) {
@@ -72,7 +221,13 @@ async function openCase(uuid) {
     try { profile = await api('GET', `/api/visits/${uuid}/profile`); } catch (_) {}
     currentCase = { uuid, detail, profile };
     document.getElementById('no-case').style.display = 'none';
-    document.getElementById('case-detail').style.display = 'flex';
+    const panel = document.getElementById('case-detail');
+    panel.style.display = 'flex';
+    // S37: re-trigger the entrance so switching cases reads as a NEW case arriving
+    // rather than the same panel silently swapping its text.
+    panel.classList.remove('fx-in');
+    void panel.offsetWidth;   // force reflow so the animation restarts
+    panel.classList.add('fx-in');
     renderVerbatim(detail);
     renderConditionCard(profile);
     renderFields(profile);

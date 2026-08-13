@@ -1,0 +1,385 @@
+/* S37 (ADR-0059) — depth + motion layer for the two STAFF portals.
+   Loaded AFTER shared.css by /medic/ and /doctor/ only. The patient kiosk does not
+   load this file: its motion language is the avatar and the countdown, and a clinic
+   kiosk running on an old machine must not pay for staff chrome.
+
+   Three rules this file is built on, in order of authority:
+
+   1. ACCESSIBILITY OUTRANKS THE EFFECT. Every animation here is inside the
+      `@media (prefers-reduced-motion: no-preference)` guard at the bottom, so a
+      user who has asked their OS for less motion gets a completely static portal
+      with identical layout, colour and information. Nothing is *conveyed* by
+      movement alone — every animated cue also has a colour, an icon or a number.
+
+   2. MOTION MUST MEAN SOMETHING. Depth encodes interactivity (a card that lifts is
+      a card you can open), entrance encodes arrival (a new patient in the queue),
+      and a pulse encodes urgency (a red flag). Nothing moves for decoration.
+
+   3. IT MUST STAY FAST ON THE PROJECT'S HARDWARE. Only `transform` and `opacity`
+      are animated — both composited, neither triggering layout — and durations stay
+      at 120-320ms. No 3D geometry, no canvas, no WebGL: the "3D" here is real
+      perspective on flat clinical cards, which is what reads as depth on a screen a
+      medic glances at, and it costs nothing on integrated graphics.
+
+   Role separation lives here too (see the last section): the medic portal is an
+   OPERATIONS board (amber urgency, wait clocks, a queue that ranks) and the doctor
+   portal is a CLINICAL workspace (indigo depth, a timeline spine, calmer motion).
+   The two must never look like the same screen with a different title. */
+
+:root {
+  /* Elevation ladder — one shadow per depth so cards can't invent their own. */
+  --elev-1: 0 1px 2px rgba(13, 63, 60, .06), 0 1px 3px rgba(13, 63, 60, .05);
+  --elev-2: 0 4px 10px -2px rgba(13, 63, 60, .10), 0 2px 4px -2px rgba(13, 63, 60, .06);
+  --elev-3: 0 14px 28px -8px rgba(13, 63, 60, .18), 0 6px 12px -6px rgba(13, 63, 60, .10);
+  --elev-focus: 0 0 0 3px rgba(20, 184, 166, .22);
+
+  --dur-fast: 130ms;
+  --dur-base: 200ms;
+  --dur-slow: 320ms;
+  /* Slight overshoot: it reads as physical without looking playful. */
+  --ease-out: cubic-bezier(.22, .86, .36, 1);
+
+  --rail-critical: var(--danger-color);
+  --rail-high: #C2410C;
+  --rail-medium: var(--warning-color);
+  --rail-low: var(--accent-color);
+  --rail-none: var(--border-color);
+}
+
+/* ------------------------------------------------------------------ *
+ * 1. Depth primitives
+ * ------------------------------------------------------------------ */
+
+/* Perspective lives on the CONTAINER so sibling cards share one vanishing point.
+   Applied per-scroller rather than on <body>, which would make the whole page a
+   containing block and break the doctor portal's fixed assistant panel. */
+.fx-scene { perspective: 1400px; perspective-origin: 50% 0%; }
+
+/* The staff layout is a two-pane workspace: the queue and the case are meant to
+   scroll INDEPENDENTLY, which is the entire reason `.queue-sidebar` and
+   `.detail-workspace` carry `overflow-y: auto`. shared.css only sets
+   `min-height: 100vh` on body, so a long case grew the whole page instead — the
+   sidebar stretched to 3,399px and the queue scrolled away while a doctor read
+   the case. Pinning the staff portals to the viewport is what makes those two
+   existing scrollers actually do their job. */
+body.portal-medic, body.portal-doctor { height: 100vh; overflow: hidden; }
+
+/* ...except on paper, where clipping to one screen would truncate the case.
+   DOCTOR-7's print rules already flatten the panes; this releases the height. */
+@media print {
+  body.portal-medic, body.portal-doctor { height: auto; overflow: visible; }
+}
+
+.fx-card {
+  transition: transform var(--dur-base) var(--ease-out),
+              box-shadow var(--dur-base) var(--ease-out);
+  transform-style: preserve-3d;
+  will-change: transform;
+}
+.fx-card:hover { transform: translate3d(0, -2px, 12px); box-shadow: var(--elev-3); }
+/* Press: the card goes back INTO the screen — the physical answer to a click. */
+.fx-card:active { transform: translate3d(0, 0, 2px); box-shadow: var(--elev-1); }
+
+/* Keyboard users get the same affordance, without a hover they cannot trigger. */
+.fx-card:focus-visible {
+  outline: none;
+  box-shadow: var(--elev-3), var(--elev-focus);
+  transform: translate3d(0, -2px, 12px);
+}
+
+.fx-lift { transition: transform var(--dur-fast) var(--ease-out), box-shadow var(--dur-fast) var(--ease-out); }
+.fx-lift:hover:not(:disabled) { transform: translateY(-1px); box-shadow: var(--elev-2); }
+.fx-lift:active:not(:disabled) { transform: translateY(1px); box-shadow: none; }
+
+/* ------------------------------------------------------------------ *
+ * 2. Queue rows — the medic's primary surface
+ * ------------------------------------------------------------------ */
+
+.queue-item {
+  position: relative;
+  overflow: hidden;
+  /* The rail is the tier, encoded as colour AND position. */
+  border-left: 4px solid var(--rail, var(--rail-none));
+  transition: background var(--dur-fast) var(--ease-out),
+              transform var(--dur-fast) var(--ease-out),
+              box-shadow var(--dur-fast) var(--ease-out);
+}
+.queue-item:hover { transform: translateX(3px); box-shadow: var(--elev-2); z-index: 1; }
+.queue-item.active {
+  /* shared.css paints the active row `border-left: 4px solid var(--secondary-color)`,
+     which repaints the tier rail teal the moment a medic SELECTS the case — measured:
+     a Critical row went from #EF4444 to #0D9488 on click. On a triage board the tier
+     must survive selection, so the colour is restored here and selection is signalled
+     by the lift, the tint and the right-hand edge instead. */
+  border-left-color: var(--rail, var(--secondary-color));
+  border-left-width: 4px;
+  transform: translateX(5px);
+  box-shadow: var(--elev-2);
+}
+/* Active row: a moving edge on the right, so "which case am I in" survives even
+   when the row scrolls near an equally teal neighbour. */
+.queue-item.active::after {
+  content: '';
+  position: absolute; inset: 0 0 0 auto; width: 3px;
+  background: var(--secondary-color);
+}
+.queue-item.tier-critical { --rail: var(--rail-critical); }
+.queue-item.tier-high     { --rail: var(--rail-high); }
+.queue-item.tier-medium   { --rail: var(--rail-medium); }
+.queue-item.tier-low      { --rail: var(--rail-low); }
+
+.queue-chips { display: flex; gap: 6px; align-items: center; flex-wrap: wrap; margin-top: 7px; }
+
+.wait-chip {
+  display: inline-flex; align-items: center; gap: 4px;
+  font-size: .68rem; font-weight: 700; padding: 2px 7px; border-radius: 999px;
+  background: #ECF5F3; color: var(--text-muted); border: 1px solid var(--border-color);
+  font-variant-numeric: tabular-nums;
+}
+/* Wait bands are a JUDGEMENT the medic makes, so they are coloured, not animated:
+   an amber clock is readable in a glance and in a screenshot. */
+.wait-chip.warn { background: #FFFBEB; color: #B45309; border-color: #FDE68A; }
+.wait-chip.late { background: #FEF2F2; color: var(--danger-color); border-color: #FECACA; }
+
+.flag-chip {
+  display: inline-flex; align-items: center; gap: 4px;
+  font-size: .66rem; font-weight: 800; padding: 2px 7px; border-radius: 999px;
+  background: #FEF2F2; color: var(--danger-color); border: 1px solid #FECACA;
+  text-transform: uppercase; letter-spacing: .02em;
+}
+
+/* Intake completeness — a bar the medic reads without opening the case. */
+.meter { display: inline-flex; align-items: center; gap: 6px; font-size: .68rem; color: var(--text-muted); }
+.meter-track {
+  width: 62px; height: 5px; border-radius: 999px; background: #E2EFEC; overflow: hidden;
+}
+.meter-fill {
+  height: 100%; border-radius: 999px; background: var(--secondary-color);
+  transform-origin: left center;
+  transition: width var(--dur-slow) var(--ease-out), background var(--dur-base) linear;
+}
+.meter-fill.low  { background: var(--warning-color); }
+.meter-fill.full { background: var(--accent-color); }
+.meter-num { font-weight: 700; font-variant-numeric: tabular-nums; }
+
+/* ------------------------------------------------------------------ *
+ * 3. Stats strip (medic) — load at a glance
+ * ------------------------------------------------------------------ */
+
+.stat-strip { display: flex; gap: 10px; flex-wrap: wrap; }
+.stat-tile {
+  flex: 1 1 108px; min-width: 96px;
+  background: var(--bg-white); border: 1px solid var(--border-color);
+  border-radius: var(--radius); padding: 10px 12px;
+  box-shadow: var(--elev-1);
+  transition: transform var(--dur-base) var(--ease-out), box-shadow var(--dur-base) var(--ease-out);
+}
+.stat-tile:hover { transform: translateY(-2px); box-shadow: var(--elev-2); }
+.stat-value {
+  font-size: 1.45rem; font-weight: 800; line-height: 1.1; color: var(--primary-color);
+  font-variant-numeric: tabular-nums;
+}
+.stat-label { font-size: .68rem; font-weight: 700; text-transform: uppercase; color: var(--text-muted); letter-spacing: .03em; }
+.stat-tile.alert { border-color: #FECACA; background: #FFF8F8; }
+.stat-tile.alert .stat-value { color: var(--danger-color); }
+.stat-tile.warn { border-color: #FDE68A; background: #FFFDF5; }
+.stat-tile.warn .stat-value { color: #B45309; }
+
+/* ------------------------------------------------------------------ *
+ * 4. Handoff readiness (medic) + status transitions
+ * ------------------------------------------------------------------ */
+
+.check-row {
+  display: flex; gap: 10px; align-items: flex-start;
+  padding: 8px 12px; border-radius: 8px; font-size: .85rem;
+  background: var(--bg-main); border: 1px solid var(--border-color);
+}
+.check-row.warn { background: #FFFBEB; border-color: #FDE68A; color: #92400E; }
+.check-row.info { background: #F4FAF8; }
+.check-icon { font-size: .95rem; line-height: 1.4; }
+.check-detail { font-size: .76rem; color: var(--text-muted); margin-top: 2px; word-break: break-word; }
+
+.ready-pill {
+  display: inline-flex; align-items: center; gap: 6px;
+  font-size: .72rem; font-weight: 800; text-transform: uppercase;
+  padding: 4px 10px; border-radius: 999px;
+  background: #ECFDF5; color: var(--accent-color); border: 1px solid #D1FAE5;
+}
+.ready-pill.not-ready { background: #FFFBEB; color: #B45309; border-color: #FDE68A; }
+
+/* ------------------------------------------------------------------ *
+ * 5. Timeline (doctor) — the visit history spine
+ * ------------------------------------------------------------------ */
+
+.timeline { position: relative; padding-left: 26px; display: flex; flex-direction: column; gap: 12px; }
+.timeline::before {
+  content: ''; position: absolute; left: 8px; top: 6px; bottom: 6px; width: 2px;
+  background: linear-gradient(180deg, var(--secondary-color), var(--border-color));
+  border-radius: 2px;
+}
+.tl-entry { position: relative; }
+.tl-entry::before {
+  content: ''; position: absolute; left: -22px; top: 14px;
+  width: 10px; height: 10px; border-radius: 50%;
+  background: var(--bg-white); border: 2px solid var(--secondary-color);
+  transition: transform var(--dur-base) var(--ease-out), background var(--dur-base) linear;
+}
+.tl-entry.is-current::before { background: var(--secondary-color); transform: scale(1.35); }
+.tl-entry.tier-critical::before { border-color: var(--danger-color); }
+.tl-entry.tier-high::before { border-color: var(--rail-high); }
+
+.tl-card {
+  background: var(--bg-white); border: 1px solid var(--border-color);
+  border-radius: var(--radius); padding: 12px 14px; box-shadow: var(--elev-1);
+  display: flex; flex-direction: column; gap: 6px;
+}
+.tl-head { display: flex; justify-content: space-between; align-items: center; gap: 10px; flex-wrap: wrap; }
+.tl-date { font-size: .78rem; font-weight: 700; color: var(--primary-color); font-variant-numeric: tabular-nums; }
+.tl-problem { font-size: .9rem; }
+.tl-meta { font-size: .74rem; color: var(--text-muted); }
+.rx-line {
+  display: flex; gap: 8px; align-items: baseline; flex-wrap: wrap;
+  font-size: .8rem; padding: 7px 10px; border-radius: 8px;
+  background: #F4FAF8; border-left: 3px solid var(--secondary-color);
+}
+.rx-meds { color: var(--text-main); font-weight: 600; }
+
+/* ------------------------------------------------------------------ *
+ * 6. Loading + empty states
+ * ------------------------------------------------------------------ */
+
+.skeleton {
+  background: linear-gradient(90deg, #E8F3F0 25%, #F4FAF8 37%, #E8F3F0 63%);
+  background-size: 400% 100%;
+  border-radius: 6px;
+}
+.skeleton-row { padding: 14px 20px; border-bottom: 1px solid var(--border-color); }
+.skeleton-line { height: 10px; margin-bottom: 8px; }
+
+.empty-state { display: flex; flex-direction: column; align-items: center; gap: 6px; padding: 26px 18px; text-align: center; color: var(--text-muted); }
+.empty-state .glyph { font-size: 2rem; opacity: .75; }
+
+/* ------------------------------------------------------------------ *
+ * 7. Role identity — the two portals must not read as one screen
+ * ------------------------------------------------------------------ */
+
+/* MEDIC = operations desk. A warm amber top edge, tighter chrome, a board that
+   ranks people by urgency. */
+body.portal-medic .portal-header { border-bottom: 2px solid var(--warning-color); }
+body.portal-medic .portal-title::after {
+  content: 'TRIAGE';
+  margin-left: 10px; font-size: .58rem; font-weight: 800; letter-spacing: .12em;
+  padding: 2px 7px; border-radius: 4px; vertical-align: middle;
+  background: #FFFBEB; color: #B45309; border: 1px solid #FDE68A;
+}
+
+/* DOCTOR = clinical workspace. A cool indigo edge, more depth, calmer motion. */
+body.portal-doctor .portal-header { border-bottom: 2px solid #4F46E5; }
+body.portal-doctor .portal-title::after {
+  content: 'CLINICAL';
+  margin-left: 10px; font-size: .58rem; font-weight: 800; letter-spacing: .12em;
+  padding: 2px 7px; border-radius: 4px; vertical-align: middle;
+  background: #EEF2FF; color: #4338CA; border: 1px solid #C7D2FE;
+}
+body.portal-doctor .queue-item.active { background: #EEF2FF; }
+body.portal-doctor .queue-item.active::after { background: #4F46E5; }
+body.portal-doctor .queue-header { border-bottom: 2px solid #E0E7FF; }
+
+/* Sub-tabs (doctor: Queue | Recent) */
+.seg { display: inline-flex; background: #ECF5F3; border: 1px solid var(--border-color); padding: 3px; border-radius: 999px; gap: 2px; }
+.seg-btn {
+  background: none; border: none; cursor: pointer; font-family: inherit;
+  font-size: .74rem; font-weight: 700; color: var(--text-muted);
+  padding: 5px 12px; border-radius: 999px;
+  transition: background var(--dur-fast) var(--ease-out), color var(--dur-fast) var(--ease-out);
+}
+.seg-btn.active { background: var(--bg-white); color: var(--primary-color); box-shadow: var(--elev-1); }
+
+/* ------------------------------------------------------------------ *
+ * 8. Narrow screens
+ *
+ * `.staff-grid` is a fixed `340px 1fr` in shared.css with no breakpoint, so on a
+ * 768px tablet the queue ate 340px and left 413px for the whole clinical
+ * workspace. Below 900px the two panes stack instead: the queue becomes a short
+ * scrolling strip and the case gets the full width. Kept HERE rather than in
+ * shared.css because `.staff-grid` belongs to the two staff portals — the kiosk
+ * shares the stylesheet and must not inherit a staff breakpoint.
+ * ------------------------------------------------------------------ */
+
+@media (max-width: 900px) {
+  .staff-grid { grid-template-columns: 1fr; grid-template-rows: auto minmax(0, 1fr); }
+  .queue-sidebar {
+    border-right: none;
+    border-bottom: 1px solid var(--border-color);
+    max-height: 38vh;
+  }
+  .detail-workspace { padding: 16px; }
+  /* The horizontal nudge costs width the row no longer has. */
+  .queue-item:hover, .queue-item.active { transform: none; }
+}
+
+/* Below ~700px a handful of FIXED pixel widths written inline in the two portals
+   (a 280px search box, a 220px doctor picker, a 220px override reason) add up to
+   more than the screen and push the whole page sideways. `!important` is required
+   and is the point: an inline `style="width:280px"` outranks every selector, so
+   this is the only way to relax those specific widths without unpicking markup
+   that is correct on the desktop screens these portals are actually used on. */
+@media (max-width: 700px) {
+  body.portal-medic .portal-header,
+  body.portal-doctor .portal-header { flex-wrap: wrap; row-gap: 8px; }
+  body.portal-medic .top-nav,
+  body.portal-doctor .top-nav { flex-wrap: wrap; }
+  body.portal-medic .top-nav > div,
+  body.portal-doctor .top-nav > div { flex: 1 1 100%; }
+  #phone-search { width: 100% !important; }
+  #doctor-select { min-width: 0 !important; width: 100% !important; }
+  #override-reason { width: 100% !important; }
+  /* The assign row is label + picker + button on one line by default; at this
+     width the picker would clip its own doctor names, so it takes its own row. */
+  #assign-row { flex-wrap: wrap; width: 100%; }
+  #assign-row select { flex: 1 1 100%; }
+}
+
+@media (max-width: 560px) {
+  .stat-tile { flex-basis: calc(50% - 5px); }
+  .stat-value { font-size: 1.2rem; }
+  .timeline { padding-left: 20px; }
+  .timeline::before { left: 5px; }
+  .tl-entry::before { left: -19px; }
+}
+
+/* ------------------------------------------------------------------ *
+ * 9. Motion — everything below is OPTIONAL BY DESIGN
+ *    A reduced-motion user gets every layout, colour and number above,
+ *    and none of the movement.
+ * ------------------------------------------------------------------ */
+
+@media (prefers-reduced-motion: no-preference) {
+  @keyframes fxIn { from { opacity: 0; transform: translateY(8px) scale(.985); } to { opacity: 1; transform: none; } }
+  @keyframes fxSlideIn { from { opacity: 0; transform: translateX(-10px); } to { opacity: 1; transform: none; } }
+  @keyframes fxPop { 0% { transform: scale(1); } 45% { transform: scale(1.16); } 100% { transform: scale(1); } }
+  @keyframes fxFlagPulse {
+    0%, 100% { box-shadow: 0 0 0 0 rgba(239, 68, 68, .45); }
+    50%      { box-shadow: 0 0 0 5px rgba(239, 68, 68, 0); }
+  }
+  @keyframes fxShimmer { from { background-position: 100% 0; } to { background-position: 0 0; } }
+
+  /* Panels arrive; they do not simply appear. */
+  .fx-in { animation: fxIn var(--dur-slow) var(--ease-out) both; }
+
+  /* Queue rows stagger in so the eye follows the ORDER — which, after S37, is the
+     triage ranking. --i is set per row by staff.js. Capped at 10 rows' worth of
+     delay so a 50-case queue never feels slow. */
+  .queue-item.fx-queue { animation: fxSlideIn var(--dur-base) var(--ease-out) both; animation-delay: calc(min(var(--i, 0), 10) * 22ms); }
+
+  /* A number that changed pops once — the medic notices the queue grew without
+     re-reading the whole strip. */
+  .fx-pop { animation: fxPop var(--dur-slow) var(--ease-out); }
+
+  /* Urgency, and only urgency, repeats. */
+  .flag-chip.pulse { animation: fxFlagPulse 2.2s ease-out infinite; }
+
+  .skeleton { animation: fxShimmer 1.25s linear infinite; }
+
+  .tl-entry { animation: fxIn var(--dur-base) var(--ease-out) both; animation-delay: calc(min(var(--i, 0), 8) * 34ms); }
+}

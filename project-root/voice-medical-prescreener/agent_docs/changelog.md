@@ -16,6 +16,112 @@
 
 ---
 
+## Session 37 — 2026-08-13 — **The staff portals get their ROLES: a medic operations layer (triage order, wait, completeness, pre-handoff vitals, advisory handover check) and a doctor longitudinal layer (patient timeline, prescription history, completed-cases scope); plus a staff depth/motion layer** — 723 → 767 tests
+- Did: a full audit-then-build cycle over `/medic/` and `/doctor/`, loop-engineered (read the real
+  code → find the gap → smallest fix → targeted tests → browser measurement → regression → next).
+  **ADR-0058** (features + data ownership) and **ADR-0059** (the motion layer). **Alembic stays
+  0012 — `models.py` and `migrations/` are untouched, no migration, no new dependency.**
+  **No module changed status.** M15 stays 🟨. New reference doc: `agent_docs/portal_roles.md`.
+- **Phase 1 — the real-mic status was corrected across the docs.** The human confirmed at the start
+  of this session that the real-microphone test of the S33–S36 voice changes **has now been done**.
+  ⚠ Recorded exactly that far and no further: **no per-claim results were supplied and none are
+  documented**, and **no defects were reported back into this session**. So the docs now say the
+  run happened and that its detailed outcomes were not itemised — they do NOT claim a pass on the
+  three specific S36 claims (the completion vocabulary, the eleven-digit phone stop, audibility).
+  The S25 evidence, which IS itemised, is left exactly as it was.
+- **Finding 1 — the medic queue was sorted by the wrong thing, and it is the role's whole job.**
+  `list_visits` returns `started_at DESC`, so a Critical patient who submitted 40 minutes ago sorted
+  BELOW a Low-risk patient who submitted seconds ago. Triage order is now worst tier first, then
+  longest wait first. Measured live against the dev DB: `critical 447m · high 1554m · medium 2860m ·
+  medium 1530m · medium 1498m · medium 1451m · medium 85m` — worst first, and strictly
+  longest-waiting first inside the Medium band. ⚠ An UNASSESSED case deliberately sorts BETWEEN High
+  and Medium, not last: "we do not know yet" is not "we know it is fine". `sort=recent` still selects
+  the old ordering, and a phone search is never re-sorted (that list is a chronology).
+- **Finding 2 — the medic could record vitals only AFTER handing the case over.** This is the
+  clearest workflow defect of the session and it was invisible in the docs: the weight/BP/identity
+  editor existed only inside `renderPostReferral()`, the screen shown after `POST /assign`. Every
+  case therefore reached the doctor with no weight and no BP. The fix moves the MOMENT, not the data
+  — same `patients` row, same `PATCH /patients/{id}/vitals`, same audit action, now in the case
+  workspace before the referral. Exercised end to end in the browser: saving 68.5 kg / 130/85 made
+  the `vitals_missing` advisory disappear on the same screen.
+- **Finding 3 — `prescriptions` was a WRITE-ONLY table.** Rows were created by `POST /prescription`
+  and nothing in the codebase ever read one back, so a repeat medication was undetectable from
+  inside the doctor portal, and the doctor could see only the single visit in front of them.
+  NEW `GET /patients/{id}/history` returns prior visits + prior prescriptions (from **every**
+  doctor — a repeat is only detectable if the other doctor's prescription is visible too).
+  ⚠ It carries **no transcript**: a prior visit is opened through the existing
+  `GET /api/visits/{uuid}` and read from the one immutable copy (rule #1), and it ranks, trends and
+  interprets **nothing** (rule #2).
+- **Finding 4 — reviewing a case made it vanish.** `POST /review` ended by dropping the case from the
+  workspace, and the doctor queue lists only `awaiting_doctor` — so a doctor who accepted a case and
+  then wanted to write its prescription had no route back except a phone search, even though
+  prescribing after accepting is the normal order. The case now stays open and changes state, the
+  review controls are replaced by a statement of what happened (`POST /review` would 409), the
+  prescription form stays available, and a **Completed** scope lists the doctor's finished
+  consultations. Verified as a full round trip in the browser: review → controls hidden → the case
+  appears under Completed and leaves the working queue → reopened → prescription written → it shows
+  up in the history panel with a working `.docx` link.
+- **Finding 5 — the handover was blind, and the fix is deliberately toothless.** NEW
+  `GET /visits/{uuid}/handoff` reports what the doctor is about to be missing. ⚠ It is **advisory
+  and can never block a forward**: a medic must be able to push a Critical patient to a doctor with
+  incomplete paperwork rather than hold them for it. A red flag is `info`, never `warn` — it is the
+  model's finding about the patient, not paperwork anyone can complete. Two tests pin the safety
+  property (one behavioural, one static over the shipped `submitForward`).
+- **Finding 6 — the referral was the one staff write with no actor.** `audit_log` recorded which
+  doctor RECEIVED a case and never which medic sent it. `AssignRequest.editor_id` is optional
+  (walk-in/dev callers never had one) and lands in the existing `audit_log.actor_id`; an unknown or
+  non-staff editor is a 403, because a wrong actor is worse than no actor.
+- **UI/UX — `frontend_shared/motion.css`, staff portals only (ADR-0059).** Depth on cards, a tier
+  rail per queue row, staggered entry that follows the triage ranking, a pop on a changed stat, a
+  pulse reserved for urgency alone, skeleton loading rows, and role identity that keeps the two
+  portals from reading as one screen (medic = amber `TRIAGE` operations desk; doctor = indigo
+  `CLINICAL` workspace with a timeline spine and a Queue/Completed control).
+  ⚠ **Accessibility outranks the effect**: every `animation` and every `@keyframes` lives inside
+  `@media (prefers-reduced-motion: no-preference)` — proven by two tests that parse the shipped
+  stylesheet — and nothing is conveyed by movement alone.
+- Decided: **ADR-0058** (a)-(h) with six explicit rejections, and **ADR-0059** (a)-(h) with three.
+  The load-bearing one: **a new staff view is a different QUESTION asked of existing rows, never a
+  new copy of them** — hence zero new tables and zero new columns.
+- Broke / problem: **four real defects found and fixed during the loop, plus one measurement trap.**
+  (1) The "Longest wait" tile printed raw minutes — a clinic that has been open a while produces
+  `2861m`, which nobody parses; it now uses the same formatter as the rows, and `waitLabel` grew a
+  days band after a dev row legitimately showed `536h 50m`. (2) The doctor timeline printed the raw
+  schema code `awaiting_doctor` at a doctor — fixed with a `STATUS_LABELS` map (ADR-0030 f: codes on
+  the wire, labels in the frontend). (3) At 375px the page scrolled sideways: inline pixel widths
+  (a 280px search box, a 220px doctor picker) exceed the screen; relaxed in the staff layer.
+  (4) **The tier rail was repainted teal the moment a medic SELECTED a case** — shared.css's
+  `.queue-item.active { border-left: 4px solid var(--secondary-color) }` outranked the rail colour;
+  measured #EF4444 → #0D9488 on click, now restored so the tier outlives selection.
+  ⚠ **The measurement trap, recorded because it will recur:** the Browser pane was not displayed, so
+  the page was not compositing and **CSS transitions freeze mid-flight** — `getComputedStyle`
+  returned stale colours and made a correct stylesheet look inverted. Injecting
+  `*{transition:none!important;animation:none!important}` before measuring is the fix; nothing was
+  wrong with the CSS.
+- One pre-existing layout fault was fixed while checking it: shared.css sets only
+  `min-height: 100vh`, so a long case grew the whole page instead of the two panes scrolling
+  independently — the queue sidebar had stretched to **3,399px** and scrolled out of reach while a
+  doctor read a case, defeating the point of `overflow-y: auto` on both panes. The staff portals are
+  now pinned to the viewport, released again under `@media print`.
+- No existing test was weakened, changed or deleted. All 723 prior tests still pass unmodified.
+- Verified: **767 passed, 2 skipped, 0 failures** (was 723). New files: `test_medic_triage.py` (18),
+  `test_doctor_history.py` (10), `test_staff_portal_ui.py` (16). Live browser run against a real
+  uvicorn + the real dev SQLite: triage order, the load strip, the wait/flag/meter chips, the
+  pre-handoff vitals save, the advisory checks re-evaluating, the doctor timeline (6 prior visits),
+  the review → Completed → reopen → prescribe → history round trip, empty/error/search-miss states,
+  and layout at 1280 / 768 / 375 in both languages with **no page-level horizontal scroll and no
+  overflowing element**. ⚠ Two synthetic dev-DB rows were changed by that run (one visit reviewed,
+  one prescription created) — noted in `test_log.md`, synthetic data only (rule #4).
+- Deferred: a per-field "verified" flag for the medic (needs new per-field state; `source == 'human'`
+  already gives the weaker `fields_verified` signal), a medic completed-referrals list (nothing
+  attributes a referral to an individual medic — refused with a 400 rather than guessed), doctor-side
+  follow-up/recall scheduling, and a doctor→medic back-channel. All recorded with reasons in
+  `portal_roles.md` §6. Also still open from earlier cycles: **Step S5**, the mid-turn word-loss
+  rule #1 decision (human's), rotating the **3 API keys**, formal **WER**, and the Edge run.
+- Next: **a human pass over the two staff portals** — walk the medic triage flow and the doctor
+  timeline/prescription flow on a real screen and report anything that reads wrong. The code side of
+  S37 is complete and test-pinned; what no test can settle is whether the triage ordering matches how
+  this clinic actually wants to work, and whether the motion reads as "clinical" rather than "busy".
+
 ## Session 36 — 2026-08-13 — **The patient session becomes a real boundary (epoch + endSession); MCP evaluated and REJECTED; the phone number ends its own turn; "ঠিক আছে" finishes the review; the raw transcript downloads itself** — 622 → 723 tests
 - Did: worked all seven post-S35 hardening items in one continuous pass, loop-engineered
   (reproduce → root cause → smallest fix → targeted tests → browser measurement → regression → next).

@@ -72,6 +72,117 @@ transcribed by hand (the "ground truth"). Record the model + machine each time.
 
 ## Test entries (newest first)
 
+## 2026-08-13 — Session 37 — staff-portal roles (medic operations + doctor longitudinal) + the motion layer: suite **723 → 767**
+- Setup: Python 3.13.3 on Windows 11; `pytest backend/tests/` with `PYTHONIOENCODING=utf-8`. Backend
+  tests are fully offline (no LLM, no network) — visits, profiles and risk rows are written straight
+  to an in-memory SQLite session so the ordering is driven by EXACT tiers and EXACT wait times rather
+  than by hoping a faked model returns the right tier. The prescription half of the history tests
+  runs through the REAL `POST /prescription` route with storage redirected to `tmp_path`, so what the
+  history reads back is what the prescription module actually writes. Browser checks in the in-app
+  Chrome against a real uvicorn on port 8001 and the real dev SQLite (Alembic head 0012).
+- Metric(s): suite pass/fail; queue ordering; derived-column arithmetic; ownership (rows created by a
+  read); cross-patient and cross-doctor isolation; layout overflow at three widths in two languages.
+
+### Automated suite
+- **767 passed, 2 skipped, 0 failed** (was 723 → **+44**), 35.9 s. **No existing test was modified,
+  weakened or deleted** — all 723 prior tests pass unchanged.
+- **`test_medic_triage.py` (18)** — pure functions with no DB: `waiting_minutes` on a **naive**
+  (offset-less) SQLite timestamp = 42 min (subtracting naive from an aware `now()` is a TypeError,
+  and reading naive UTC as local time is the P2-1 defect one layer down) · `started_at` fallback for
+  pre-0011 rows · clock skew clamps to 0, never negative · triage order over five rows resolves to
+  `critical_old, critical_new, high_old, high_new, low_new` · **`TIER_ORDER['high'] < TIER_ORDER[None]
+  < TIER_ORDER['medium']`** (an unassessed case must not sink) · completeness helpers share M9's
+  `field_has_text`, so `"   "` counts as empty and a Bangla-only slot counts as filled.
+  Over HTTP: the medic queue returns Critical-waiting → High-waiting → Low-just-arrived while
+  `sort=recent` returns the old newest-first · `sort=bogus` → 400 · a row carries
+  `fields_filled=3, fields_total=10, fields_verified=1` · **a phone search stays chronological** even
+  when the older visit is the Critical one · stats describe exactly the queue's rows (3 waiting, 1
+  critical, 1 high, 1 unassessed, 1 red-flagged; the forwarded case excluded) and an empty queue
+  reports `longest_wait_minutes: null` · handoff on a bare visit returns `ready:false` with
+  `main_problem_missing/identity_incomplete/risk_not_assessed` as **warn** and
+  `vitals_missing/fields_empty/no_field_verified` as **info** · fixing them flips `ready:true` and a
+  vitals PATCH removes `vitals_missing` · **a red flag is `info` and leaves `ready:true`** · **a
+  `ready:false` case still forwards with 200** (the safety property) · assign records the medic in
+  `audit_log.actor_id`, still works with no `editor_id`, and 403s on an unknown one ·
+  `scope=recent&role=medic` → **400 with the reason**, not a guess.
+- **`test_doctor_history.py` (10)** — prior visits newest-first with tier/status/treating doctor ·
+  **the history carries no transcript**: a stored `কাশি হচ্ছে` utterance appears nowhere in the
+  response (rule #1) · `limit` honoured, `limit=0` → 422, unknown patient → 404, a patient with no
+  visits returns empty rather than erroring · a real prescription comes back with its
+  doctor/diagnosis/medicine names and a **download_url that returns 200** · the medicine preview is
+  capped at 6 and survives `None`, `{}`, a string instead of a list, and an entry with no name ·
+  **both doctors' prescriptions are visible on the patient** (a repeat is only detectable if the
+  other doctor's is too) · `scope=recent` returns only the doctor's `reviewed`/`closed` cases while
+  the working queue keeps only `awaiting_doctor` · **no cross-doctor leak** and `scope=recent`
+  without `doctor_id` → 400 · **no cross-patient leak**: a second patient's visit, prescription and
+  name appear nowhere in the first patient's history.
+- **`test_staff_portal_ui.py` (16)** — static-source assertions over the SERVED files (the S28 rule:
+  frontend tests are static-source only, no vitest/jsdom). Both portals load `motion.css` **after**
+  `shared.css`; the kiosk does not load it at all · **every `animation:` and every `@keyframes` is
+  inside `@media (prefers-reduced-motion: no-preference)`** — the parser blanks comments first,
+  because on the first run the phrase quoted in the file header was matched instead of the at-rule ·
+  each keyframe animates only `transform`/`opacity`/`box-shadow`/`background-position` · role
+  separation both ways (medic contains no `/prescription`, `/assistant/`, `/review`, `/history`;
+  doctor contains no `/assign`, `/handoff`, `dashboard/stats`, `intake-card`) · both role classes and
+  both role chips exist · the queue uses the server's `waiting_minutes`/`fields_filled` and contains
+  **no `Date.now()` and no `TIER_ORDER`** (it must not derive urgency of its own) · the forward path
+  does not reference the readiness before the POST · the timeline references no
+  `raw_text`/`corrected_text`/`utterances` and writes every dynamic string with `textContent` ·
+  status codes go through `STATUS_LABELS` · the review controls hide on `reviewed`/`closed` while the
+  prescription button stays.
+- **Ownership, tested behaviourally rather than by inspection:** calling `/dashboard`,
+  `/dashboard/stats`, `/handoff` and the doctor queue creates **zero** rows across Visit, Patient,
+  CaseProfile, RiskAssessment, AuditLog and User; and renaming a patient **and** a doctor changes the
+  queue row **immediately** (nothing cached an identity it does not own).
+- One test failed on first run and was **tightened, not weakened**:
+  `test_the_handoff_check_never_disables_the_forward_button` forbade any mention of the readiness
+  anywhere in `submitForward`, which also forbade the legitimate teardown that clears it AFTER a
+  successful POST. It now asserts the precise property — nothing referencing the readiness appears
+  **before** the `/assign` call, which is the only code that could prevent it.
+
+### Live browser run (real uvicorn, real dev SQLite, NO microphone — this session touched no voice code)
+- **Triage order, measured against the dev DB:** `critical 447m · high 1554m · medium 2860m ·
+  medium 1530m · medium 1498m · medium 1451m · medium 85m` — worst tier first, strictly
+  longest-waiting first inside the Medium band.
+- **Load strip:** `waiting 7 · critical 1 · high 1 · unassessed 0 · red_flagged 1 ·
+  longest_wait 2860m · average_wait 1346m`, and the strip's `waiting` equals the number of rows
+  rendered beneath it.
+- **Queue rows:** wait chip / red-flag chip / completeness meter render per row
+  (`⏱ 7h 27m · ▲ Red flag · 10/10`); the meter fill measured 100% at `rgb(16,185,129)` on a 62px
+  track; tier rails measured `#EF4444` (critical), `#C2410C` (high), `#F59E0B` (medium).
+- **Pre-handoff vitals, end to end:** saving 68.5 kg / 130/85 through the new Intake & Vitals card
+  updated the patient line and made the `vitals_missing` advisory disappear on the same screen.
+- **Doctor round trip:** review → the case stays open with `status: reviewed`, the accept/override
+  controls hide, "Consultation completed" shows, the prescription button remains → the case appears
+  under **Completed** (1 row) and leaves the working queue (0 rows) → reopened from Completed →
+  prescription written and auto-downloaded → the history header moved to `1 prescription(s)` and the
+  "Issued in this visit" row rendered with a working `.docx` link.
+- **Timeline:** 6 prior visits with dates, complaints, tiers and treating doctors; collapsed by
+  default for a returning patient so the current case still leads.
+- **States:** skeleton rows before the first paint; `🔍 No patient found for that number.` for a
+  search miss (distinct from `✅ No cases in the queue.`); the error banner shows the server's own
+  message for an invalid phone (`Not a valid Bangladeshi mobile number: '123'`).
+- **Layout:** at 1280×800 the two panes scroll independently (sidebar pinned at 599px, workspace
+  scrolls, page does not); at 768px the panes stack (sidebar 342px = 38vh, workspace full width);
+  at 375px **no page-level horizontal scroll and no overflowing element**, in English and Bangla.
+  **0 console errors** across the whole run.
+- ⚠ **Two synthetic dev-DB rows were changed by this run** (one visit moved `awaiting_doctor` →
+  `reviewed`, one prescription + document created). Synthetic/consented data only, rule #4. Recorded
+  here so a later session does not read them as real clinic activity.
+
+### Caveats (honest)
+- ⚠ **This session touched no voice code and measured no audio.** Nothing here says anything about
+  STT, TTS or the S33–S36 voice behaviour.
+- ⚠ **The static-source tests prove wiring and containment, not appearance.** That every animation
+  sits behind the reduced-motion guard is mechanically proven; that the result *looks* clinical
+  rather than busy is a human judgement and is **not claimed**.
+- ⚠ **A measurement trap worth recording.** The Browser pane was not displayed, so the page was not
+  compositing and **CSS transitions freeze mid-flight**: `getComputedStyle` returned pre-transition
+  colours and made a correct stylesheet look inverted (the active/inactive tab colours appeared
+  swapped). Injecting `*{transition:none!important;animation:none!important}` before reading is the
+  fix. Nothing was wrong with the CSS, and no code was changed for it.
+- ⚠ **Only Chrome.** The Edge run remains outstanding, as it has since S25.
+
 ## 2026-08-13 — Session 36 — session boundary, MCP rejection, phone early stop, review completion, auto transcript — suite **622 → 723**
 
 - Setup: Windows 11, `.venv` Python 3.14, `pytest backend/tests/` with `PYTHONIOENCODING=utf-8`;

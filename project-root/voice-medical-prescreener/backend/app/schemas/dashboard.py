@@ -26,6 +26,18 @@ class DashboardItemOut(BaseModel):
     red_flags: list | None = None
     main_problem: str | None = Field(None, description="summary_fields.main_problem value.")
     summary: str | None = None
+    # S37 (ADR-0058) — derived operational columns. Nothing new is stored: the wait
+    # is computed from submitted_at and the counts from the same summary_fields the
+    # detail screen renders, so a queue row can never disagree with the case it opens.
+    waiting_minutes: int | None = Field(
+        None, description="Whole minutes since the patient submitted (started_at as fallback)."
+    )
+    fields_filled: int = Field(0, description="How many of the 10 summary fields carry text.")
+    fields_total: int = Field(10, description="Size of the fixed summary-field contract.")
+    fields_verified: int = Field(0, description="How many of the 10 a human has edited.")
+    assigned_doctor_name: str | None = Field(
+        None, description="Resolved name for the assigned doctor; null when unassigned."
+    )
 
 
 class FieldEditRequest(BaseModel):
@@ -70,3 +82,10 @@ class ConditionEditRequest(BaseModel):
 
 class AssignRequest(BaseModel):
     doctor_id: int = Field(..., description="users.id of the doctor to forward the case to.")
+    # S37: OPTIONAL on purpose — every other staff write already identifies its actor,
+    # but the referral (the one hand-off between two humans) did not, so audit_log
+    # recorded which doctor received a case and never which medic sent it. Optional
+    # keeps the walk-in / dev callers that never had an editor working unchanged.
+    editor_id: int | None = Field(
+        None, description="users.id of the forwarding medic; recorded as the audit actor."
+    )

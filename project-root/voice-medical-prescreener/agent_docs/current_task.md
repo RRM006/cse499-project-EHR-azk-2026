@@ -6,148 +6,169 @@
 
 ---
 
-**Date:** 2026-08-13 (end of Session 36)
-**Phase:** **The post-S35 hardening cycle is CLOSED.** All seven items were implemented and
-verified in one pass: the review-grid alignment defect, a real patient-session boundary, the
-MCP evaluation (**rejected, with reasons**), the phone-number early stop, "ঠিক আছে" finishing the
-review, the automatic raw-transcript download, and two usability gaps.
-Test suite: **723 passed, 2 skipped, 0 failures** (was 622).
-Alembic head: **0012 — no schema change, do not create a migration.** No new dependency.
-New ADR this session: **0057.** **No module changed status** — refinements inside M1 / M7 / M12 /
-M13 / M14, all already ✅. **M15 🟨.**
+**Date:** 2026-08-13 (end of Session 37)
+**Phase:** **The staff-portal role cycle is CLOSED.** Both `/medic/` and `/doctor/` were audited as
+ROLES and given the layer each was missing, plus a shared depth/motion layer. Everything built is
+**derived and read-only**.
+Test suite: **767 passed, 2 skipped, 0 failures** (was 723).
+Alembic head: **0012 — `db/models.py` and `migrations/` are UNTOUCHED. Do not create a migration.**
+No new dependency. New ADRs: **0058** (features + data ownership) and **0059** (the motion layer).
+**No module changed status** — the work lands inside M14 and the medic side of the same staff layer,
+both already ✅. **M15 stays 🟨.**
+**NEW reference doc: `agent_docs/portal_roles.md` — read it before touching either staff portal.**
 
-**⚠ Step S5 was NOT implemented and must not be assumed. See the bottom of this file.**
+**⚠ Step S5 is STILL NOT implemented and must not be assumed. See the bottom of this file.**
 
 ---
 
-## 🚦 THE NEXT STEP — **REAL MICROPHONE VALIDATION of the S36 voice changes**
+## 🚦 THE NEXT STEP — **a HUMAN pass over the two staff portals**
 
-⚠ **A correction to how S33–S35 phrased this, because it matters and it was wrong.** Those files say
-"NO MICROPHONE HAS EVER BEEN USED, in any session". That is not true and contradicts our own record:
-**S25's human live real-mic run PASSED on Windows 11 + Chrome + a real mic** (TC-V1/V2/V3/F2/R1 all
-✅, STT "very accurate", ~2 s latency) — see `milestone_log.md` and `human_live_run_guide.md`. The
-accurate, narrower statement is the one to carry forward:
+The code side of S37 is complete and test-pinned. What no test can settle is whether the new
+behaviour matches how this clinic actually wants to work. Two things need a person:
 
-> **Real-microphone STT/TTS is PROVEN for the S25-era flow. What no microphone has exercised is the
-> voice behaviour added SINCE — S33/S34/S35/S36.** Those results all come from driving the shipped
-> handlers with scripted recogniser results in a browser engine, which validates the wiring and the
-> vocabulary but not what a real `bn-BD` recogniser actually returns.
-
-Three NEW claims from S36 that a real recogniser can disprove, in priority order:
-
-1. **The completion vocabulary** (`CONFIRM_YES` in `frontend/kiosk.js`). S36 added `alright`,
-   `all`, `সব`, `সবকিছু` and the filler `s`. Bring back what the recogniser actually returns for:
-   ঠিক আছে · সব ঠিক আছে · সবকিছু ঠিক আছে · সব ঠিক · all right · alright · okay · that's all.
-   A miss is **one map entry**, not an architecture change.
-2. **The phone early stop.** Does `maybeCompletePhone()` fire on the eleventh digit of real
-   speech, or does the recogniser deliver digits in chunks that make it fire early/late? Watch the
-   live digit preview and whether the mic closes the moment the last digit lands.
-3. **Is the spoken completion audible?** It is a single `speak()` over a waiting room. Also: does
-   it finish before the 5-second auto-logout cuts it off?
+1. **Does the triage ordering match your intent?** The medic queue is now **worst tier first, then
+   longest wait first**, and an **unassessed** case sorts *between* High and Medium (on the
+   reasoning that "we do not know yet" is not "we know it is fine"). If a real desk would rather
+   see, say, strict FIFO with urgency only as a badge, that is a one-line change to
+   `TIER_ORDER` / `triage_sort_key` in `backend/app/services/triage.py`, not a redesign.
+2. **Does the motion read as "clinical" or as "busy"?** Depth on cards, a stagger on the queue, a
+   pop on a changed stat, and a pulse on the red-flag chip only. Anything that distracts should be
+   said plainly — every effect lives in one file (`frontend_shared/motion.css`) and each is
+   removable on its own.
 
 ### Setup
 - Run: `.venv\\Scripts\\python.exe -m uvicorn backend.app.main:app --reload --port 8001`
-- Open **http://127.0.0.1:8001/kiosk.html** in **Chrome** (and **Edge** if possible — still never run).
-- ⚠ Use `localhost` or `127.0.0.1`. A LAN IP **blocks the mic and Web Speech entirely**.
+- Open **http://127.0.0.1:8001/medic/** and **http://127.0.0.1:8001/doctor/** in Chrome.
+- No microphone is involved in any of this — S37 touched no voice code.
 
-### The exact flow to test
-1. **Phone** → speak the 11 digits and **keep talking** ("এটাই আমার নম্বর"). The mic must close on
-   the eleventh digit and the trailing words must NOT appear in the number. Then try repeating a
-   digit — that used to break a correct number and should now be impossible.
-2. **OTP** → unchanged; confirm the mic still opens itself.
-3. **Interview** → confirm `Question 1 of 4 … 4 of 4` appears during the scripted opening and
-   **disappears** once the M7 loop starts (that is deliberate, not a bug).
-4. **Review** → say **না** to open the correction question, then say **ঠিক আছে**. It must submit
-   once, close the dock, and NOT read "ঠিক আছে" back as a symptom. Then repeat with **all right**.
-5. **Completion** → the assistant should SAY that the information went to the doctor, and a
-   `raw-transcript-visit-….docx` should download by itself, exactly once.
-6. **Next patient** → after the 5-second logout, confirm the screen is the phone screen and nothing
-   from the previous patient is visible anywhere.
+### The exact flow to walk
+1. **Medic:** log in. Read the load strip (waiting / critical / high / not assessed / longest wait).
+   Confirm the top of the queue is who you would actually take next.
+2. **Medic:** open a case. The **Intake & Vitals** card is now at the top and works BEFORE you
+   forward — record a weight and a BP and watch the handover check drop `vitals_missing`.
+3. **Medic:** read the **Handover Check**. Confirm it is *advice*, not a gate: the Submit & Forward
+   button must stay usable even when the card says "You can still add more".
+4. **Doctor:** open an assigned case. Expand **Patient History** — prior visits, and prior
+   prescriptions from every doctor with a working `.docx` link.
+5. **Doctor:** Accept & Write to EHR. The case must **stay on screen**, the accept/override controls
+   must disappear, "Consultation completed" must show, and **Write Prescription must still work**.
+6. **Doctor:** switch the sidebar to **Completed** and confirm the case you just reviewed is there.
+7. **Both:** toggle বাংলা and confirm nothing overflows or falls back to English.
 
 ### ⚠ The rule for next session
-**Only change code if live testing reveals a REAL issue.** Everything through S36 is complete and
+**Only change code if the walkthrough reveals a REAL issue.** Everything through S37 is complete and
 test-pinned.
 
 ---
 
-## ✅ What Session 36 shipped (settled — do not redo or re-derive)
+## Also open (the human's choice, not a queue)
 
-- **The session boundary:** `sessionEpoch`, `sessionToken()`, `endSession()`, `startNewSession()`.
-  Eight async paths check `mine()` before writing. `startNewSession()` is COMPLETE — teardown,
-  fresh state, avatar clear, voice mode, phone screen. `confirmSubmit()` calls only that.
-- **Layout:** `.summary-body.no-float` (the grid track dies with the float) + `.resume-q-body`
-  (`min-width: 0`, `overflow-wrap: anywhere`).
-- **Phone:** `maybeCompletePhone()` inside `onresult`, checked before `restartSilenceWindow()`;
-  `otpSending` guard on `sendOtp()`.
-- **Review completion:** `reviewCorrectionOpen()`, `maybeFinishReview()`, routed before
-  `holdForConfirmation()`; `updateSubmitVisibility()` now also respects `submitting`.
-- **Transcript:** `downloadRawTranscript({auto:true})` from `confirmSubmit()`,
-  `autoTranscriptDownloaded` guard; server filename `raw-transcript-visit-<8>-<date>.docx`.
-- **UX:** `SUBMITTED_ALOUD` + `renderConvoProgress()` / `hideConvoProgress()` and `#convo-progress`.
-- **Backend:** NEW `services/question_tools.py` (`get_patient_context`, `get_question_context`,
-  `unsafe_question_reason`, `safe_fallback_question`, `MAX_CONTEXT_TURNS = 24`);
-  `followup.py` now renders from those tools and guards M7's OUTPUT.
+1. **Rotate the 3 API keys** — HUMAN-only, still pending since S25, recommended before any public demo.
+2. **Formal WER / precision-recall** on a labelled set — the thesis-evidence gap. S25's live run was
+   qualitative.
+3. **The mid-turn word-loss rule #1 decision** — what happens to a half-captured answer in
+   `finalBuffer` when the tab is backgrounded or mic permission is revoked mid-answer. **This is
+   yours to decide, and it is what BLOCKS the second half of Step S5.**
+4. **The Edge run** — every live run so far has been Chrome only.
+5. **Faculty future requirements** (`faculty_future_features.md`): quantized summary model,
+   quantized STT/TTS, the fully voice-driven follow-up loop.
+
+---
+
+## ✅ What Session 37 shipped (settled — do not redo or re-derive)
+
+- **NEW `services/triage.py`** — `waiting_minutes()` (pins offset-less SQLite UTC BEFORE arithmetic),
+  `TIER_ORDER`, `triage_sort_key()`, `empty_field_keys()`, `human_verified_count()`,
+  `handoff_checks()`, `queue_stats()`. Writes nothing.
+- **NEW `services/history.py`** — `patient_history()` + `_medicine_names()`. Writes nothing.
+- **NEW `schemas/triage.py`, `schemas/history.py`, `api/routes_history.py`** (registered in `main.py`).
+- **`routes_dashboard.py`** — `scope` (`queue`|`recent`) + `sort` (`triage`|`recent`),
+  `_queue_visits()` as the ONE queue definition shared by the list and the stats,
+  `GET /api/dashboard/stats`, `GET /api/visits/{uuid}/handoff`, and `assign` recording the
+  forwarding medic in `audit_log.actor_id`.
+- **`schemas/dashboard.py`** — `DashboardItemOut` += `waiting_minutes`, `fields_filled`,
+  `fields_total`, `fields_verified`, `assigned_doctor_name`; `AssignRequest` += optional `editor_id`.
+- **NEW `frontend_shared/motion.css`** — staff-only depth/motion + role identity + staff breakpoints.
+- **`frontend_shared/staff.js`** — skeleton / empty / error / search-miss states, `waitLabel()`,
+  queue chips + tier rails, `setQueueScope()`.
+- **`frontend_medic/index.html`** — load strip, Intake & Vitals BEFORE the referral, handover check,
+  attributed forward.
+- **`frontend_doctor/index.html`** — patient timeline + prescription history, Queue/Completed scope,
+  review-state bar, `STATUS_LABELS`.
+- **NEW tests:** `test_medic_triage.py` (18), `test_doctor_history.py` (10),
+  `test_staff_portal_ui.py` (16). **No existing test was modified, weakened or deleted.**
 
 ## ⚠ Open gaps / honest caveats (carry these forward)
 
-- **🟡 Real-mic STT/TTS is PROVEN (S25) — for the S25-era flow only.** The voice behaviour added in
-  S33–S36 (spoken yes/no, Bangla-script English digit words, the answer read-back, the phone early
-  stop, the completion phrases, the spoken completion line) has **never been exercised by a
-  microphone**. ⚠ Do not repeat S33–S35's "no microphone has ever been used" — it is false; and do
-  not swing the other way and call the new behaviour validated either.
-- **The S36 guard on M7's output is HIGH-PRECISION, LOW-RECALL and is not a medical-safety
-  classifier.** It catches dosage amounts and explicit prescribing/diagnosing phrases. It
-  deliberately does NOT ban "ওষুধ"/"medicine"/"diagnosis" — asking ABOUT those is M7's job. Rule #2
-  rests on the whole design, not on that function. Do not let the green suite become "the AI cannot
-  diagnose now".
-- **Whether the model OBEYS the bounded context is NOT proven** — Tier 1/Tier 2 only (ADR-0054 f).
-- **Acoustic quality is still not tested and not claimed** (S35 caveat, unchanged).
-- **A pending read-back discarded by "Done"** remains part of the open **mid-turn word-loss rule #1
-  decision** (`stopListening(false)` drops `finalBuffer`) — **do not decide it unilaterally.** This
-  is now also what BLOCKS S5's permission/visibility recovery.
-- **Still not done from earlier cycles:** rotating the **3 API keys** (HUMAN-only), the Chrome +
-  Edge live run, and formal **WER**.
+- **🟡 Real-mic status.** The human confirmed at the start of S37 that the real-microphone run of the
+  **S33–S36** voice changes **was carried out**. ⚠ Exactly that far: **no per-claim results were
+  supplied and none are documented**, and no defects came back. So do NOT repeat "no microphone has
+  exercised S33–S36" (false), and do NOT upgrade the three specific S36 claims (the completion
+  vocabulary, the eleven-digit phone stop, audibility) to "verified" — there is no recorded evidence
+  for them. S25's itemised evidence stands unchanged.
+- **S37's static-source tests prove wiring and containment, not appearance.** That every animation
+  sits behind `prefers-reduced-motion` is mechanically proven; that the portals *look* clinical
+  rather than busy is a human judgement and is not claimed.
+- **A medic still cannot record "I checked this field and it is correct" without editing it.**
+  Deliberately deferred (ADR-0058, Rejected 2): it needs new per-field state. `fields_verified`
+  (count of `source == 'human'`) is the weaker signal shipped instead.
+- **Nothing attributes a referral to an individual medic *retroactively*.** S37 records it going
+  forward; historical rows have none, which is why `scope=recent&role=medic` is a **400 with the
+  reason**, not a guess.
+- **⚠ A measurement trap, recorded because it will recur:** when the Browser pane is not displayed
+  the page does not composite and **CSS transitions freeze mid-flight** — `getComputedStyle` returns
+  stale colours and can make a correct stylesheet look inverted. Inject
+  `*{transition:none!important;animation:none!important}` before measuring.
+- **⚠ Two synthetic dev-DB rows changed during S37's browser verification** (one visit
+  `awaiting_doctor` → `reviewed`, one prescription + document created). Synthetic data only (rule
+  #4); noted so nobody reads them as real clinic activity.
+- **Still not done from earlier cycles:** the 3 API keys, formal WER, the Edge run, Step S5.
 
 ## Locked decisions — do NOT re-open
-- **ADR-0057 (S36):** the session is an epoch-guarded boundary and `endSession()` is its one place;
-  `startNewSession()` is complete, and is never called from `resetState()` (module-load TDZ);
-  **MCP is rejected** — no tool-calling loop, the round-trips are the scarce resource, a second
-  context path rebuilds a disagreement S35 removed, and session scoping is structural; a complete
-  phone number ends its own turn but does NOT skip the read-back; only YES finishes the correction
-  question; the auto-download is dropped rather than handed to the next patient; the grid track dies
-  with the float; progress is claimed only where the length is a fact.
-- **ADR-0056 (S35):** one yes/no vocabulary for every confirmation; an unknown word makes an
-  utterance ambiguous and NO beats YES; a verdict is routed before the clinical branches and never
-  stored; ONE clock, in the header; `collected_context()` informs the question and never selects it.
-- **ADR-0055 / 0054 / 0053 / 0052 / 0051 / 0050 / 0049 / 0048 / 0045 / 0040** — see `decisions.md`.
+
+- **ADR-0058 (S37):** a new staff view is a different QUESTION asked of existing rows, never a new
+  copy — hence **no new table and no new column**; triage order is tier-then-wait and an unassessed
+  case sorts between High and Medium; the handover check is **advisory and can never block a
+  forward** (a Critical patient must reach a doctor with incomplete paperwork); a red flag is `info`,
+  never `warn`; the patient history carries **no transcript** (rule #1) and interprets nothing
+  (rule #2); `scope=recent` is doctor-only and requires `doctor_id`; medic and doctor writing the
+  same `patients` row at two moments is **one source of truth used twice, not duplication**.
+- **ADR-0059 (S37):** accessibility outranks the effect — every `animation`/`@keyframes` stays
+  inside `@media (prefers-reduced-motion: no-preference)` and nothing is conveyed by movement alone;
+  only composited properties animate; a looping animation is reserved for urgency; the two staff
+  portals must never read as one screen; the kiosk never loads `motion.css`.
+- **ADR-0057 (S36):** the session epoch and `endSession()`; **MCP is rejected**; a complete phone
+  number ends its own turn but does not skip the read-back; the auto-download is dropped rather than
+  handed to the next patient.
+- **ADR-0056 / 0055 / 0054 / 0053 / 0052 / 0051 / 0050 / 0049 / 0048 / 0045 / 0040** — see
+  `decisions.md`.
 - **S31's terminal/transient STT split:** `no-speech`, `aborted`, `bad-grammar` must stay OUT of
   `TERMINAL_STT_ERRORS` or Chrome's continuous listening regresses. `r.onend` stays untouched.
-- **⚠ No apostrophes in comments inside the `CONFIRM_*` literals.** The vocabulary tests parse
-  quoted tokens straight out of the served file, so prose with an apostrophe is read AS VOCABULARY.
-  This actually happened in S36 and was caught by `test_the_two_vocabularies_do_not_overlap`.
+- **⚠ No apostrophes in comments inside the `CONFIRM_*` literals** in `kiosk.js` — the vocabulary
+  tests parse quoted tokens straight out of the served file, so prose with an apostrophe is read AS
+  VOCABULARY. This actually happened in S36.
 
 ## ⛔ Step S5 is NOT implemented — do not assume it is
 
 S5 (`faculty_future_features.md` §J) is: **no-speech re-prompt, empty-submit guard, 120 s answer
 cap, and permission/visibility recovery.** S34 built only the narrow empty-capture re-ask its
-Phase 2 required; S35 and **S36 built nothing from S5 at all**. Verified by inspection at the end of
-S36 and now pinned by `test_step_s5_is_still_not_implemented`: `no_speech_ms` and `max_answer_ms`
-are still marked `S5 (not used yet)` and read by nothing, and there is no `visibilitychange`
-handler and no permission-recovery path anywhere in the kiosk.
-⚠ **The permission/visibility half is BLOCKED, not merely pending.** It cannot be built without
-deciding what happens to the half-captured answer in `finalBuffer` when the tab is backgrounded or
-permission is revoked mid-answer — and discarding a patient's words is the open rule #1 decision
-above. **That decision is the human's.**
+Phase 2 required; S35, S36 and **S37 built nothing from S5 at all** (S37 touched no voice code).
+Pinned by `test_step_s5_is_still_not_implemented`: `no_speech_ms` and `max_answer_ms` are still
+marked `S5 (not used yet)` and read by nothing, and there is no `visibilitychange` handler and no
+permission-recovery path anywhere in the kiosk.
+⚠ **The permission/visibility half is BLOCKED, not merely pending** — see open item 3 above.
 
 ## Reminders (the four non-negotiables)
-- **Rule #1:** raw words never edited. A verdict is never stored; a rejected capture was never
-  stored; the auto-downloaded transcript is `u.raw_text` and says so on its first line; the M7
-  output guard replaces a *generated question*, never a patient's words.
-- **Rule #2:** never diagnoses. `question_tools` restates and bounds; it ranks nothing and names no
-  condition, and a test asserts no disease name lives in the guard's vocabulary.
-- **Rule #3:** red flags ADD-only; the local rule still forces Critical with every LLM down.
+
+- **Rule #1:** raw words are never edited, and never RE-RENDERED elsewhere. S37's doctor timeline
+  deliberately carries no transcript — a prior visit is opened through `GET /api/visits/{uuid}` and
+  read from the one immutable copy. A test asserts it.
+- **Rule #2:** never diagnoses. The patient history ranks nothing, trends nothing and names no
+  condition; the C1 suggestion still never reaches the prescription Diagnosis.
+- **Rule #3:** red flags ADD-only. In S37 a red flag is surfaced as `info` on the handover check and
+  as a pulsing chip on the queue row — it can never make a case read as "not ready", and the local
+  rule still forces Critical with every LLM down.
 - **Rule #4:** synthetic/consented data only. Web Speech sends audio to Google; edge-tts sends the
   assistant's question text to Microsoft (ADR-0050) — state both in the thesis privacy section.
-  The auto-download filename deliberately carries no name and no phone number.
 - Run (Windows): `.venv\\Scripts\\python.exe -m uvicorn backend.app.main:app --reload --port 8001`
-- Tests: `pytest backend/tests/` (**723 passing, 2 skipped**). Windows: `PYTHONIOENCODING=utf-8`.
+- Tests: `pytest backend/tests/` (**767 passing, 2 skipped**). Windows: `PYTHONIOENCODING=utf-8`.

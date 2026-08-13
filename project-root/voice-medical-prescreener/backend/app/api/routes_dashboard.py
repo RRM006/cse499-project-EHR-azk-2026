@@ -29,10 +29,19 @@ from backend.app.schemas.dashboard import (
 )
 from backend.app.schemas.patient import PatientOut
 from backend.app.schemas.profile import SUMMARY_FIELD_KEYS, CaseProfileOut, SuggestedCondition
+from backend.app.schemas.triage import HandoffOut, QueueStatsOut
 from backend.app.schemas.visit import VisitOut
 from backend.app.services.audit import audit
 from backend.app.services.requirements import missing_requirements
 from backend.app.services.risk import assess_visit, latest_assessment
+from backend.app.services.triage import (
+    empty_field_keys,
+    handoff_checks,
+    human_verified_count,
+    queue_stats,
+    triage_sort_key,
+    waiting_minutes,
+)
 from backend.app.services.suggestion import (
     CONDITION_DISCLAIMER,
     CONDITION_DISCLAIMER_BN,
@@ -60,6 +69,11 @@ def _to_item(db: Session, visit: Visit) -> DashboardItemOut:
         main_problem = (
             (profile.entities.get("summary_fields") or {}).get("main_problem") or {}
         ).get("value")
+    doctor = db.get(User, visit.assigned_doctor_id) if visit.assigned_doctor_id else None
+    # S37: derived, per-row operational columns (ADR-0058). ``empty_field_keys``
+    # shares M9's ``field_has_text``, so "7/10 filled" here is the same arithmetic
+    # the kiosk resume loop and the completeness score already use.
+    empty = empty_field_keys(profile)
     return DashboardItemOut(
         visit_uuid=visit.uuid,
         visit_status=visit.status,
@@ -69,10 +83,15 @@ def _to_item(db: Session, visit: Visit) -> DashboardItemOut:
         patient_name=patient.display_name if patient else None,
         patient_phone=patient.external_ref if patient else None,
         assigned_doctor_id=visit.assigned_doctor_id,
+        assigned_doctor_name=doctor.name if doctor else None,
         tier=assessment.tier if assessment else None,
         red_flags=assessment.red_flags if assessment else None,
         main_problem=main_problem,
         summary=profile.summary if profile else None,
+        waiting_minutes=waiting_minutes(visit),
+        fields_filled=len(SUMMARY_FIELD_KEYS) - len(empty),
+        fields_total=len(SUMMARY_FIELD_KEYS),
+        fields_verified=human_verified_count(profile),
     )
 
 
@@ -166,17 +185,84 @@ def submit_visit(
 # --- staff queues ---
 
 
+#: S37 — the "completed consultations" scope. 'closed' rides along with 'reviewed'
+#: because both mean the doctor is done with the case; the visits status
+#: CheckConstraint is the authority on the full set.
+_DONE_STATUSES = ("reviewed", "closed")
+
+
+def _queue_visits(
+    db: Session, *, role: str, doctor_id: int | None, scope: str, limit: int
+) -> list[Visit]:
+    """The visits one staff queue is scoped to. ONE definition, so /dashboard and
+    /dashboard/stats can never describe different row sets (that divergence is how
+    a stats strip starts lying about the list beneath it)."""
+    if role == "medic":
+        if scope != "queue":
+            # Deliberately refused rather than guessed: nothing records WHICH medic
+            # forwarded a case (the referral is attributed to the receiving doctor),
+            # so a medic "recent" list would either show every medic's work as one
+            # person's or need a new column to invent the attribution. See ADR-0058.
+            raise HTTPException(
+                status_code=400,
+                detail="scope='recent' is doctor-only — medic referrals are not attributed "
+                       "to an individual medic.",
+            )
+        return repo.list_visits(db, status="awaiting_review", limit=limit)
+
+    if role == "doctor":
+        if scope == "recent":
+            if doctor_id is None:
+                # Ownership boundary: a completed-consultation list is personal.
+                # Without an owner this would hand every doctor's finished cases to
+                # whoever asked, so it is a 400, not an unfiltered result.
+                raise HTTPException(
+                    status_code=400, detail="doctor_id is required for scope='recent'."
+                )
+            return (
+                db.query(Visit)
+                .filter(
+                    Visit.status.in_(_DONE_STATUSES),
+                    Visit.assigned_doctor_id == doctor_id,
+                )
+                .order_by(Visit.completed_at.desc(), Visit.started_at.desc())
+                .limit(limit)
+                .all()
+            )
+        q = db.query(Visit).filter(Visit.status == "awaiting_doctor")
+        if doctor_id is not None:
+            q = q.filter(Visit.assigned_doctor_id == doctor_id)
+        return q.order_by(Visit.started_at.desc()).limit(limit).all()
+
+    raise HTTPException(status_code=400, detail="role must be 'medic' or 'doctor'.")
+
+
 @router.get("/dashboard", response_model=list[DashboardItemOut])
 def dashboard(
     role: str = "medic",
     doctor_id: int | None = None,
     phone: str | None = None,
+    scope: str = "queue",
+    sort: str = "triage",
     limit: int = 50,
     db: Session = Depends(get_db),
 ) -> list[DashboardItemOut]:
     """Case queues. role=medic -> awaiting_review; role=doctor -> awaiting_doctor
     (optionally filtered to one doctor's assignments). phone= looks a patient up
-    across statuses (the staff search box in the mockup)."""
+    across statuses (the staff search box in the mockup).
+
+    S37 (ADR-0058) adds two knobs:
+
+    ``scope`` — 'queue' (default, unchanged) or 'recent', the doctor's own completed
+    consultations. Reviewing a case used to make it VANISH from the portal: the queue
+    only lists ``awaiting_doctor``, so a doctor who accepted a case and then wanted to
+    write its prescription had no way back to it except a phone search.
+
+    ``sort`` — 'triage' (default) or 'recent'. Triage order is worst tier first, then
+    longest wait first, because a queue sorted newest-first puts a Critical patient
+    who has waited 40 minutes below a Low-risk one who submitted seconds ago. Pass
+    ``sort=recent`` for the pre-S37 newest-first ordering.
+    """
     if phone:
         try:
             normalized = repo.normalize_phone(phone)
@@ -194,18 +280,48 @@ def dashboard(
             .limit(limit)
             .all()
         )
+        # A phone search is a patient's history, so it stays newest-first whatever
+        # `sort` says — triage order would scramble a chronology into a work list.
         return [_to_item(db, v) for v in visits]
 
-    if role == "medic":
-        visits = repo.list_visits(db, status="awaiting_review", limit=limit)
-    elif role == "doctor":
-        q = db.query(Visit).filter(Visit.status == "awaiting_doctor")
-        if doctor_id is not None:
-            q = q.filter(Visit.assigned_doctor_id == doctor_id)
-        visits = q.order_by(Visit.started_at.desc()).limit(limit).all()
-    else:
-        raise HTTPException(status_code=400, detail="role must be 'medic' or 'doctor'.")
-    return [_to_item(db, v) for v in visits]
+    if sort not in ("triage", "recent"):
+        raise HTTPException(status_code=400, detail="sort must be 'triage' or 'recent'.")
+    visits = _queue_visits(db, role=role, doctor_id=doctor_id, scope=scope, limit=limit)
+    items = [_to_item(db, v) for v in visits]
+    if sort == "triage" and scope == "queue":
+        # Sorted on the built items so the ordering uses exactly the tier and wait
+        # the medic can see on the row — not a second query that might disagree.
+        items.sort(key=lambda i: triage_sort_key(tier=i.tier, waiting=i.waiting_minutes))
+    return items
+
+
+@router.get("/dashboard/stats", response_model=QueueStatsOut)
+def dashboard_stats(
+    role: str = "medic",
+    doctor_id: int | None = None,
+    limit: int = 200,
+    db: Session = Depends(get_db),
+) -> QueueStatsOut:
+    """S37 — load figures for the queue this role is looking at (ADR-0058).
+
+    Read-only and derived per request; nothing is stored. The default limit is
+    higher than the queue's because these are counts, not rows to render.
+    """
+    visits = _queue_visits(db, role=role, doctor_id=doctor_id, scope="queue", limit=limit)
+    return QueueStatsOut(role=role, **queue_stats(db, visits))
+
+
+@router.get("/visits/{visit_uuid}/handoff", response_model=HandoffOut)
+def visit_handoff(visit_uuid: str, db: Session = Depends(get_db)) -> HandoffOut:
+    """S37 — what the doctor is about to receive, before the medic forwards it.
+
+    ⚠ ADVISORY ONLY. ``ready: false`` does NOT block ``POST /assign`` and nothing in
+    the assign path consults this: a medic must be able to escalate a Critical
+    patient immediately, incomplete paperwork and all (ADR-0058).
+    """
+    visit = _get_visit_or_404(db, visit_uuid)
+    result = handoff_checks(db, visit)
+    return HandoffOut(visit_uuid=visit.uuid, **result)
 
 
 # --- field verification / edit (medic + doctor detail screens) ---
@@ -359,9 +475,18 @@ def assign_doctor(
     doctor = db.get(User, payload.doctor_id)
     if doctor is None or doctor.role != "doctor":
         raise HTTPException(status_code=400, detail=f"User {payload.doctor_id} is not a doctor.")
+    # S37: attribute the referral to the forwarding medic when one is supplied. An
+    # unknown or non-staff editor_id is rejected rather than silently dropped —
+    # a wrong actor in an audit trail is worse than no actor.
+    actor_id = None
+    if payload.editor_id is not None:
+        editor = db.get(User, payload.editor_id)
+        if editor is None or editor.role not in ("medic", "doctor", "admin"):
+            raise HTTPException(status_code=403, detail="Editor must be a medic, doctor, or admin.")
+        actor_id = editor.id
     visit.assigned_doctor_id = doctor.id
     db.commit()
     updated = repo.set_visit_status(db, visit=visit, status="awaiting_doctor")
     audit(db, action="visit.assign", entity_type="visit", entity_id=visit.uuid,
-          clinic_id=visit.clinic_id, detail={"doctor_id": doctor.id})
+          actor_id=actor_id, clinic_id=visit.clinic_id, detail={"doctor_id": doctor.id})
     return updated

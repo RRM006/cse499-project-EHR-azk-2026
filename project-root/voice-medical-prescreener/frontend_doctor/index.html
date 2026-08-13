@@ -5,6 +5,8 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Niramoy — Doctor Portal</title>
   <link rel="stylesheet" href="/shared/shared.css">
+  <!-- S37 (ADR-0059): depth + motion, staff portals only. Must load AFTER shared.css. -->
+  <link rel="stylesheet" href="/shared/motion.css">
   <style>
     .login-wrap { display: flex; flex: 1; align-items: center; justify-content: center; padding: 40px; }
     #portal-main { display: none; flex: 1; flex-direction: column; min-height: 0; }
@@ -38,7 +40,7 @@
       display: flex; gap: 8px; background: var(--bg-white); }
   </style>
 </head>
-<body>
+<body class="portal-doctor">
   <div class="portal-header">
     <div><span class="portal-title">Niramoy Pre-Screening</span>
       <span class="portal-subtitle" data-en="Doctor Clinical Portal" data-bn="ডাক্তার ক্লিনিক্যাল পোর্টাল">Doctor Clinical Portal</span></div>
@@ -85,10 +87,20 @@
     </div>
     <div class="staff-grid">
       <div class="queue-sidebar">
-        <div class="queue-header"><span data-en="Assigned Queue" data-bn="নির্ধারিত তালিকা">Assigned Queue</span> (<span id="queue-count">0</span>)</div>
+        <!-- S37 (ADR-0058): reviewing a case used to make it DISAPPEAR — the queue
+             only lists awaiting_doctor, so a doctor who accepted a case and then
+             wanted to write its prescription had no route back except a phone
+             search. "Completed" is that route. -->
+        <div class="queue-header" style="display:flex; justify-content:space-between; align-items:center; gap:8px; flex-wrap:wrap;">
+          <span><span id="queue-scope-label" data-en="Assigned" data-bn="নির্ধারিত">Assigned</span> (<span id="queue-count">0</span>)</span>
+          <span class="seg">
+            <button class="seg-btn active" id="seg-queue" onclick="switchScope('queue')" data-en="Queue" data-bn="তালিকা">Queue</button>
+            <button class="seg-btn" id="seg-recent" onclick="switchScope('recent')" data-en="Completed" data-bn="সম্পন্ন">Completed</button>
+          </span>
+        </div>
         <div id="queue-list"></div>
       </div>
-      <div class="detail-workspace">
+      <div class="detail-workspace fx-scene">
         <div id="no-case" style="margin:auto; text-align:center; color:var(--text-muted);">
           <div style="font-size:3rem;">🧑‍⚕️</div>
           <h3 data-en="Select Patient" data-bn="রোগী নির্বাচন করুন">Select Patient</h3>
@@ -123,13 +135,25 @@
                rendered by staff.js renderConditionCard(); a suggestion only, never a diagnosis. -->
           <div class="card" id="condition-card" style="display:none; flex-direction:column; gap:10px;"></div>
 
+          <!-- S37 (ADR-0058): the patient's prior encounters and prior prescriptions.
+               All of it already existed in the DB and nothing ever read it back —
+               `prescriptions` was a write-only table, so a repeat medication was
+               undetectable from inside the portal. Read-only; carries NO prior
+               transcript (a previous visit is opened to read the real words, rule #1). -->
+          <div class="card" id="history-card" style="display:none; flex-direction:column; gap:12px;"></div>
+
           <div id="field-cards" style="display:flex; flex-direction:column; gap:12px;"></div>
 
           <div class="card" id="review-bar" style="display:flex; justify-content:flex-end; gap:12px; align-items:center; flex-wrap:wrap;">
+            <!-- S37: shown instead of the review controls once a case is 'reviewed'
+                 or 'closed'. POST /review 409s on those, so offering the buttons was
+                 offering an error — while the prescription form is still valid and
+                 stays available. -->
+            <div id="review-done" style="display:none; flex:1; min-width:220px; font-size:.88rem; font-weight:600; color:var(--accent-color);"></div>
             <input class="input-field" id="review-notes" placeholder="Notes / annotation (optional)" style="flex:1; min-width:220px;">
-            <button class="btn btn-secondary" onclick="openPrescription()" data-en="📝 Write Prescription" data-bn="📝 প্রেসক্রিপশন লিখুন">📝 Write Prescription</button>
-            <button class="btn btn-danger-outline" onclick="review('low')" data-en="Override to Low-Risk" data-bn="স্বাভাবিক ঝুঁকিতে নামান">Override to Low-Risk</button>
-            <button class="btn btn-primary" onclick="review(null)" data-en="Accept &amp; Write to EHR" data-bn="গ্রহণ করে EHR-এ লিখুন">Accept &amp; Write to EHR</button>
+            <button class="btn btn-secondary fx-lift" onclick="openPrescription()" data-en="📝 Write Prescription" data-bn="📝 প্রেসক্রিপশন লিখুন">📝 Write Prescription</button>
+            <button class="btn btn-danger-outline fx-lift" id="btn-override" onclick="review('low')" data-en="Override to Low-Risk" data-bn="স্বাভাবিক ঝুঁকিতে নামান">Override to Low-Risk</button>
+            <button class="btn btn-primary fx-lift" id="btn-accept" onclick="review(null)" data-en="Accept &amp; Write to EHR" data-bn="গ্রহণ করে EHR-এ লিখুন">Accept &amp; Write to EHR</button>
           </div>
         </div>
 
@@ -190,7 +214,37 @@
     async function onDoctorCaseLoaded(c) {
       document.getElementById('prescription-screen').style.display = 'none';  // clean switch
       renderPatientDetails();
+      renderReviewBar();
       await loadRisk(c);
+      await loadHistory(c);
+    }
+
+    /* ---- S37 (ADR-0058): queue scope ---- */
+
+    function switchScope(scope) {
+      document.getElementById('seg-queue').classList.toggle('active', scope === 'queue');
+      document.getElementById('seg-recent').classList.toggle('active', scope === 'recent');
+      document.getElementById('queue-scope-label').textContent =
+        scope === 'recent' ? t('Completed', 'সম্পন্ন') : t('Assigned', 'নির্ধারিত');
+      setQueueScope(scope);   // staff.js owns the fetch + render
+    }
+
+    /* S37 — a reviewed case is still openable (that is the whole point of the
+       Completed list), but POST /review would 409, so the controls that would fail
+       are replaced by a statement of what already happened. The prescription button
+       stays: writing the prescription AFTER accepting the case is the normal order. */
+    function renderReviewBar() {
+      const status = (currentCase && currentCase.detail && currentCase.detail.status) || '';
+      const done = status === 'reviewed' || status === 'closed';
+      const doneBox = document.getElementById('review-done');
+      doneBox.style.display = done ? 'block' : 'none';
+      doneBox.textContent = done
+        ? '✓ ' + t('Consultation completed — this case is already in the EHR.',
+                   'পরামর্শ সম্পন্ন — কেসটি ইতিমধ্যে EHR-এ সংরক্ষিত।')
+        : '';
+      ['review-notes', 'btn-override', 'btn-accept'].forEach((id) => {
+        document.getElementById(id).style.display = done ? 'none' : '';
+      });
     }
 
     async function loadRisk(c) {
@@ -322,6 +376,196 @@
       }
     }
 
+    /* ---- S37 (ADR-0058): patient timeline + prescription history ----
+       Read-only. Every row references an existing visit/prescription; nothing is
+       copied into a doctor-owned store. Prior WORDS are deliberately absent — the
+       doctor opens the previous visit and reads the one immutable copy (rule #1).
+       Nothing here trends, ranks or interprets: two visits with the same complaint
+       are two rows with two dates, and what that means is the doctor's call (rule #2). */
+    let patientHistory = null;
+
+    /* Codes on the wire, labels in the frontend (ADR-0030 f). Without this the
+       timeline printed the raw schema code `awaiting_doctor` at a doctor. */
+    const STATUS_LABELS = {
+      in_progress:     { en: 'in progress',      bn: 'চলমান' },
+      awaiting_review: { en: 'awaiting medic',   bn: 'মেডিকের অপেক্ষায়' },
+      awaiting_doctor: { en: 'awaiting doctor',  bn: 'ডাক্তারের অপেক্ষায়' },
+      reviewed:        { en: 'reviewed',         bn: 'পর্যালোচিত' },
+      closed:          { en: 'closed',           bn: 'সমাপ্ত' },
+    };
+    function statusLabel(code) {
+      const entry = STATUS_LABELS[code];
+      return entry ? t(entry.en, entry.bn) : (code || '—');
+    }
+
+    async function loadHistory(c) {
+      patientHistory = null;
+      const patient = (c.detail || {}).patient;
+      if (!patient) { renderHistory(); return; }
+      try { patientHistory = await api('GET', `/api/patients/${patient.id}/history`); }
+      catch (_) { /* the case itself must open even if the history call fails */ }
+      renderHistory();
+    }
+
+    function renderHistory() {
+      const card = document.getElementById('history-card');
+      if (!card) return;
+      if (!patientHistory) { card.style.display = 'none'; return; }
+      const visits = patientHistory.visits || [];
+      const rxAll = patientHistory.prescriptions || [];
+      // The visit on screen is not "history" — it is the consultation in progress.
+      const priorVisits = visits.filter((v) => v.visit_uuid !== currentCase.uuid);
+      card.style.display = 'flex';
+
+      card.innerHTML =
+        `<div style="display:flex; justify-content:space-between; align-items:center; gap:12px; flex-wrap:wrap;">
+           <h3 style="font-size:1.05rem; color:var(--primary-color);">🗂 ${t('Patient History', 'রোগীর ইতিহাস')}
+             <span style="font-weight:600; font-size:.76rem; color:var(--text-muted);">
+               (${priorVisits.length} ${t('previous visit(s)', 'পূর্ববর্তী ভিজিট')} · ${rxAll.length} ${t('prescription(s)', 'প্রেসক্রিপশন')})</span>
+           </h3>
+           <button class="btn btn-secondary fx-lift" id="history-toggle" style="padding:6px 12px; font-size:.8rem;"></button>
+         </div>
+         <div id="history-body" style="display:none;"></div>`;
+
+      const body = card.querySelector('#history-body');
+      const toggle = card.querySelector('#history-toggle');
+      const setOpen = (open) => {
+        body.style.display = open ? 'block' : 'none';
+        toggle.textContent = open ? '▴ ' + t('Hide', 'লুকান') : '▾ ' + t('Show', 'দেখুন');
+      };
+      toggle.onclick = () => setOpen(body.style.display === 'none');
+
+      if (!priorVisits.length && !rxAll.length) {
+        const none = document.createElement('div');
+        none.className = 'empty-state';
+        none.style.padding = '10px';
+        none.textContent = t('First recorded visit for this patient.',
+                             'এই রোগীর প্রথম রেকর্ডকৃত ভিজিট।');
+        body.appendChild(none);
+        setOpen(true);
+        return;
+      }
+
+      const line = document.createElement('div');
+      line.className = 'timeline';
+      priorVisits.forEach((v, idx) => {
+        const rx = rxAll.filter((r) => r.visit_uuid === v.visit_uuid);
+        const entry = document.createElement('div');
+        entry.className = 'tl-entry tier-' + (v.tier || 'none');
+        entry.style.setProperty('--i', idx);
+        const box = document.createElement('div');
+        box.className = 'tl-card';
+
+        const head = document.createElement('div');
+        head.className = 'tl-head';
+        const date = document.createElement('span');
+        date.className = 'tl-date';
+        date.textContent = dhakaDateTime(v.submitted_at || v.started_at);
+        const badges = document.createElement('span');
+        badges.innerHTML = tierBadge(v.tier);
+        head.appendChild(date);
+        head.appendChild(badges);
+        box.appendChild(head);
+
+        const problem = document.createElement('div');
+        problem.className = 'tl-problem';
+        problem.textContent = v.main_problem || t('(no recorded main problem)', '(প্রধান সমস্যা লেখা নেই)');
+        box.appendChild(problem);
+
+        if (v.red_flags && v.red_flags.length) {
+          const flags = document.createElement('div');
+          flags.className = 'red-flag-item';
+          flags.style.fontSize = '.8rem';
+          flags.textContent = `▸ ${t('Red flag', 'বিপদ সংকেত')}: ${v.red_flags.join(', ')}`;
+          box.appendChild(flags);
+        }
+
+        const meta = document.createElement('div');
+        meta.className = 'tl-meta';
+        meta.textContent = [
+          v.assigned_doctor_name || t('unassigned', 'অনির্ধারিত'),
+          statusLabel(v.status),
+        ].join('  ·  ');
+        box.appendChild(meta);
+
+        rx.forEach((r) => {
+          const row = document.createElement('div');
+          row.className = 'rx-line';
+          const label = document.createElement('span');
+          label.textContent = '💊';
+          const meds = document.createElement('span');
+          meds.className = 'rx-meds';
+          meds.textContent = r.medicines.length
+            ? r.medicines.join(', ')
+            : t('(no medicines listed)', '(কোনো ওষুধ নেই)');
+          row.appendChild(label);
+          row.appendChild(meds);
+          if (r.diagnosis) {
+            const dx = document.createElement('span');
+            dx.style.cssText = 'color:var(--text-muted); font-size:.76rem;';
+            dx.textContent = `— ${r.diagnosis}`;   // doctor-authored, echoed unchanged
+            row.appendChild(dx);
+          }
+          if (r.download_url) {
+            const a = document.createElement('a');
+            a.className = 'btn btn-secondary fx-lift';
+            a.style.cssText = 'padding:3px 10px; font-size:.74rem; margin-left:auto;';
+            a.href = r.download_url;
+            a.setAttribute('download', r.filename || '');
+            a.textContent = '⬇ .docx';
+            row.appendChild(a);
+          }
+          box.appendChild(row);
+        });
+
+        const open = document.createElement('button');
+        open.className = 'btn btn-secondary fx-lift';
+        open.style.cssText = 'align-self:flex-start; padding:4px 12px; font-size:.76rem;';
+        // Opens the real visit so the patient's own words come from the one stored
+        // copy — the history never carries a second rendering of them (rule #1).
+        open.textContent = '↗ ' + t('Open this visit', 'এই ভিজিট খুলুন');
+        open.onclick = () => openCase(v.visit_uuid);
+        box.appendChild(open);
+
+        entry.appendChild(box);
+        line.appendChild(entry);
+      });
+      body.appendChild(line);
+
+      // Prescriptions written on THIS visit are shown separately: they are not
+      // history, they are what has already been issued in the consultation at hand.
+      const thisVisitRx = rxAll.filter((r) => r.visit_uuid === currentCase.uuid);
+      if (thisVisitRx.length) {
+        const head = document.createElement('div');
+        head.style.cssText = 'font-size:.8rem; font-weight:700; color:var(--primary-color); margin:12px 0 6px;';
+        head.textContent = t('Issued in this visit', 'এই ভিজিটে দেওয়া হয়েছে');
+        body.appendChild(head);
+        thisVisitRx.forEach((r) => {
+          const row = document.createElement('div');
+          row.className = 'rx-line';
+          row.style.marginBottom = '6px';
+          const meds = document.createElement('span');
+          meds.className = 'rx-meds';
+          meds.textContent = '💊 ' + (r.medicines.join(', ') || t('(no medicines listed)', '(কোনো ওষুধ নেই)'));
+          row.appendChild(meds);
+          if (r.download_url) {
+            const a = document.createElement('a');
+            a.className = 'btn btn-secondary fx-lift';
+            a.style.cssText = 'padding:3px 10px; font-size:.74rem; margin-left:auto;';
+            a.href = r.download_url;
+            a.setAttribute('download', r.filename || '');
+            a.textContent = '⬇ .docx';
+            row.appendChild(a);
+          }
+          body.appendChild(row);
+        });
+      }
+
+      // Prior encounters are opened deliberately, not read by accident: default the
+      // panel closed for a returning patient so the current case still leads.
+      setOpen(priorVisits.length === 0);
+    }
+
     function updatePlaceholders() {
       document.getElementById('phone-search').placeholder =
         t('Patient Mobile Lookup (+880...)', 'রোগীর মোবাইল খুঁজুন (+৮৮০...)');
@@ -440,25 +684,31 @@
       renderSafety();
       updatePlaceholders();
       renderAssistantLog();   // P3-3: answers/labels follow the toggle
+      // S37: the timeline and the review-bar state re-render from state too.
+      if (currentCase) { renderHistory(); renderReviewBar(); }
+      document.getElementById('queue-scope-label').textContent =
+        document.getElementById('seg-recent').classList.contains('active')
+          ? t('Completed', 'সম্পন্ন') : t('Assigned', 'নির্ধারিত');
       const rx = document.getElementById('prescription-screen');
       if (rxDraft && rx.style.display !== 'none') { collectDraftFromForm(); renderPrescriptionForm(); }
     }
 
     async function review(overrideTier) {
       if (!currentCase) return showError(t('Select a case first.', 'আগে একটি কেস নির্বাচন করুন।'));
+      const uuid = currentCase.uuid;
       try {
-        await api('POST', `/api/visits/${currentCase.uuid}/review`, {
+        await api('POST', `/api/visits/${uuid}/review`, {
           reviewer_id: PORTAL.userId,
           override_tier: overrideTier,
           disposition: overrideTier ? 'override' : 'accept',
           notes: document.getElementById('review-notes').value || null,
         });
-        currentCase = null;
-        currentRisk = null;
-        document.getElementById('case-detail').style.display = 'none';
-        document.getElementById('no-case').style.display = 'block';
         document.getElementById('review-notes').value = '';
-        loadQueue();
+        // S37: the case USED to be dropped here — the doctor was returned to an
+        // empty workspace, and since the queue only lists awaiting_doctor the case
+        // became unreachable. Writing the prescription after accepting is the
+        // normal order, so the case stays open and simply changes state.
+        await openCase(uuid);
       } catch (e) { showError(e.message); }
     }
 
@@ -580,6 +830,9 @@
         a.download = res.document.filename || '';
         document.body.appendChild(a); a.click(); a.remove();
         renderPrescriptionSaved(res);
+        // S37: the history panel is the only place a saved prescription is visible
+        // again, so it must know about the one just written.
+        if (currentCase) await loadHistory(currentCase);
       } catch (e) { showError(e.message); }
       if (btn) btn.disabled = false;
     }

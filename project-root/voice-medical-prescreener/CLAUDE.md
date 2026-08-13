@@ -23,34 +23,49 @@ original 20-step build AND the **"Context Fixed Problem 2.0" cycle** are done (t
 bilingual portals, background-assessed submit, Dhaka times, M16 assistant, and **real OTP**:
 hashed/expiring/single-use codes behind a pluggable sender seam, `OTP_CHANNEL=dev|textbee`,
 `000000` bypass dev-channel-only — ADR-0045). DB = Alembic head **0012** (17 tables) — still 0012
-as of S36. **192 tests passed at S25; the current count is 723 (see the S36 paragraph below).**
-**S25: the human live real-mic run PASSED on Windows 11** — TC-V1/V2/V3/F2/R1 all ✅ (STT
-"very accurate", ~2 s latency, TTS spoke, follow-ups good; OTP via the `000000` dev bypass). On
-that gate the module board moved: **Modules 1–14 are now ✅** (M5 retired, **M15 stays 🟨** = future
-retrain/regression pipeline). What's left is NOT build work: **rotate the 3 API keys** before any
-public demo (still pending) + optionally log formal WER/precision-recall as thesis evidence (the
-live run was qualitative). Future issues from manual testing go in
+as of S37. **192 tests passed at S25; the current count is 767 (see the S37 paragraph below).**
+**S25: the human live real-mic run PASSED on Windows 11** — TC-V1/V2/V3/F2/R1 all ✅ (STT "very
+accurate", ~2 s latency, TTS spoke, follow-ups good). On that gate **Modules 1–14 went ✅** (M5
+retired, **M15 stays 🟨** = future retrain/regression pipeline). What's left is NOT build work:
+**rotate the 3 API keys** before any public demo (still pending) + optionally log formal
+WER/precision-recall as thesis evidence (S25 was qualitative). Manual-testing findings go in
 `agent_docs/context fixed problem 3.0.md`; the **three** faculty future requirements (quantized
-summary model, quantized STT/TTS, and — added 2026-08-08 — a fully voice-driven follow-up loop) in
+summary model, quantized STT/TTS, a fully voice-driven follow-up loop) in
 `agent_docs/faculty_future_features.md`.
 **The faculty Requirement 3 + 3b build (voice-first Patient Portal, ADR-0048 — supersedes
 ADR-0027's voice-only rule) is built through Step S4** — mic opens itself after TTS → visible 3-2-1
 confirmation window → the turn ends on silence → next question, **with typing always available as
-the fallback**. Plan + 12-point live checklist: `faculty_future_features.md` §A–K. **S1** =
-`voice_loop` + timings in `.env` and the public `GET /api/config`; **S2** = the bilingual
-`[🎤 Speak] [⌨ Type]` switch; **S3** = auto-listen behind an echo guard + a TTS generation token;
-**S4** = the endpointer (any resumed speech cancels the window — a clipped answer is a rule #1
-defect). **⛔ Step S5 is NOT built** (`no_speech_ms` watchdog, `max_answer_ms` cap,
-permission/visibility recovery) — verified absent at the end of S36 and pinned by a test; its
+the fallback** (S1 = `voice_loop` config + `GET /api/config`; S2 = the `[🎤 Speak] [⌨ Type]` switch;
+S3 = auto-listen behind an echo guard; S4 = the endpointer). Plan + 12-point live checklist:
+`faculty_future_features.md` §A–K. **⛔ Step S5 is NOT built** (`no_speech_ms` watchdog,
+`max_answer_ms` cap, permission/visibility recovery) — verified absent and pinned by a test; its
 permission/visibility half is **blocked** on the open mid-turn word-loss rule #1 decision, which is
 the human's to make. **S6–S7 are not built either** and each needs its own "go".
-**Sessions 34–36 then ran three manual-testing/hardening cycles on top** (ADR-0055/0056/0057):
+**Session 37 (2026-08-13) then audited the two STAFF portals as ROLES** (ADR-0058 features + data
+ownership, ADR-0059 the depth/motion layer) and gave each the layer it was missing. **MEDIC:** the
+queue is ordered by **urgency** (worst tier first, then longest wait) instead of newest-first; rows
+carry wait time, a red-flag chip and an intake-completeness meter; a floor-load strip; **vitals and
+identity are captured BEFORE the referral** (they had been recordable only on the POST-referral
+screen, so every case reached the doctor with no weight and no BP); an **advisory** handover check
+that **can never block a forward**; and the referral is attributed to the forwarding medic.
+**DOCTOR:** a patient **timeline** + **prescription history** (`prescriptions` had been a
+*write-only* table), a **Completed** scope so a reviewed case stays reachable instead of vanishing,
+and review controls that hide once the case is reviewed. **Every S37 view is DERIVED and read-only —
+no new table, no new column, `db/models.py` and `migrations/` untouched.** UI: new
+`frontend_shared/motion.css` (staff portals only; every animation behind `prefers-reduced-motion`).
+→ **767 tests pass, 2 skipped.** Full role/ownership reference: **`agent_docs/portal_roles.md`**.
+⚠ **Real-mic status (corrected in S37):** the human has confirmed the real-microphone run of the
+**S33–S36** voice changes **was carried out**. Recorded exactly that far: **no per-claim results
+were supplied and none are documented**, and no defects came back. Do not repeat "no microphone has
+exercised S33–S36" (no longer true), and do not upgrade the three specific S36 claims to "verified"
+(no evidence). S25's itemised evidence stands unchanged.
+**Sessions 34–36 before that ran three manual-testing/hardening cycles** (ADR-0055/0056/0057):
 the spoken-answer read-back, spoken yes/no confirmation everywhere, one header clock, TTS pacing,
-and — in **Session 36 (2026-08-13)** — a real **patient-session boundary** (an epoch that stops one
-patient's in-flight responses, recognition engine and buffers reaching the next), the phone number
-**ending its own turn** at eleven digits, "ঠিক আছে"/"all right" **finishing the review**, the raw
-transcript **downloading itself** at completion, an **output guard on M7's generated question**, and
-**MCP evaluated and REJECTED** (ADR-0057 b). → **723 tests pass, 2 skipped.** Alembic still **0012**.
+and in **S36** a real **patient-session boundary** (an epoch stopping one patient's in-flight
+responses, recognition engine and buffers reaching the next), the phone number **ending its own
+turn** at eleven digits, "ঠিক আছে"/"all right" **finishing the review**, the raw transcript
+**downloading itself**, an **output guard on M7's question**, and **MCP evaluated and REJECTED**
+(ADR-0057 b). → 723 tests at the end of S36. Details: `changelog.md`.
 
 ## NON-NEGOTIABLE RULES (never break these)
 
@@ -147,6 +162,12 @@ Spread load across **three independent daily buckets** so no single quota is the
   10px radius, Inter for UI. It SUPERSEDES the old Mintlify rule; `DESIGN-mintlify.md` is kept only
   as historical reference (marked superseded at its top). The three portals share
   `frontend_shared/` (shared.css, shared.js with the ONE `TIER_LABELS` map, staff.js, tts.js).
+- **`frontend_shared/motion.css` = the STAFF depth/motion layer (S37, ADR-0059).** Loaded by
+  `/medic/` and `/doctor/` **after** shared.css; the kiosk must NOT load it. Rules: every
+  `animation`/`@keyframes` stays inside `@media (prefers-reduced-motion: no-preference)`, nothing is
+  conveyed by movement alone, only composited properties animate, and a looping animation is
+  reserved for urgency. The two staff portals must never read as one screen (medic = amber `TRIAGE`
+  operations desk, doctor = indigo `CLINICAL` workspace) — see `agent_docs/portal_roles.md`.
 - **Bangla text always uses Noto Sans Bengali (NOT mono — mono breaks Bangla shaping).**
 - **Bilingual EN/BN** via `data-en` / `data-bn` attributes + the `setLanguage()` helper.
 - **Raw is never shown as editable and never modified (rule #1).** The medic/doctor 10-field
@@ -173,7 +194,10 @@ Spread load across **three independent daily buckets** so no single quota is the
 9. `agent_docs/update_system_flowchart.md` — TikZ source of the Patient Journey flow
 10. `agent_docs/context fixed problem 3.0.md` — the NEXT fix/feature cycle (human pastes raw
     findings from manual testing; we turn them into a numbered, checkable tracker like 2.0)
-11. `agent_docs/faculty_future_features.md` — faculty-required FUTURE work, 3 requirements
+11. `agent_docs/portal_roles.md` — what the patient/medic/doctor portals are each FOR, per-role
+    feature tables, use cases, the data-ownership matrix, and what was deliberately NOT built
+    (read this before adding anything to `/medic/` or `/doctor/`)
+12. `agent_docs/faculty_future_features.md` — faculty-required FUTURE work, 3 requirements
     (quantized Moshi summary model + quantized on-device STT/TTS + fully voice-driven follow-up
     conversation) — research track, NOT current build work
 
