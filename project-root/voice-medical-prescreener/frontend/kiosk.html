@@ -151,6 +151,12 @@
        application state in currentAvatarState(); nothing here animates on its own.
        ============================================================ */
     .doctor-stage { display: flex; align-items: center; gap: 18px; perspective: 700px; }
+    /* S36 (ADR-0057), Finding 7: the conversation-screen progress chip. Reuses the
+       existing .progress-chip token set (one chip style in the kiosk, not two) and sits
+       at the END of the stage row, so the avatar and its status keep their positions
+       exactly — `margin-left: auto` against `flex: none` means it can never squeeze
+       them. It stays `display: none` until there is something TRUE to say. */
+    .doctor-stage .progress-chip { margin-left: auto; margin-top: 0; flex: none; }
     .doctor-avatar {
       width: 92px; height: 92px; flex: none; position: relative;
       transform-style: preserve-3d; transition: transform .35s ease;
@@ -342,6 +348,18 @@
        min-content width, so one wide card would push the whole review sideways instead
        of wrapping inside its column. */
     .summary-body { display: grid; grid-template-columns: 210px minmax(0, 1fr); gap: 18px; align-items: start; }
+    /* S36 (ADR-0057), Finding 1 — the track must not outlive its occupant.
+       MEASURED defect, not a style preference: when the resume dock opens, S34's
+       setResumeMode() hides #summary-float, and a hidden grid item stops being placed
+       — but its TRACK does not go away. Auto-placement then dropped .summary-grid into
+       the narrow FIRST column while the wide second one sat empty: the grid went from
+       471px to 170px with a 231px card still inside it, so every card overflowed its
+       own column and the whole review jumped left. That is the reported "alignment
+       breaks at the final question".
+       The column therefore exists only while the float does. `.summary-body.no-float`
+       (0,2,0) outranks the plain `.summary-body` in BOTH media queries below without
+       depending on source order, so the single-column form holds at every width. */
+    .summary-body.no-float { grid-template-columns: minmax(0, 1fr); }
     .doctor-float { position: sticky; top: 8px; }
     .doctor-float-inner {
       display: flex; flex-direction: column; align-items: center; gap: 8px;
@@ -407,7 +425,17 @@
 
     .resume-dock { display: none; flex-direction: column; gap: 12px; border-left: 4px solid var(--secondary-color); }
     .resume-q-row { display: flex; align-items: flex-start; gap: 12px; }
-    .resume-question { font-size: 1.15rem; line-height: 1.5; margin-top: 2px; font-weight: 600; }
+    /* S36 (ADR-0057), Finding 1 — the text column between the avatar and the 🔊.
+       `min-width: 0` is the load-bearing half: a flex item defaults to `min-width:
+       auto`, which refuses to shrink below its content's min-content width. MEASURED
+       with one unbroken 76-character token: the column pushed the 🔊 button clean out
+       of the row and the dock scrolled sideways. The avatar and the button both carry
+       `flex: none`, so the text column is the only one that may absorb the width —
+       which is exactly what these two declarations make it do. Every real Bangla and
+       English question already wrapped correctly; this is what keeps that true for a
+       question nobody has written yet. */
+    .resume-q-body { flex: 1; min-width: 0; }
+    .resume-question { font-size: 1.15rem; line-height: 1.5; margin-top: 2px; font-weight: 600; overflow-wrap: anywhere; }
 
     /* ============================================================
        P2 — responsive. Two axes matter here and they are NOT the same problem:
@@ -646,6 +674,13 @@
           <div class="doctor-substatus" id="doctor-substatus"
                data-en="Your AI health assistant" data-bn="আপনার এআই স্বাস্থ্য সহকারী">Your AI health assistant</div>
         </div>
+        <!-- S36 (ADR-0057), Finding 7: "how much longer?" answered on the conversation
+             screen, where until now nothing answered it at all. Written ONLY while the
+             scripted opening is running, because that is the only stretch whose length
+             is a FACT (INTAKE_SCRIPT has four questions). The M7 loop that follows ends
+             on completeness, not on a count, so it is left blank rather than given an
+             invented denominator. -->
+        <span class="progress-chip" id="convo-progress"></span>
       </div>
       <div class="chat-thread" id="chat-thread"></div>
       <div class="voice-dock">
@@ -761,7 +796,10 @@
               <div class="doctor-mouth" style="width:21px; height:4px;"></div>
             </div>
           </div>
-          <div style="flex:1;">
+          <!-- S36: the inline `flex:1` became .resume-q-body so the CSS can also give
+               it `min-width: 0` — an inline flex-grow without it still refuses to
+               shrink, which is what pushed the 🔊 out of the row. -->
+          <div class="resume-q-body">
             <div class="summary-label" data-en="A few more questions before we finish" data-bn="শেষ করার আগে আরও কয়েকটি প্রশ্ন">A few more questions before we finish</div>
             <div class="resume-question" id="resume-question"></div>
           </div>

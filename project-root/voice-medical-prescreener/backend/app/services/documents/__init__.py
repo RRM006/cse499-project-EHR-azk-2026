@@ -133,11 +133,19 @@ def generate_visit_document(
     storage.save_bytes(rel_path, data)
 
     stamp = visit.started_at.strftime("%Y%m%d") if visit.started_at else "visit"
+    # S36 (ADR-0057), Finding 6: the transcript kind is downloaded automatically at the
+    # end of every screening now, so its NAME has to carry the one distinction this
+    # project is built on. "transcript" is ambiguous once a corrected text exists;
+    # "raw-transcript" says which of the two a doctor is holding without opening it.
+    # The stored `kind` is unchanged — this is the human-facing download name only.
+    # Deliberately carries no name and no phone number: a filename ends up in a
+    # downloads folder, an email subject and a file listing (rule #4).
+    label = "raw-transcript" if kind == "transcript" else kind
     return repo.create_document(
         db,
         utterance_id=None,
         visit_id=visit.id,
-        filename=f"{kind}-visit-{visit.uuid[:8]}-{stamp}.docx",
+        filename=f"{label}-visit-{visit.uuid[:8]}-{stamp}.docx",
         rel_path=rel_path,
         kind=kind,
         doc_format="docx",

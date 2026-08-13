@@ -22,8 +22,9 @@ We build it one module at a time.
 original 20-step build AND the **"Context Fixed Problem 2.0" cycle** are done (teal redesign,
 bilingual portals, background-assessed submit, Dhaka times, M16 assistant, and **real OTP**:
 hashed/expiring/single-use codes behind a pluggable sender seam, `OTP_CHANNEL=dev|textbee`,
-`000000` bypass dev-channel-only — ADR-0045). DB = Alembic head **0012** (17 tables). **192 tests
-pass.** **S25: the human live real-mic run PASSED on Windows 11** — TC-V1/V2/V3/F2/R1 all ✅ (STT
+`000000` bypass dev-channel-only — ADR-0045). DB = Alembic head **0012** (17 tables) — still 0012
+as of S36. **192 tests passed at S25; the current count is 723 (see the S36 paragraph below).**
+**S25: the human live real-mic run PASSED on Windows 11** — TC-V1/V2/V3/F2/R1 all ✅ (STT
 "very accurate", ~2 s latency, TTS spoke, follow-ups good; OTP via the `000000` dev bypass). On
 that gate the module board moved: **Modules 1–14 are now ✅** (M5 retired, **M15 stays 🟨** = future
 retrain/regression pipeline). What's left is NOT build work: **rotate the 3 API keys** before any
@@ -32,18 +33,24 @@ live run was qualitative). Future issues from manual testing go in
 `agent_docs/context fixed problem 3.0.md`; the **three** faculty future requirements (quantized
 summary model, quantized STT/TTS, and — added 2026-08-08 — a fully voice-driven follow-up loop) in
 `agent_docs/faculty_future_features.md`.
-**Session 28 (2026-08-08) STARTED the faculty Requirement 3 + 3b build** — a **voice-first Patient
-Portal** (mic opens itself after TTS → visible 3-2-1 confirmation countdown → auto-submit → next
-question) **with typing always available as the fallback** (ADR-0048, which supersedes ADR-0027's
-voice-only rule). Plan + 12-point live checklist: `faculty_future_features.md` §A–K. **Step S1 is
-DONE** (backend only, no UX change): `voice_loop` + timings in `.env`, the new public
-`GET /api/config`, and a server-side non-blank `raw_text` guard. **Step S2 is DONE** (kiosk UI, turn-
-taking unchanged): a bilingual **`[🎤 Speak] [⌨ Type]`** switch in both docks, one shared mode, mic
-hidden in Type mode, Enter-to-send, mic failure → typing. **Step S3 is DONE** (auto-listen): the mic
-opens itself after the question is spoken, behind an echo guard (wait for `speechSynthesis.speaking`
-to clear + `tts_guard_ms`) and a TTS generation token so a cancelled question can never open the mic
-during the next one; **the patient still taps once to finish**. → **234 tests pass**. **Steps S4–S7
-are NOT built yet** and each needs its own "go".
+**The faculty Requirement 3 + 3b build (voice-first Patient Portal, ADR-0048 — supersedes
+ADR-0027's voice-only rule) is built through Step S4** — mic opens itself after TTS → visible 3-2-1
+confirmation window → the turn ends on silence → next question, **with typing always available as
+the fallback**. Plan + 12-point live checklist: `faculty_future_features.md` §A–K. **S1** =
+`voice_loop` + timings in `.env` and the public `GET /api/config`; **S2** = the bilingual
+`[🎤 Speak] [⌨ Type]` switch; **S3** = auto-listen behind an echo guard + a TTS generation token;
+**S4** = the endpointer (any resumed speech cancels the window — a clipped answer is a rule #1
+defect). **⛔ Step S5 is NOT built** (`no_speech_ms` watchdog, `max_answer_ms` cap,
+permission/visibility recovery) — verified absent at the end of S36 and pinned by a test; its
+permission/visibility half is **blocked** on the open mid-turn word-loss rule #1 decision, which is
+the human's to make. **S6–S7 are not built either** and each needs its own "go".
+**Sessions 34–36 then ran three manual-testing/hardening cycles on top** (ADR-0055/0056/0057):
+the spoken-answer read-back, spoken yes/no confirmation everywhere, one header clock, TTS pacing,
+and — in **Session 36 (2026-08-13)** — a real **patient-session boundary** (an epoch that stops one
+patient's in-flight responses, recognition engine and buffers reaching the next), the phone number
+**ending its own turn** at eleven digits, "ঠিক আছে"/"all right" **finishing the review**, the raw
+transcript **downloading itself** at completion, an **output guard on M7's generated question**, and
+**MCP evaluated and REJECTED** (ADR-0057 b). → **723 tests pass, 2 skipped.** Alembic still **0012**.
 
 ## NON-NEGOTIABLE RULES (never break these)
 

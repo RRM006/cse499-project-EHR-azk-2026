@@ -122,7 +122,12 @@ def test_the_clock_and_the_submit_button_share_one_verdict():
     # S35 widened this from one consumer to two: the spoken review approval is armed by
     # the SAME verdict, for the same reason — the kiosk must never ask "is this correct?"
     # about a review the server would refuse.
-    assert "if (blocked) { cancelReviewTimer(); stopReviewConfirmation(); }" in body
+    # S36 (ADR-0057) widened the CONDITION by one term for the same class of reason: a
+    # visit that is already being SENT must not be asked about either. Finding 5's spoken
+    # finish closes the resume dock, which lands here — without `submitting` the kiosk
+    # would speak "is everything correct?" over the submit that answer had just
+    # triggered, and then listen for a reply to a question about a finished visit.
+    assert "if (blocked || submitting) { cancelReviewTimer(); stopReviewConfirmation(); }" in body
     assert "else { startReviewTimer(); startReviewConfirmation(); }" in body
     # …and `blocked` is still the F3 verdict, unchanged.
     assert "state.resumeActive || (state.readiness && !state.readiness.complete)" in body
@@ -173,15 +178,27 @@ def test_the_submit_is_guarded_against_the_timeout_racing_a_tap():
 def test_a_failed_submit_releases_the_guard_but_a_successful_one_does_not():
     """A 409 (required info missing) must leave the patient able to try again once they
     have answered. A SUCCESSFUL submit must not — there is nothing left to submit until
-    resetState() hands the kiosk to the next patient."""
+    the kiosk is handed to the next patient.
+
+    ⚠ S36 (ADR-0057) moved WHERE the re-arm lives, not whether it happens. It used to be
+    a bare `submitting = false;` in confirmSubmit's logout block, alongside a
+    hand-written list of other things to clear. That list was the bug this session
+    fixed: it was maintained by remembering, so it cancelled three timers but not the
+    phone one and never touched the recognition engine at all. The re-arm now sits in
+    endSession(), which confirmSubmit reaches through startNewSession() — so the guard
+    is released by the SAME call that guarantees nothing else survives either."""
     body = kiosk_js().split("async function confirmSubmit() {")[1].split("\n}\n")[0]
     catch = body.split("} catch (e) {")[1].split("}")[0]
     assert "submitting = false;" in catch
     after_success = body.split("setAvatarOverride('done');")[1]
-    # the only re-arm on the success path is inside the logout reset, i.e. for the NEXT patient
-    assert after_success.count("submitting = false;") == 1
-    assert "resetState();" in after_success
-    assert after_success.index("resetState();") < after_success.index("submitting = false;")
+    # confirmSubmit itself no longer re-arms — the ONLY release on the success path is
+    # the one inside endSession(), i.e. for the NEXT patient.
+    assert "submitting = false;" not in after_success
+    assert "startNewSession();" in after_success
+    assert "submitting = false;" in fn_body("endSession")
+    # and the teardown always precedes the fresh state, never the other way round
+    start = fn_body("startNewSession")
+    assert start.index("endSession();") < start.index("resetState();")
 
 
 def test_the_timeout_route_goes_through_the_same_guarded_submit():
@@ -195,11 +212,17 @@ def test_the_timeout_route_goes_through_the_same_guarded_submit():
 
 def test_no_clock_may_outlive_the_patient_it_belongs_to():
     """A stale review clock firing after the logout reset would submit into the NEXT
-    patient's visit — the same class of defect the S4 countdown teardown exists for."""
-    js = kiosk_js()
-    logout = js.split("async function confirmSubmit() {")[1].split("\n}\n")[0]
-    assert "cancelReviewTimer();        // S34" in logout
-    assert "cancelPendingMic();" in logout and "cancelCountdown();" in logout
+    patient's visit — the same class of defect the S4 countdown teardown exists for.
+
+    ⚠ S36 (ADR-0057): these cancels moved out of confirmSubmit into endSession(), and
+    the phone ticker — which the hand-written list had simply MISSED — joined them. The
+    assertion is therefore made against the teardown itself, and it is stricter than
+    before: all FOUR timers, not the three somebody remembered."""
+    body = fn_body("endSession")
+    for cancel in ("cancelReviewTimer();", "cancelPendingMic();",
+                   "cancelCountdown();", "cancelPhoneTimer();"):
+        assert cancel in body, f"endSession() does not stop {cancel}"
+    assert "startNewSession();" in kiosk_js().split("async function confirmSubmit() {")[1]
     assert "document.getElementById('kiosk-clock').style.display = 'none';" in fn_body("resetState")
 
 

@@ -6,7 +6,74 @@
 
 **Status keys:** ⬜ Not started · 🟨 In progress · 🟦 Blocked · ✅ Done · ⛔ Retired
 
-**Last updated:** 2026-08-12 (**Session 35 — the SECOND manual-testing cycle is closed; all 8
+**Last updated:** 2026-08-13 (**Session 36 — the post-S35 hardening cycle is CLOSED; all seven items
+shipped in one pass. 622 → 723 tests pass, 2 skipped, 0 failures.** New ADR **0057**. **Alembic stays
+0012 — no schema change, no migration, no new dependency.**
+⚠ **NO MODULE CHANGED STATUS.** Refinements inside modules already ✅ (M1 speech input, M7 follow-up,
+M12 report export, M13 storage, M14 presentation) plus four bug fixes. **M15 stays 🟨.**
+**The reported "alignment breaks at the final question" was the GRID, not the dock (Finding 1).**
+Reproduced and MEASURED before anything was touched: `setResumeMode()` hides `#summary-float`, and a
+hidden grid item stops being PLACED while its TRACK stays exactly where it was — auto-placement then
+dropped the summary cards into the narrow first column, **471px → 170px with a 231px card inside
+it**, so every card overflowed its own column and the review jumped 188px left. One CSS rule
+(`.summary-body.no-float`) keyed to the same condition that hides the float, at (0,2,0) so it beats
+both responsive overrides regardless of source order. Verified reversible.
+**The patient SESSION is now a real boundary (Finding 2) — this is the largest change and it is a
+privacy one.** `resetState()` looked like a reset and was not: the recognition ENGINE was still
+running (`r.onend` restarts it, so a patient still talking had their voice transcribed into the NEXT
+patient's phone dock), `finalBuffer` still held their words, the review read-through kept reading
+their answers aloud, the phone ticker was never cancelled, and their summary cards stayed in the DOM.
+⚠ **The dangerous one was none of those: every in-flight `api()` promise wrote into the new
+session**, because `state` is a module-level variable resetState() REPLACES. Worst case `verifyOtp()`
+— a late response installed the previous patient's `visit.uuid` into the new patient's session, so
+the new patient's answers would have been POSTed onto the old patient's visit. Clearing variables
+cannot stop a promise that has already resolved, so the fix is an EPOCH (`sessionToken()`), the same
+shape as S3's `armToken`. NEW `endSession()` / `startNewSession()`; eight async paths check before
+writing.
+**MCP was evaluated and REJECTED, with the reasons recorded (Finding 3, ADR-0057 b).** No
+tool-calling loop exists to attach it to (`call_module()` is one-shot); the round-trips are the
+scarce resource (ADR-0026, and M7 sits in the LIVE loop); a second context path would rebuild the
+disagreement S35 removed; and session scoping here is STRUCTURAL — a function not given visit B
+cannot return visit B — which a transport would weaken. The three responsibilities are in-process
+functions in NEW `services/question_tools.py`. **Two real gaps found while evaluating were closed:**
+the conversation handed to M7 was the ENTIRE unbounded history (now the most recent 24 turns; a
+normal ~18-turn visit is never truncated), and M7's question was only ever ASKED not to prescribe —
+it is now CHECKED on the way out, with a deterministic server-authored fallback.
+⚠ **That output guard is HIGH-PRECISION / LOW-RECALL and is NOT a medical-safety classifier.** It
+catches dosage amounts and explicit prescribing/diagnosing phrases and deliberately does NOT ban
+"ওষুধ" / "medicine" / "diagnosis" — asking ABOUT those is M7's job. Rule #2 rests on the whole
+design, not on that function.
+**A complete phone number now ends its own turn (Finding 4)** — eleven digits are knowable the
+instant they arrive, and waiting for silence let trailing speech join the same utterance, so a
+repeated digit pushed the count past eleven and a correct number came back as "not understood".
+⚠ The read-back is NOT skipped (ADR-0053 stands; S35 already made it button-free).
+**"ঠিক আছে" / "all right" now finishes the review (Finding 5).** Measured first: `সব ঠিক আছে`,
+`সবকিছু ঠিক আছে`, `সব ঠিক`, `all right`, `alright` and the "that is all" family ALL returned null,
+so the most natural way to say "everything is fine" was read back as a symptom and stored as a
+correction — a loop the patient could not leave by speaking. Reuses `parseConfirmation()`.
+**The raw transcript downloads itself at completion (Finding 6)**, once, unawaited, silent on
+failure, and DROPPED if the kiosk was handed over mid-render; filename now
+`raw-transcript-visit-<8>-<date>.docx`, carrying no name and no phone number.
+**Two usability gaps closed (Finding 7)** after confirming the other eight ideas were already
+solved: the completion is now SPOKEN (it was text-only on a kiosk where every question is spoken),
+and the conversation screen shows `Question N of 4` **during the scripted opening only** — the M7
+loop ends on completeness, and an invented denominator would lie.
+**Four defects created and caught during the loop, plus one caught by an existing test:** a
+docstring terminator lost in a rewrite and a JS comment pasted into Python (both caught by a syntax
+check before any test ran); apostrophes in my own comments inside the `CONFIRM_*` literals, which
+`shipped_set()` parses as vocabulary — **caught by the pre-existing
+`test_the_two_vocabularies_do_not_overlap`**, exactly what it exists for; and an incomplete
+`startNewSession()` that cleared all patient DATA but left the previous patient's screen showing.
+⛔ **Step S5 was NOT implemented** — `no_speech_ms` watchdog, `max_answer_ms` cap and
+permission/visibility recovery are all still untouched, verified by inspection and now pinned by a
+test. Its permission/visibility half is **BLOCKED**, not merely pending: it cannot be built without
+deciding what happens to a half-captured answer in `finalBuffer`, which is the open rule #1 decision
+reserved for the human.
+⚠ **On the microphone, corrected because S33-S35 overstated it:** real-mic STT/TTS **is proven** for
+the S25-era flow (S25's human live run passed on Windows 11 + Chrome + a real mic). What no
+microphone has ever exercised is the voice behaviour added since — **S33-S36**. Do not repeat "no
+microphone has ever been used"; it is false. Do not call the new behaviour validated either.
+Prior: 2026-08-12 (**Session 35 — the SECOND manual-testing cycle is closed; all 8
 findings shipped in one pass. 547 → 622 tests pass, 2 skipped, 0 failures.** New ADR **0056**
 (supersedes ADR-0055's "Rejected (1)", amends ADR-0053). **Alembic stays 0012 — no schema change,
 no migration, no new dependency.**

@@ -11,17 +11,22 @@ from __future__ import annotations
 
 import json
 import logging
-from datetime import datetime, timezone
-
 from sqlalchemy.orm import Session
 
 from backend.app.core.config import get_settings
-from backend.app.db.models import CaseProfile, FollowupQuestion, Patient, Visit
+from backend.app.db.models import CaseProfile, FollowupQuestion, Visit
 from backend.app.db.repository_visits import add_utterance
 from backend.app.schemas.profile import SUMMARY_FIELD_KEYS
 from backend.app.services.completion import field_has_text
-from backend.app.services.intake import _conversation_text, _parse_json
+from backend.app.services.intake import _parse_json
 from backend.app.services.llm_client import call_module
+from backend.app.services.question_tools import (
+    conversation_text,
+    get_patient_context,
+    get_question_context,
+    safe_fallback_question,
+    unsafe_question_reason,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -116,19 +121,20 @@ def patient_context(db: Session, visit: Visit, profile: CaseProfile) -> str:
 
     Returns '' rather than a block of empty labels when nothing is known — an empty
     "Age:" line invites the model to invent one.
+
+    S36 (ADR-0057): the FACTS now come from ``get_patient_context()`` — the explicit,
+    session-scoped context tool — and this function is only the renderer that turns them
+    into the block M7 sees. One source of truth for "what may a question know about this
+    patient", one place to change it, and the answer is testable without a prompt.
     """
+    context = get_patient_context(db, visit, profile)
     bits: list[str] = []
-    patient = db.get(Patient, visit.patient_id) if visit.patient_id else None
-    if patient is not None and patient.birth_year:
-        age = datetime.now(timezone.utc).year - patient.birth_year
-        if 0 < age < 130:
-            bits.append(f"Age: {age} years")
-        if patient.sex:
-            bits.append(f"Sex: {patient.sex}")
-    area = (profile.entities or {}).get("problem_area") or {}
-    area_text = str(area.get("en") or area.get("bn") or "").strip()
-    if area_text:
-        bits.append(f"Area the patient came about: {area_text}")
+    if context["age_years"] is not None:
+        bits.append(f"Age: {context['age_years']} years")
+        if context["sex"]:
+            bits.append(f"Sex: {context['sex']}")
+    if context["area"]:
+        bits.append(f"Area the patient came about: {context['area']}")
     if not bits:
         return ""
     return "PATIENT CONTEXT:\n" + "\n".join(bits) + "\n\n"
@@ -241,6 +247,12 @@ def generate_next_question(
             f"ASK ABOUT EXACTLY THIS ONE FIELD, nothing else: {target_key} — "
             f"{FIELD_PROMPTS.get(target_key, target_key)}\n\n"
         )
+    # S36 (ADR-0057): the conversation M7 sees is BOUNDED and comes from the explicit
+    # context tool. Before this the entire history went into every prompt, so the prompt
+    # grew without limit as the loop ran — the brief's "prefer deterministic /
+    # context-controlled inputs over blindly sending large conversation history". A full
+    # screening is ~18 turns, so a normal visit is never truncated.
+    qcontext = get_question_context(db, visit, profile, missing=remaining)
     user = (
         f"{patient_context(db, visit, profile)}"
         # S35: what is already known sits WITH the patient context and BEFORE the
@@ -248,7 +260,7 @@ def generate_next_question(
         # it — and because everything after "CONVERSATION:" is pinned identical across
         # two patients who differ only in age (test_age_appropriate_questions.py).
         f"{collected_context(profile)}"
-        f"CONVERSATION:\n{_conversation_text(db, visit)}\n\n"
+        f"CONVERSATION:\n{conversation_text(qcontext)}\n\n"
         f"{field_directive}"
         f"MISSING DATA POINTS:\n{json.dumps(remaining, ensure_ascii=False)}\n\n"
         f"ALREADY ASKED (do not repeat):\n"
@@ -272,6 +284,20 @@ def generate_next_question(
         # The field we ASKED the model to cover is the field we record — always, and
         # on the JSON-salvage path too. Whatever the model echoed back is ignored.
         target_gap = target_key
+
+    # S36 (ADR-0057), Tool 3 — the output guard. The system prompt has always TOLD M7
+    # never to diagnose or prescribe; this CHECKS it, on the way out, before a patient
+    # can ever hear it. The difference matters because the prompt is a request to a model
+    # that ADR-0026 may have quota-shifted to a weaker fallback provider mid-conversation.
+    # A rejected question is replaced by a deterministic, server-authored one, so the
+    # guard firing costs the patient nothing — the turn continues either way.
+    reason = unsafe_question_reason(question_text)
+    if reason:
+        logger.warning(
+            "M7 question rejected for visit %s (%s); using the local fallback",
+            visit.id, reason,
+        )
+        question_text = safe_fallback_question(target_key, FIELD_PROMPTS)
 
     question = FollowupQuestion(
         visit_id=visit.id, target_gap=target_gap, question_text=question_text, priority=priority

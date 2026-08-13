@@ -146,6 +146,133 @@ function resetState() {
 }
 resetState();
 
+/* --- S36 (ADR-0057): THE PATIENT SESSION BOUNDARY --------------------------------
+
+   The defect this closes is a PRIVACY one, and it was not hypothetical. The kiosk is
+   one long-lived page that serves patient after patient, and almost nothing belonging
+   to the previous patient actually stopped when their visit was submitted.
+
+   `resetState()` builds a fresh `state` object and empties the chat thread, which LOOKS
+   like a reset. It is not one — everything living outside `state` survived it:
+
+     * **The recognition engine, still running.** `r.onend` restarts it while
+       `listening` is true, and `r.onresult` writes into `activeDock()`. So a patient
+       who was still talking when the kiosk reset had their voice transcribed straight
+       into the NEXT patient's phone dock.
+     * **`finalBuffer`**, still holding the previous patient's captured words.
+     * **Every in-flight `api()` promise.** `state` is a module-level variable that
+       resetState() REPLACES, so a response arriving after the reset does not write into
+       a dead object — it writes into the LIVE one. The worst is `verifyOtp()`: it would
+       install the previous patient's `visit.uuid` into the new patient's session, and
+       every answer the new patient gave would be POSTed onto the old patient's visit.
+       `submitResumeAnswer()` and `finishConversation()` would likewise `renderSummary()`
+       the previous patient's profile onto the new patient's review screen.
+     * **The review read-through**, still reading the previous patient's answers aloud.
+     * **The phone countdown**, and the previous patient's rendered summary cards.
+
+   The fix is an EPOCH — the same shape as S3's `armToken` and S34's read-aloud queue
+   token, both of which already solve "a callback that outlived what asked for it".
+   `sessionToken()` captures the session on screen; the predicate it returns answers
+   "is my session still the live one?", and every `await` on a patient-facing path is
+   followed by that check BEFORE it writes anything.
+
+   ⚠ Why an epoch and not just "clear the variables": clearing cannot help a promise
+   that has ALREADY resolved and is about to run. The only way to stop a continuation
+   is for it to identify itself as stale, which is what the counter is for.
+
+   ⚠ `endSession()` is deliberately NOT called from `resetState()`. resetState() also
+   runs at MODULE LOAD, where `recognition`, `finalBuffer`, `phoneTicker` and `DOCKS`
+   are all still in their temporal dead zone — the trap that killed the whole kiosk once
+   in S33. `startNewSession()` sequences the two instead. */
+
+let sessionEpoch = 0;
+
+/** Capture the session that is on screen NOW. The returned predicate is false from the
+ *  moment endSession() runs, which is exactly the question every `await` on a
+ *  patient-facing path must ask before it touches `state` or the DOM. */
+function sessionToken() {
+  const epoch = sessionEpoch;
+  return () => epoch === sessionEpoch;
+}
+
+/** Tear down everything belonging to the patient who just finished — for real, not
+ *  visually. Ordered so the epoch bump happens FIRST: if anything below throws, the
+ *  in-flight responses are already invalidated, which is the half that protects data. */
+function endSession() {
+  sessionEpoch += 1;
+
+  /* 1. The microphone. Detaching the handlers BEFORE abort() is what stops `onend`
+        from restarting the engine, and abort() rather than stop() DISCARDS what was
+        captured instead of delivering it into the next patient's dock. A fresh engine
+        is built for the next patient rather than reusing this one. */
+  listening = false;
+  endingTurn = false;
+  if (recognition) {
+    try {
+      recognition.onresult = null;
+      recognition.onend = null;
+      recognition.onerror = null;
+      recognition.abort();
+    } catch (_) { /* an engine that never started throws; there is nothing to undo */ }
+  }
+  recognition = null;
+  finalBuffer = '';
+  heardSpeech = false;
+
+  // 2. Audio in both directions — ADR-0049: ttsCancel() also stops the server <audio>.
+  readAloudQueue = null;   // the review read-through must not follow the patient out
+  ttsCancel();
+
+  // 3. Every timer that could still fire into the next patient's screening.
+  cancelPendingMic();
+  cancelCountdown();
+  cancelPhoneTimer();
+  cancelReviewTimer();
+  clearTimeout(flushTimer);
+  flushTimer = null;
+
+  // 4. The re-entry guards, so the next patient is never locked out by a flag the
+  //    previous one left set (a stuck `otpVerifying` makes the kiosk refuse every code).
+  otpSending = false;
+  otpVerifying = false;
+  submitting = false;
+  autoTranscriptDownloaded = false;   // S36 Finding 6: the NEXT patient gets their own
+
+  // 5. The previous patient's WORDS, wherever they are still rendered. Hiding a panel
+  //    is not enough — the text itself goes, so there is nothing left to re-read.
+  hideAnswerConfirm();
+  hidePhoneConfirm();
+  clearDigitPreview();
+  Object.values(DOCKS).forEach((dock) => {
+    setBilingualText(dock.transcript, '', '');
+    const box = dock.confirmText ? document.getElementById(dock.confirmText) : null;
+    if (box) box.textContent = '';
+  });
+  const grid = document.getElementById('summary-grid');
+  if (grid) grid.innerHTML = '';
+  const resumeQ = document.getElementById('resume-question');
+  if (resumeQ) resumeQ.textContent = '';
+  hideConvoProgress();   // S36 Finding 7: the next patient starts at no question, not at 4
+  setReadAloudLabel(false);
+}
+
+/** The ONE way a new patient begins: end the previous session, THEN build clean state,
+ *  THEN put the kiosk back where a new patient starts.
+ *
+ *  All three, always, in this order. The order is the contract — a reset without an
+ *  endSession() is the bug this whole section exists to fix — and so is the
+ *  COMPLETENESS: a caller that had to remember to also clear the avatar, restore voice
+ *  mode and show the phone screen is the same "maintained by remembering" teardown that
+ *  confirmSubmit() used to carry, one function further along. There is nothing left for
+ *  a caller to forget. */
+function startNewSession() {
+  endSession();
+  resetState();
+  setAvatarOverride(null);   // P1: the next patient must not inherit "All done"
+  setInputMode('voice', { focus: false });   // S2/ADR-0048: voice-first at every reset
+  showScreen('screen-phone');
+}
+
 function showScreen(id) {
   document.querySelectorAll('.screen').forEach((s) => s.classList.toggle('active', s.id === id));
 }
@@ -410,6 +537,24 @@ function digitsFromSpeech(text) {
 const CONFIRM_YES = new Set([
   'হ্যাঁ', 'হ্যা', 'হা', 'জি', 'জ্বি', 'জী', 'ঠিক', 'ইয়েস',
   'yes', 'yeah', 'yep', 'ok', 'okay', 'right', 'correct', 'fine', 'good',
+  /* S36 (ADR-0057), Finding 5: the words a patient actually uses to mean "nothing more
+     to change". Measured against the shipped parser BEFORE this session, every one of
+     these returned null — so the most natural way to say "everything is fine" was heard
+     as ordinary speech and stored as though it were a correction:
+        সব ঠিক আছে · সবকিছু ঠিক আছে · সব ঠিক · all right · alright · that is all
+
+     `all` and `সব` are YES words rather than filler, and that distinction is the whole
+     reason the "that is all" family works: a filler-only utterance carries no YES token,
+     so parseConfirmation() would still return null for it. They stay safe under the same
+     rule as every other entry — an utterance is a verdict only when EVERY word in it is
+     known — so "all my body hurts" and "সব সময় ব্যথা" remain ambiguous and are asked
+     again, never treated as approval.
+
+     ⚠ Keep apostrophes OUT of the comments inside this literal. test_kiosk_voice_
+     confirmation.py parses the vocabulary straight out of the served file by matching
+     quoted tokens, so an apostrophe in prose is read as a word and silently joins the
+     set — which is exactly how the overlap test caught this comment on its first draft. */
+  'alright', 'all', 'সব', 'সবকিছু',
 ]);
 
 /* No. `নাই`/`নেই` are what "ঠিক নাই" is built from, and `আবার`/`বলি`/`বলব` cover
@@ -426,6 +571,14 @@ const CONFIRM_NO = new Set([
 const CONFIRM_FILLER = new Set([
   'আছে', 'হয়েছে', 'একদম', 'জ্বী', 'হুম', 'আচ্ছা', 'মানে', 'এটা', 'এটাই', 'সেটাই',
   'that', 'is', 'it', 'thats', 'quite', 'very', 'uh', 'um', 'hmm', 'well',
+  /* S36 (ADR-0057), Finding 5: speechTokens() splits on every non-letter, so a
+     contraction leaves its tail behind as a separate token — the phrase "that is all"
+     written with an apostrophe tokenises to three tokens, that / s / all, and the
+     orphan s made the whole utterance ambiguous. It is a fragment rather than a word,
+     so it can carry no meaning of its own and is safe here; `thats` above stays for the
+     recognisers that write it unpunctuated.
+     ⚠ No apostrophes in this comment — see the note in CONFIRM_YES. */
+  's',
 ]);
 
 /** 'yes' | 'no' | null (not a confirmation — ask again, never guess).
@@ -540,11 +693,24 @@ function initOtpInputs() {
 }
 initOtpInputs();
 
+/* S36 (ADR-0057), Finding 4: the re-entry guard the lookup never had. FOUR things can
+   now reach sendOtp() — the Continue button, Enter in the field, the read-back's ✔, and
+   the phone countdown accepting itself — and every one of them sends a real SMS. The
+   read-back path was already single-shot (confirmPhone() clears `pendingPhone` first),
+   but the typed path was not: two quick Enters were two codes to the patient's handset,
+   and because each new code invalidates the last (ADR-0045, single-use), the patient
+   would then be reading out a code the server had already replaced. */
+let otpSending = false;
+
 async function sendOtp() {
+  if (otpSending) return;
   const phone = document.getElementById('phone-input').value.trim();
   if (!phone) return showError(t('Enter your mobile number.', 'মোবাইল নম্বর লিখুন।'));
+  otpSending = true;
+  const mine = sessionToken();   // S36: this lookup belongs to the patient who asked for it
   try {
     await api('POST', '/api/patients/lookup', { phone });
+    if (!mine()) return;   // the kiosk reset while we waited — this number is not the new patient's
     state.phone = phone;
     setBilingualText('otp-sub',
       `A 6-digit code has been sent to +880 ${phone}`,
@@ -556,7 +722,14 @@ async function sendOtp() {
     showScreen('screen-otp');
     document.querySelector('.otp-input').focus();
     askAloud(t(OTP_PROMPT.en, OTP_PROMPT.bn));
-  } catch (e) { showError(e.message); }
+  } catch (e) {
+    if (mine()) showError(e.message);
+  } finally {
+    /* Released, not latched: the guard exists to collapse the near-simultaneous calls
+       (two Enters, a tap racing the countdown) into one SMS. A later, deliberate retry
+       after a failed lookup is a different request and must still work. */
+    otpSending = false;
+  }
 }
 
 /* F1: re-entry guard. Auto-verify, Enter and the button all land here, and the code is
@@ -573,6 +746,11 @@ async function verifyOtp() {
     return;
   }
   otpVerifying = true;
+  /* S36 (ADR-0057): the single most dangerous stale write in the kiosk. Without this
+     token, a verify-otp response that arrives after the kiosk has reset installs the
+     PREVIOUS patient's visit.uuid into the NEW patient's session — and every answer the
+     new patient then gives is POSTed onto the old patient's visit. */
+  const mine = sessionToken();
   let res = null;
   try {
     res = await api('POST', '/api/patients/verify-otp', { phone: state.phone, otp });
@@ -586,6 +764,7 @@ async function verifyOtp() {
   } finally {
     otpVerifying = false;
   }
+  if (!mine()) return;   // S36: a verified code from a finished session opens nothing
   // Failed above — the patient stays on the OTP screen. F5b: in voice mode, say the
   // prompt again and reopen the mic, so retrying is speaking rather than hunting.
   if (!res) { reAskOtp(); return; }
@@ -754,6 +933,45 @@ function rejectPhone() {
   if (state.inputMode === 'voice' && !listening) toggleListening();
 }
 
+/* --- S36 (ADR-0057), Finding 4: a complete phone number ends its own turn ----------
+
+   The phone number is the ONE answer in this kiosk whose completeness is knowable the
+   instant it arrives: eleven digits, starting 01, and there is nothing more to say.
+   Every other answer is prose, where only silence can suggest the patient has finished
+   — which is why the S4 endpointer waits `countdown_ms` before ending a turn.
+
+   Applying that same wait here was a defect, not a design. After the last digit the mic
+   stayed open for the whole confirmation window, and whatever arrived in it was appended
+   to the SAME utterance: "…নয় দুই, এটাই আমার নম্বর" adds no digits and is merely untidy,
+   but a patient who repeats themselves ("…দুই — দুই?") pushes the count past eleven and
+   `phoneFromSpeech()` then returns null for a number that was already correct. The
+   patient is told their number was not understood and asked to say it all again.
+
+   ⚠ This deliberately does NOT skip the read-back. ADR-0053's reason still holds — a
+   wrong digit here does not annoy the patient, it sends their verification code to a
+   stranger's handset — and S35 already made that step require no button: it accepts
+   itself after `phone_confirm_ms`. So the patient still hears their number and still
+   reaches OTP without touching anything; they simply stop waiting for a silence timer
+   that had nothing left to wait for.
+
+   ⚠ It reads `live` (finals PLUS the current interim), because the eleventh digit is
+   usually still interim when it arrives — waiting for the recogniser to finalise it is
+   the very delay this removes. The captured text is committed to `finalBuffer` first, so
+   `stopListening(true)` submits exactly the words that were on screen and the ordinary
+   path (applySpokenPhone -> read-back) runs unchanged. One route in, one route out. */
+function maybeCompletePhone(live) {
+  // Only on the phone dock, only while a turn is genuinely open, and never twice: after
+  // stopListening() `listening` is false, which is what makes a late final chunk from
+  // the engine harmless.
+  if (!state || state.identifyStep !== 'phone' || state.pendingPhone) return false;
+  if (!listening || endingTurn) return false;
+  if (!phoneFromSpeech(live)) return false;   // not eleven valid digits yet — keep listening
+  cancelCountdown();      // S4: the confirmation window has nothing left to confirm
+  finalBuffer = live;     // the evidence is the utterance that was actually shown
+  stopListening(true);    // the SAME exit a tap takes — applySpokenPhone() takes it from here
+  return true;
+}
+
 function applySpokenPhone(rawText) {
   const heard = digitsFromSpeech(rawText);
   const national = phoneFromSpeech(rawText);
@@ -801,11 +1019,50 @@ function reAskOtp() {
   askAloud(t(OTP_PROMPT.en, OTP_PROMPT.bn));
 }
 
+/* --- S36 (ADR-0057), Finding 7: "how much longer?" -------------------------------
+
+   The conversation screen answered that question with nothing at all, and for the
+   patient this kiosk is built for — elderly, often anxious, frequently at a computer
+   for the first time — an interview of unknown length is its own reason to give up.
+
+   ⚠ It is shown ONLY during the scripted opening, and that restriction is the honest
+   part. INTAKE_SCRIPT has a known length, so "প্রশ্ন ২ / ৪" is a FACT. The M7 loop that
+   follows ends on completeness and the turn cap, not on a count nobody knows in
+   advance — so rather than invent a denominator that would drift ("Question 6 of 10"
+   while the loop stops at 7), the chip simply goes away. A progress bar that lies is
+   worse than no progress bar, and this project does not get to be approximate about
+   what it knows. */
+function renderConvoProgress() {
+  const chip = document.getElementById('convo-progress');
+  if (!chip) return;
+  if (!inScriptedOpening() && state.scriptIndex < 0) { chip.style.display = 'none'; return; }
+  const step = Math.min(state.scriptIndex + 1, INTAKE_SCRIPT.length);
+  if (step < 1) { chip.style.display = 'none'; return; }
+  const total = INTAKE_SCRIPT.length;
+  chip.dataset.en = `Question ${step} of ${total}`;
+  chip.dataset.bn = `প্রশ্ন ${bnDigits(step)} / ${bnDigits(total)}`;
+  chip.textContent = t(chip.dataset.en, chip.dataset.bn);
+  chip.style.display = 'inline-block';
+}
+
+function hideConvoProgress() {
+  const chip = document.getElementById('convo-progress');
+  if (!chip) return;
+  chip.style.display = 'none';
+  /* Cleared, not just hidden — the same rule endSession() follows for the previous
+     patient's words. A hidden element still holding "Question 2 of 4" is one language
+     toggle or one stray render away from being visible again on the wrong screen. */
+  chip.textContent = '';
+  chip.dataset.en = '';
+  chip.dataset.bn = '';
+}
+
 /* F4: ask INTAKE_SCRIPT[index]. Goes through assistantSays(), so the question is
    shown, spoken, recorded as a system utterance, and (in auto mode) opens the mic —
    identical handling to an M7 question. */
 async function askScriptedQuestion(index) {
   state.scriptIndex = index;
+  renderConvoProgress();   // S36: the step count follows the script, not a guess
   const q = INTAKE_SCRIPT[index];
   await assistantSays({ en: q.en, bn: q.bn });   // P1-2: pair → follows the toggle
 }
@@ -1129,6 +1386,11 @@ function initRecognition() {
     el.textContent = live;
     // S34: on the identification docks, show the DIGITS this utterance means so far.
     renderDigitPreview(live);
+    /* S36 (ADR-0057), Finding 4: eleven valid digits ARE the end of this turn. Checked
+       before the endpointer below, because the whole point is not to start a silence
+       window the number has already made unnecessary — and because everything after
+       this point belongs to a turn that no longer exists. */
+    if (maybeCompletePhone(live)) return;
     /* S4: the patient is still talking, so the confirmation window restarts from zero.
        Coughs and filler sounds arrive here too — deliberately, since erring toward NOT
        cutting the patient off is the safe direction (rule #1). A blank/noise-only tick
@@ -1211,6 +1473,11 @@ function stopListening(sendTurn) {
     /* S35 (ADR-0056), Finding 7: the review screen is waiting for the patient to approve
        the whole pre-screening. Same parser, same rules — a verdict, never an answer. */
     else if (state.reviewConfirm) applyReviewConfirmation(text);
+    /* S36 (ADR-0057), Finding 5: the correction question is open and the patient has
+       said there is nothing to correct ("ঠিক আছে", "all right"). Checked BEFORE the
+       read-back gate below, or the kiosk would read "ঠিক আছে" back as though it were a
+       symptom and then store it as one. */
+    else if (maybeFinishReview(text)) { /* the review is finished — see maybeFinishReview */ }
     /* S34 (ADR-0055): a CLINICAL spoken answer is read back to the patient before it is
        stored. holdForConfirmation() returns true when it has taken ownership of this
        turn — either because the capture was unusable (re-ask, never guess) or because
@@ -1530,6 +1797,11 @@ function sendTypedFallback() {
 async function submitPatientTurn(rawText, source) {
   if (state.busy) return;
   state.busy = true;
+  /* S36 (ADR-0057): every write below this line happens AFTER an await, so each one
+     must first prove it still belongs to the patient on screen. Without it, a followup
+     answer that resolves late spoke the previous patient's next question into the new
+     patient's thread and set it as their `activeQuestion`. */
+  const mine = sessionToken();
   addBubble('patient', rawText, { en: 'Your words', bn: 'আপনার কথা' });
   try {
     if (state.activeQuestion) {
@@ -1538,6 +1810,7 @@ async function submitPatientTurn(rawText, source) {
         question_id: state.activeQuestion.id, raw_text: rawText,
         source, stt_provider: source === 'mic' ? 'browser_webspeech' : 'manual',
       });
+      if (!mine()) return;
       state.activeQuestion = res.next_question || null;
       if (res.complete) await finishConversation();
       else await assistantSays(res.next_question.question_text, { record: false });
@@ -1550,24 +1823,32 @@ async function submitPatientTurn(rawText, source) {
         raw_text: rawText, role: 'patient', source,
         stt_provider: source === 'mic' ? 'browser_webspeech' : 'manual',
       });
+      if (!mine()) return;
       await askScriptedQuestion(state.scriptIndex + 1);
     } else {
       // Free opening turn(s): store, then run intake and start the loop.
       state.scriptIndex = -1;   // F4: the scripted opening is finished
+      hideConvoProgress();      // S36: past here the remaining count is genuinely unknown
       await api('POST', `/api/visits/${state.visitUuid}/utterances`, {
         raw_text: rawText, role: 'patient', source,
         stt_provider: source === 'mic' ? 'browser_webspeech' : 'manual',
       });
       await api('POST', `/api/visits/${state.visitUuid}/intake`);
+      if (!mine()) return;
       state.intakeDone = true;
       const res = await api('POST', `/api/visits/${state.visitUuid}/followup/next`);
+      if (!mine()) return;
       if (res.complete) await finishConversation();
       else {
         state.activeQuestion = res.question;
         await assistantSays(res.question.question_text, { record: false });
       }
     }
-  } catch (e) { showError(e.message); }
+  } catch (e) {
+    if (!mine()) return;   // an error from a finished session is not this patient's problem
+    showError(e.message);
+  }
+  if (!mine()) return;     // …and neither is clearing their busy flag
   state.busy = false;
 }
 
@@ -1596,6 +1877,7 @@ async function submitFinalTurn(rawText) {
 async function finishConversation() {
   if (state.finishing) return;  // P1-1: ignore double-clicks while finishing
   state.finishing = true;
+  const mine = sessionToken();   // S36: nothing below may land on the next patient's screen
   cancelPendingMic();   // S3: "Done" ends the conversation — no mic may open behind it
   /* S34: a read-back still waiting for an answer belongs to the question the patient
      has just walked away from. Retract it so it cannot follow them onto the summary.
@@ -1615,13 +1897,21 @@ async function finishConversation() {
     }
     if (!state.intakeDone) {
       await api('POST', `/api/visits/${state.visitUuid}/intake`);
+      if (!mine()) return;
       state.intakeDone = true;
     }
     const profile = await api('GET', `/api/visits/${state.visitUuid}/profile`);
+    /* S36: the previous patient's summary must never be drawn onto — nor navigated to
+       on — the new patient's screen. This is the last await before both happen. */
+    if (!mine()) return;
     renderSummary(profile);
     showScreen('screen-summary');
     await refreshResumeLoop(profile);   // KIOSK-7: fill remaining fields before submit
-  } catch (e) { showError(e.message); }
+  } catch (e) {
+    if (!mine()) return;
+    showError(e.message);
+  }
+  if (!mine()) return;
   state.finishing = false;
 }
 
@@ -1962,6 +2252,52 @@ function rejectReview() {
   setResumeMode(null, REVIEW_CORRECTION);
 }
 
+/* --- S36 (ADR-0057), Finding 5: "ঠিক আছে" is an answer to the correction question ---
+
+   Once rejectReview() has opened "কোন তথ্যটি ঠিক করতে চান?", the patient has one more
+   thing they may reasonably want to say, and it is not a correction: that there is
+   nothing to correct after all. They looked, or listened, and it is fine.
+
+   Before this, that sentence had nowhere to go. "ঠিক আছে" fell through to the ordinary
+   clinical path, was read back as though it were a symptom, and on ✔ was STORED as the
+   patient's answer to `review_correction` — and the same question was asked again. The
+   patient could not get out of the correction loop by speaking, which on a voice-first
+   kiosk means they could not get out at all.
+
+   It reuses `parseConfirmation()` — the same vocabulary, the same "every word must be
+   known" rule — so there is no second confirmation system and a phrase added for one
+   place works in the other. Only a YES ends the review:
+
+     * an ordinary sentence is `null` and is therefore a real correction, which is the
+       common case and reaches the existing pipeline completely unchanged;
+     * `no` is left to that same pipeline too. On THIS question it is genuinely unclear
+       ("no, nothing" or the start of a correction), and ending a patient's screening on
+       an unclear signal is the one direction that cannot be undone.
+
+   Submission goes through confirmSubmit(), so the spoken finish, the tap and the review
+   clock all pass the ONE re-entry guard and the visit is sent exactly once — and if the
+   server refuses for missing required information, its catch re-opens the outstanding
+   question instead of stranding the patient (F3's rule, unchanged). */
+
+function reviewCorrectionOpen() {
+  return !!(state && state.resumeActive && state.resumeScripted
+            && state.resumeScripted.key === REVIEW_CORRECTION.key);
+}
+
+/** Returns TRUE when it has taken ownership of this turn — the caller must not submit. */
+function maybeFinishReview(text) {
+  if (!reviewCorrectionOpen()) return false;
+  if (parseConfirmation(text) !== 'yes') return false;   // a correction, or unclear: not ours
+  ttsCancel();
+  cancelPendingMic();   // the screening is over — nothing may re-open the mic behind it
+  /* confirmSubmit() first: it sets `submitting` synchronously, before its first await,
+     and updateSubmitVisibility() reads that flag — so closing the dock on the next line
+     cannot re-arm the very approval question this answer just settled. */
+  confirmSubmit();
+  setResumeMode(null);   // dock closes; Finding 1's full-width grid and the float return
+  return true;
+}
+
 /* --- F3: the patient cannot reach the doctor with required information missing. ---
 
    The SERVER owns the verdict (GET /readiness), so the screen and the submit guard
@@ -1981,7 +2317,11 @@ function updateSubmitVisibility() {
      kiosk counting down to nothing.
      S35: the spoken approval is armed by that same verdict, for the same reason — the
      kiosk must never ask "is this correct?" about a review it could not submit. */
-  if (blocked) { cancelReviewTimer(); stopReviewConfirmation(); }
+  /* S36 (ADR-0057): `submitting` joins the same verdict. A visit that is already being
+     sent must not be asked about — re-arming the approval here would speak "is
+     everything correct?" over the submit that answer had just triggered (Finding 5's
+     spoken finish closes the dock, which lands exactly here). */
+  if (blocked || submitting) { cancelReviewTimer(); stopReviewConfirmation(); }
   else { startReviewTimer(); startReviewConfirmation(); }
 }
 
@@ -2007,9 +2347,13 @@ function renderRequiredNotice() {
    server leaves the verdict `null` ("unknown"), which updateSubmitVisibility()
    deliberately treats as not-blocking. */
 async function loadReadiness() {
+  const mine = sessionToken();   // S36: one visit's verdict may never gate another's submit
   try {
-    state.readiness = await api('GET', `/api/visits/${state.visitUuid}/readiness`);
+    const verdict = await api('GET', `/api/visits/${state.visitUuid}/readiness`);
+    if (!mine()) return null;
+    state.readiness = verdict;
   } catch (e) {
+    if (!mine()) return null;
     state.readiness = null;
   }
   return state.readiness;
@@ -2046,6 +2390,14 @@ function setResumeMode(question, scripted = null) {
      leaving the patient with two robots and no idea which one is talking to them. */
   const float = document.getElementById('summary-float');
   if (float) float.style.display = state.resumeActive ? 'none' : '';
+  /* S36 (ADR-0057), Finding 1: hiding the float is only HALF of removing it. Its grid
+     TRACK survives, and auto-placement then drops the summary cards into that narrow
+     column (measured: 471px -> 170px, with a 231px card overflowing it) — the reported
+     alignment break at the final question. These two lines are ONE decision and must
+     always be written from the same expression; a test pins the pairing so they cannot
+     drift apart. */
+  const layout = document.querySelector('.summary-body');
+  if (layout) layout.classList.toggle('no-float', state.resumeActive);
   if (state.resumeActive) {
     document.getElementById('resume-question').textContent = text;
     state.lastQuestionText = text;   // S34: so a rejected read-back re-asks THIS question
@@ -2062,11 +2414,13 @@ function setResumeMode(question, scripted = null) {
 }
 
 async function refreshResumeLoop(profile) {
+  const mine = sessionToken();   // S36
   const filled = renderProgress(profile);
   // F3: readiness is checked FIRST and always — a 10/10 grid is no longer proof that
   // the required items were covered, and an incomplete one is no longer a reason to
   // keep asking once the server is satisfied.
   const readiness = await loadReadiness();
+  if (!mine()) return;   // S36: no question from a finished visit may open on this screen
   if (filled >= 10 && (!readiness || readiness.complete)) { setResumeMode(null); return; }
   // F4: identity first — a missing name/age/area is re-asked with its own scripted
   // question, because no M7 question can cover it.
@@ -2074,8 +2428,10 @@ async function refreshResumeLoop(profile) {
   if (scripted) { setResumeMode(null, scripted); return; }
   try {
     const res = await api('POST', `/api/visits/${state.visitUuid}/followup/next?scope=fields`);
+    if (!mine()) return;   // S36: a question generated for the previous patient is never asked
     setResumeMode(res.complete ? null : res.question);
   } catch (e) {
+    if (!mine()) return;
     showError(e.message);
     // Fail-open on the LOOP only: an API hiccup must not trap the patient behind a
     // question that never arrived. Submission itself is still gated by readiness
@@ -2100,6 +2456,11 @@ function sendResumeTyped() {
 async function submitResumeAnswer(rawText, source) {
   if (state.busy || !(state.resumeQuestion || state.resumeScripted)) return;
   state.busy = true;
+  /* S36 (ADR-0057): without this, a late resume answer called renderSummary() with the
+     PREVIOUS patient's profile — their ten answer cards drawn onto the new patient's
+     review screen. This is the exact "old patient's information appears in the new
+     patient's session" report. */
+  const mine = sessionToken();
   const sttProvider = source === 'mic' ? 'browser_webspeech' : 'manual';
   try {
     if (state.resumeScripted) {
@@ -2117,33 +2478,71 @@ async function submitResumeAnswer(rawText, source) {
           source, stt_provider: sttProvider,
         });
     }
+    if (!mine()) return;
     const profile = await api('GET', `/api/visits/${state.visitUuid}/profile`);
+    if (!mine()) return;   // a profile fetched for a finished visit is never drawn
     renderSummary(profile);          // spec: the summary regenerates automatically
     /* Re-evaluate from scratch: refreshResumeLoop re-reads readiness and picks the
        next thing to ask, so both branches converge on ONE decision point instead of
        each guessing what should come next. */
     await refreshResumeLoop(profile);
-  } catch (e) { showError(e.message); }
+  } catch (e) {
+    if (!mine()) return;
+    showError(e.message);
+  }
+  if (!mine()) return;
   state.busy = false;
 }
 
 /* KIOSK-4: export the RAW conversation as .docx BEFORE any AI summarization is
    accepted. Backend writer is verbatim (rule #1); no new backend code — reuses the
-   step-3 endpoint. The anchor click (not location.href) keeps the kiosk page put. */
-async function downloadRawTranscript() {
+   step-3 endpoint. The anchor click (not location.href) keeps the kiosk page put.
+
+   S36 (ADR-0057), Finding 6: the same export now also runs BY ITSELF the moment a
+   screening is submitted, so the patient leaves with their own unedited record without
+   being asked to find a button. The `auto` flag is the only difference between the two
+   callers, and it controls exactly two things — the once-per-visit guard, and silence:
+   an automatic download that fails must not throw an error banner over the "all done"
+   screen, because the patient has nothing to do about it and their visit was submitted
+   either way. The button stays for a deliberate re-download. */
+let autoTranscriptDownloaded = false;
+
+async function downloadRawTranscript({ auto = false } = {}) {
+  // "Repeated finish events do not create multiple downloads": the submit guard already
+  // makes confirmSubmit() single-shot, and this makes the download single-shot even if a
+  // future caller is added. endSession() clears it for the next patient.
+  if (auto && autoTranscriptDownloaded) return;
+  if (auto) autoTranscriptDownloaded = true;
+  const mine = sessionToken();
   const btn = document.getElementById('download-transcript-btn');
   if (btn) btn.disabled = true;
   try {
     const doc = await api('POST', `/api/visits/${state.visitUuid}/documents/transcript`);
+    /* S36: if the kiosk was handed to the next patient while this was being rendered,
+       DROP it. Saving one patient's transcript into the browser of the person now
+       standing at the kiosk is the exact leak Finding 2 exists to prevent, and a missed
+       download is the cheaper failure — the manual button and the staff portals can
+       still produce it. */
+    if (!mine()) return;
     const a = document.createElement('a');
     a.href = doc.download_url;
     a.download = doc.filename || '';
     document.body.appendChild(a);
     a.click();
     a.remove();
-  } catch (e) { showError(e.message); }
+  } catch (e) {
+    if (!auto && mine()) showError(e.message);
+  }
   if (btn) btn.disabled = false;
 }
+
+/* S36 (ADR-0057), Finding 7: the spoken completion. Deliberately says what HAPPENED and
+   what to do next — "sent to the doctor" and "please wait to be called" — because "thank
+   you" alone leaves a patient standing at a kiosk wondering whether they may leave. */
+const SUBMITTED_ALOUD = {
+  en: 'Thank you. Your information has been sent to the doctor. Please wait to be called.',
+  bn: 'ধন্যবাদ। আপনার তথ্য ডাক্তারের কাছে পাঠানো হয়েছে। আপনাকে ডাকা হবে, অনুগ্রহ করে অপেক্ষা করুন।',
+};
 
 /* S34: the re-entry guard. Two things can now ask for a submit — the patient's tap and
    the 60-second review clock — and the visit must be sent EXACTLY ONCE whichever
@@ -2154,6 +2553,7 @@ let submitting = false;
 async function confirmSubmit() {
   if (submitting) return;
   submitting = true;
+  const mine = sessionToken();   // S36
   cancelReviewTimer();        // whoever got here first, the clock's job is over
   stopReviewConfirmation();   // …and so is the question it was asking
   try {
@@ -2162,12 +2562,28 @@ async function confirmSubmit() {
        resume loop so the outstanding question appears instead of a dead end. */
     await api('POST', `/api/visits/${state.visitUuid}/submit?require_complete=true`);
   } catch (e) {
+    if (!mine()) return;   // S36: a refusal for a finished visit must not unblock this one
     showError(e.message);
     submitting = false;   // it did NOT submit — the patient must be able to try again
     if (state.lastProfile) await refreshResumeLoop(state.lastProfile);
     return;
   }
+  if (!mine()) return;   // S36: the "all done" screen belongs to the visit that submitted
   setAvatarOverride('done');   // P1: the one state no live variable can express
+  /* S36 (ADR-0057), Finding 7: say it out loud. Every question in this kiosk is SPOKEN
+     (ADR-0028), and then the single most important moment in the whole visit — "your
+     information reached the doctor" — was text on a screen and nothing else. A patient
+     who cannot read that screen is exactly the patient this project is built for, and
+     they were being left to guess whether it had worked.
+
+     ⚠ Plain speak(), never askAloud(): this is an announcement, not a question, and
+     askAloud() would open the microphone on a finished visit. */
+  speak(t(SUBMITTED_ALOUD.en, SUBMITTED_ALOUD.bn));
+  /* S36 (ADR-0057), Finding 6: the patient leaves with their own RAW record, verbatim.
+     Deliberately NOT awaited — the "all done" screen and its 5-second countdown must not
+     wait on a .docx render, and the download failing must not hold up a visit that has
+     already been submitted. */
+  downloadRawTranscript({ auto: true });
   const modal = document.getElementById('logout-modal');
   modal.style.display = 'flex';
   // S34: the same ticker the review clock uses — one countdown implementation.
@@ -2178,15 +2594,14 @@ async function confirmSubmit() {
     },
     onEnd: () => {
       modal.style.display = 'none';
-      resetState();               // kiosk reset is purely frontend state (ADR-0030 d)
-      setAvatarOverride(null);    // P1: the next patient must not inherit "All done"
-      cancelPendingMic();         // S3: nothing from this visit may open the next patient's mic
-      cancelCountdown();          // S4: nor may a stale countdown submit into the next visit
-      cancelReviewTimer();        // S34: nor may a review clock fire into the next visit
-      hideAnswerConfirm();        // S34: nor may one patient's words greet the next one
-      submitting = false;         // the kiosk is free again for the NEXT patient
-      setInputMode('voice', { focus: false });  // S2: the next patient starts voice-first
-      showScreen('screen-phone');
+      /* S36 (ADR-0057): ONE call replaces the hand-written teardown that used to live
+         here. That list was the bug: it was assembled by remembering, session after
+         session, which globals to clear — so it cancelled three timers but not the
+         phone one, cleared `state` but never the recognition ENGINE or `finalBuffer`,
+         and could do nothing at all about a response still in flight. endSession() is
+         the single place that answers "what belongs to the finished patient?", and it
+         runs BEFORE resetState() builds the new one. */
+      startNewSession();
     },
   });
 }

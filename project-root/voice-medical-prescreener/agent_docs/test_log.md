@@ -72,6 +72,133 @@ transcribed by hand (the "ground truth"). Record the model + machine each time.
 
 ## Test entries (newest first)
 
+## 2026-08-13 — Session 36 — session boundary, MCP rejection, phone early stop, review completion, auto transcript — suite **622 → 723**
+
+- Setup: Windows 11, `.venv` Python 3.14, `pytest backend/tests/` with `PYTHONIOENCODING=utf-8`;
+  browser verification in the in-app Chromium engine at `http://127.0.0.1:8001/kiosk.html`, viewports
+  1280x800 / 730x694 / 375x812, both language toggles. **No microphone was used this session** —
+  the shipped handlers were driven with scripted recogniser results (S33's method).
+  ⚠ Real-mic STT/TTS **is** proven for the S25-era flow (S25's human live run passed). What is
+  unproven is the voice behaviour added in S33–S36.
+- Metric(s): pass/fail counts; measured DOM geometry; counted network calls, downloads and TTS
+  utterances; leak checks across a simulated patient handover.
+- Result: **723 passed, 2 skipped, 0 failures** (was 622 — **+101, all of them new tests** across
+  seven files: 8 + 16 + 27 + 13 + 12 + 12 + 13 = 101, counted per file at the end of the session).
+  No schema change; **Alembic stays 0012**. No new dependency.
+  Five EXISTING tests were rewritten rather than added, so they do not change the count.
+
+### Finding 1 — the review grid (MEASURED, before and after)
+
+| state | `grid-template-columns` | grid width | first card | verdict |
+|---|---|---|---|---|
+| float visible (before + after) | `170px 471px` | 471px | 231px | correct |
+| resume dock open — **BEFORE FIX** | `170px 471px` | **170px** | 231px | **card overflows its column by 61px; review jumps 188px left** |
+| resume dock open — **AFTER FIX** | `659px` | 659px | 322px | correct |
+| dock closed again | `170px 471px` | 471px | 231px | fully reversible |
+
+Question-row stress (avatar / 🔊 must not absorb the shrink), four question lengths × two languages
+× 730x694 and 375x812: avatar **64px** and 🔊 **44px** in all sixteen combinations, no dock or page
+side-scroll. Before the `min-width: 0` fix, one unbroken 76-character token pushed the 🔊 outside the
+row and the dock scrolled sideways; after, it wraps.
+
+### Finding 2 — session isolation (the privacy check)
+
+Patient A populated (thread, summary grid, dock transcript, phone read-back, pending answer,
+`finalBuffer`, a live recognition object, a running phone ticker) → `startNewSession()` → patient B:
+
+| surface | after handover |
+|---|---|
+| chat thread / summary grid / dock transcript / phone transcript / answer panel | **no A text in any** |
+| `finalBuffer` | `""` (was A's unfinished sentence) |
+| `recognition` | `null` (was a live engine) |
+| `state.visitUuid` / `pendingAnswer` / `pendingPhone` / `lastProfile` | all `null` |
+| the stale session token captured before the reset | reports **invalid** |
+| screen / input mode / identifyStep | `screen-phone` / `voice` / `phone` |
+
+**Stale in-flight responses** (a real promise resolving 250 ms AFTER the handover):
+
+| late response | leaked? |
+|---|---|
+| `followup/answer` → next question | **no** — not spoken into B's thread, `activeQuestion` stayed null |
+| `verify-otp` → A's `visit.uuid` | **no** — not installed; B stayed on `screen-phone` |
+| profile fetch → `renderSummary` | **no** — A's cards not drawn; B stayed on `screen-phone` |
+
+**CONTROL** (identical three flows, NO reset in the middle): all three completed normally — uuid
+installed and `screen-voice` reached, both bubbles added with `busy` cleared, summary rendered and
+`screen-summary` reached. The guard rejects stale sessions, not slow ones.
+
+### Finding 4 — phone early stop (digits fed word-by-word as `শূন্য এক সাত এক পাঁচ নয় আট চার ছয় তিন দুই`)
+
+| case | stopped at | still listening | captured | countdown |
+|---|---|---|---|---|
+| valid + trailing words (`এটাই আমার নম্বর`) | chunk **11** | no | `1715984632` | never ran |
+| valid + **two extra digits** | chunk **11** | no | `1715984632` | never ran |
+| valid then silence | chunk 11 | no | `1715984632` | never ran |
+| incomplete (9 digits) | — | **yes** | none | running |
+| invalid (starts `0 2`) | — | **yes** | none | running |
+
+One-verification-only, each racing case: three taps on the read-back = **1** lookup; three Enters on
+the typed path = **1**; a tap racing the 10 s countdown = **1**; a deliberate later retry = its own
+**1**. Auto-advance to `screen-otp` with no button press.
+
+### Finding 5 — review completion vocabulary (parsed by the SHIPPED `parseConfirmation`)
+
+| phrase | before S36 | after |
+|---|---|---|
+| `ঠিক আছে` · `okay` · `ok` · `yes` · `হ্যাঁ` | yes | yes |
+| `সব ঠিক আছে` · `সবকিছু ঠিক আছে` · `সব ঠিক` | **null** | **yes** |
+| `all right` · `alright` · `that's all` | **null** | **yes** |
+| `না` · `ঠিক নাই` · `আবার বলি` | no | no |
+| `আমার পেটে ব্যথা` · `all my body hurts` · `সব সময় ব্যথা` · `আমার নাম রহিম না মানে রহিমা` | null | **null** (unchanged — ordinary speech still cannot approve a record) |
+
+End-to-end on the open correction question: all six completion phrases → **1 submit each**, dock
+closed, logout modal shown, **no read-back**. A real correction (`আমার বয়স ভুল আছে, আমি ষাট বছর`) →
+**0 submits**, read-back shown verbatim, dock still open. An ambiguous sentence → **0 submits**.
+Three completion phrases in a row → **exactly 1 submit**.
+
+### Finding 6 — automatic raw transcript
+
+| case | downloads | POSTs |
+|---|---|---|
+| finish a screening | **1** (`raw-transcript-visit-ab12cd34-20260813.docx`) | 1, to `/documents/transcript` |
+| three finish events | 0 further | 0 further |
+| reset mid-render (400 ms delay) | **0** — the stale file is dropped | — |
+| manual button afterwards | 1 | 1 |
+
+`summary_report` was never hit. Backend renders verified separately: the .docx contains the raw
+Bangla utterance and the "Nothing has been edited, corrected, or summarized." header; a visit with
+zero utterances still produces a valid header-only document rather than an error; the filename
+contains none of the patient's name, phone, weight or BP, and only the 8-char visit prefix.
+
+### Finding 7 — usability
+
+`Question 1 of 4` … `Question 4 of 4` through the scripted opening, `প্রশ্ন ৪ / ৪` under the BN
+toggle, **hidden** once the M7 loop starts, and hidden + emptied after a handover. Layout: the
+avatar and its status line move **0px** when the chip appears. Completion: **exactly one** spoken
+utterance ("…has been sent to the doctor. Please wait to be called."), via plain `speak()` so no
+microphone opens on a finished visit.
+
+### ⛔ S5 — verified NOT implemented
+
+`no_speech_ms` and `max_answer_ms` are still marked `S5 (not used yet)` and are read by nothing; no
+`visibilitychange` handler, no `document.hidden` check and no `navigator.permissions` use exists
+anywhere in the kiosk. Both knobs are still served by `/api/config` (S1's seam). Now pinned by
+`test_step_s5_is_still_not_implemented` so this cannot be silently assumed later.
+
+- Notes: **four defects were created and caught during the loop, plus one caught by an existing
+  test.** A docstring terminator lost while rewriting `patient_context()`, and a JS block comment
+  pasted into a Python file — both caught by an `ast.parse` check before any test ran. Apostrophes
+  in my own comments inside the `CONFIRM_*` literals, which `shipped_set()` parses as vocabulary,
+  so the prose `['that', 's', 'all']` was READ AS VOCABULARY — **caught by the pre-existing
+  `test_the_two_vocabularies_do_not_overlap`**, which is precisely what it was written for. And an
+  incomplete `startNewSession()` that cleared all patient DATA but left the previous patient's
+  screen showing — found by the final end-to-end browser pass, not by a unit test.
+  **Still not measured:** formal WER / precision-recall on a labeled set (the standing thesis-
+  evidence gap), acoustic quality of the paced TTS, whether the M7 model OBEYS the bounded context
+  (Tier-3, not claimed), and anything about the S33–S36 voice behaviour under a real microphone.
+
+---
+
 ## 2026-08-12 — Session 35 — voice yes/no, header clock, question context, TTS pacing — suite **547 → 622**
 - Setup: Windows 11, Python 3.13.3 (venv), FastAPI TestClient + pytest; uvicorn on port 8001;
   browser validation in the in-app Chromium engine. SQLite, Alembic head **0012** (verified from the

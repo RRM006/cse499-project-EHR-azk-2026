@@ -233,7 +233,11 @@ def test_the_panel_is_retracted_by_every_action_that_ends_its_turn():
     assert "hideAnswerConfirm();" in fn_body("finishConversation")    # "Done"
     for handler in ("acceptAnswer", "rejectAnswer"):                  # both verdicts
         assert "hideAnswerConfirm();" in fn_body(handler)
-    assert "hideAnswerConfirm();        // S34" in js                 # the logout reset
+    # S36 (ADR-0057): the logout reset no longer retracts the panel with a line of its
+    # own — that hand-written list was replaced by endSession(), the ONE teardown. The
+    # rule is unchanged and now harder to forget: one patient's words may not greet the
+    # next one, and endSession() is the single place that guarantees it.
+    assert "hideAnswerConfirm();" in fn_body("endSession")
 
 
 def test_the_reset_clears_the_panels_by_id_because_docks_is_still_in_its_dead_zone():

@@ -1,8 +1,16 @@
 # 🧑‍⚕️ Human Guide — Live Run, Bangla Voice, and Key Rotation
 
-> The build is done (150 tests pass). These are the **3 things only a human can do**.
+> The build is done (**723 tests pass** as of Session 36, 2026-08-13 — this line said "150" until
+> then and was several cycles stale). These are the **3 things only a human can do**.
 > Do them **in this order**. No coding needed — just clicking and speaking.
 > Time needed: ~10 min setup, ~20 min for the live test.
+>
+> ⚠ **What the live run is FOR has changed since S25.** S25's run passed on a real mic and proved
+> the S25-era flow. Sessions 33–36 then added a lot of voice behaviour that **no microphone has
+> ever exercised**: spoken yes/no confirmation, Bangla-script English digit words, the spoken-answer
+> read-back, the phone number ending its own turn at eleven digits, "ঠিক আছে"/"all right" finishing
+> the review, and a spoken completion line. Those are what a live run should target now — the
+> current checklist is at the top of `current_task.md`.
 
 ---
 

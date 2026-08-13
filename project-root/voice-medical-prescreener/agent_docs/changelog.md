@@ -16,6 +16,114 @@
 
 ---
 
+## Session 36 — 2026-08-13 — **The patient session becomes a real boundary (epoch + endSession); MCP evaluated and REJECTED; the phone number ends its own turn; "ঠিক আছে" finishes the review; the raw transcript downloads itself** — 622 → 723 tests
+- Did: worked all seven post-S35 hardening items in one continuous pass, loop-engineered
+  (reproduce → root cause → smallest fix → targeted tests → browser measurement → regression → next).
+  **ADR-0057.** **Alembic stays 0012** — no schema change, no migration, **no new dependency**.
+  **No module changed status.** M15 stays 🟨. ⛔ **Step S5 was NOT implemented** — see below.
+- **Finding 1 — the "alignment breaks at the final question" was the GRID, not the dock.**
+  Reproduced and measured in a browser before touching anything: `setResumeMode()` hides
+  `#summary-float`, and a hidden grid item stops being PLACED while its TRACK stays exactly where it
+  was. Auto-placement then dropped `.summary-grid` into the narrow FIRST column — **471px → 170px,
+  with a 231px card still inside it**, so every card overflowed its own column and the whole review
+  jumped 188px left. Fixed with ONE rule (`.summary-body.no-float`) keyed to the same condition that
+  hides the float, at (0,2,0) so it outranks both responsive overrides without depending on source
+  order. Verified reversible: closing the dock restores `170px 471px` exactly. A second, smaller
+  defect found by the same probe: the text column between the avatar and the 🔊 was an inline
+  `flex:1` with no `min-width: 0`, so one unbroken 76-char token pushed the 🔊 out of the row —
+  now `.resume-q-body` with `min-width: 0` + `overflow-wrap: anywhere`.
+- **Finding 2 — the privacy one, and the largest change.** `resetState()` LOOKED like a reset and
+  was not: the recognition ENGINE was still running (`r.onend` restarts it, so the previous
+  patient's voice was transcribed into the NEXT patient's phone dock), `finalBuffer` still held
+  their words, the review read-through kept reading their answers aloud, the phone ticker was never
+  cancelled, and their summary cards stayed in the DOM. ⚠ **The dangerous one was none of those:
+  every in-flight `api()` promise wrote into the new session**, because `state` is a module-level
+  variable resetState() REPLACES. Worst case `verifyOtp()` — a late response installed the previous
+  patient's `visit.uuid` into the new patient's session, so the new patient's answers would have
+  been POSTed onto the old patient's visit. Clearing variables cannot fix a promise that has already
+  resolved, so the fix is an EPOCH (`sessionToken()`), the same shape as S3's `armToken`. NEW
+  `endSession()` + `startNewSession()`; eight async paths now check `mine()` before writing.
+- **Finding 3 — MCP was evaluated and REJECTED, with the reasons written down (ADR-0057 b).** There
+  is no tool-calling loop to attach it to (`call_module()` is one-shot); the round-trips are the
+  scarce resource (ADR-0026, and M7 is in the live loop); a second context path would rebuild the
+  disagreement S35 removed; and session scoping here is STRUCTURAL (a function not given visit B
+  cannot return visit B), which a transport would weaken. The three responsibilities are implemented
+  as explicit in-process functions in NEW `services/question_tools.py`. **What the rejection did not
+  excuse:** the conversation handed to M7 was the ENTIRE unbounded history (now bounded to the most
+  recent 24 turns — a normal ~18-turn visit is never truncated), and the model's question was only
+  ever ASKED not to prescribe — it is now CHECKED on the way out by `unsafe_question_reason()`, with
+  a deterministic server-authored fallback so the patient never loses a turn to the guard firing.
+- **Finding 4 — a complete phone number now ends its own turn.** It is the one answer whose
+  completeness is knowable the instant it arrives, and waiting `countdown_ms` for silence after it
+  was a defect: trailing speech joined the SAME utterance, so a repeated digit pushed the count past
+  eleven and `phoneFromSpeech()` returned null for a number already said correctly. Measured: stops
+  at chunk 11 with the trailing words and the two extra digits excluded; nine digits and a number
+  starting 02 keep listening. ⚠ The read-back is NOT skipped (ADR-0053's reason stands, and S35
+  already made it button-free). Added the re-entry guard `sendOtp()` never had — four callers, each
+  sending a real SMS.
+- **Finding 5 — "ঠিক আছে" / "all right" finishes the review.** Measured against the shipped parser
+  first: `সব ঠিক আছে`, `সবকিছু ঠিক আছে`, `সব ঠিক`, `all right`, `alright` and the "that is all"
+  family ALL returned null, so the most natural way to say "everything is fine" was read back as a
+  symptom and STORED as a correction — a loop the patient could not leave by speaking. Reuses
+  `parseConfirmation()` (no second system); `all`/`সব` are YES words rather than filler, which is
+  what makes "that is all" resolve at all. Only YES finishes; a real correction and an ambiguous
+  sentence both reach the existing pipeline untouched.
+- **Finding 6 — the raw transcript downloads itself at completion**, exactly once, not awaited,
+  silent on failure, and DROPPED if the kiosk was handed over mid-render. Filename is now
+  `raw-transcript-visit-<8>-<date>.docx` — "transcript" is ambiguous once a corrected text exists —
+  carrying no name and no phone number. The stored `kind` is unchanged.
+- **Finding 7 — two gaps, after checking that the other eight ideas were already solved.** The
+  completion was SILENT on a kiosk where every question is spoken; it now says what happened and
+  what to do next, through plain `speak()` (never `askAloud()`, which would open the mic on a
+  finished visit). And the conversation screen answered "how much longer?" with nothing; it now
+  shows `Question N of 4` **during the scripted opening only**, because that is the only stretch
+  whose length is a fact — the M7 loop ends on completeness, and an invented denominator would lie.
+- Decided: **ADR-0057** (a)-(g) + four explicit rejections.
+- Broke / problem: **four defects created and caught during the loop, plus one caught by an existing
+  test.** (1) `patient_context()` lost its docstring terminator when the body was rewritten —
+  caught by a syntax check before any test ran. (2) A JS block comment was pasted into a Python
+  file; same check. (3) My own comments inside `CONFIRM_YES`/`CONFIRM_FILLER` contained apostrophes,
+  and `shipped_set()` parses the vocabulary by matching quoted tokens — so the prose `['that', 's',
+  'all']` was silently READ AS VOCABULARY. **Caught by the pre-existing
+  `test_the_two_vocabularies_do_not_overlap`**, which is exactly what it was written for; the
+  literals now carry a warning not to use apostrophes in their comments. (4) `startNewSession()` was
+  initially incomplete — it cleared all patient DATA but left the screen on the previous patient's
+  view, so a future caller would have handed over a half-reset kiosk; the avatar clear, input mode
+  and screen moved into it so there is nothing left for a caller to forget.
+- Four existing tests updated, none weakened, all for the same reason: they pinned the hand-written
+  teardown inside `confirmSubmit()` line by line, and that list is what S36 replaced with one seam.
+  Each now asserts the NEW mechanism and is stricter than before — the timer test checks all FOUR
+  cancels rather than the three somebody remembered, including the phone ticker the old list had
+  simply missed. A fifth (`updateSubmitVisibility`) was widened by one term for Finding 5.
+- Verified: **723 passed, 2 skipped, 0 failures** (was 622). New files: `test_kiosk_resume_layout.py`
+  (8), `test_kiosk_session_isolation.py` (16), `test_question_tools.py` (27),
+  `test_kiosk_phone_early_stop.py` (13), `test_kiosk_review_completion.py` (11),
+  `test_auto_raw_transcript.py` (12), `test_kiosk_patient_feedback.py` (13).
+  **Live browser run (the shipped handlers driven with scripted recogniser results, S33's method —
+  NO microphone; ⚠ note real-mic STT/TTS *is* proven for the S25-era flow, S25's run passed, but no
+  mic has ever exercised the S33-S36 voice behaviour, and S33-S35's "no microphone has EVER been
+  used" phrasing is wrong and is corrected in current_task.md):** the review grid 170→659px with the dock open and back to `170px 471px` on close, no
+  side-scroll at 1280x800 / 730x694 / 375x812 in both languages, avatar 64px and 🔊 44px across four
+  question lengths; patient A → reset → patient B leaving ZERO of A's text in thread/grid/dock/phone
+  /answer panel with `finalBuffer` empty, `recognition` null and the stale token invalid; a REAL
+  in-flight response resolving 250ms after the reset failing to leak in all three of followup/answer,
+  verify-otp and the profile fetch, with a CONTROL run proving all three still work normally without
+  a reset; the phone stopping at chunk 11 and reaching OTP with exactly 1 lookup under four
+  different race conditions; all six completion phrases submitting exactly once while a real
+  correction and an ambiguous sentence submit zero; 1 auto-download with the raw filename and 0 on
+  repeat; and one spoken completion line.
+- Deferred: **Step S5 — STILL NOT IMPLEMENTED** (`no_speech_ms` watchdog, `max_answer_ms` cap,
+  permission/visibility recovery), verified absent by inspection and now pinned by a test so no
+  later session can assume it landed here. The one S5 item Finding 7 touches — recovery when mic
+  permission is interrupted mid-answer — was left deliberately: it cannot be built without deciding
+  what happens to the half-captured answer in `finalBuffer`, and that is the open **rule #1
+  decision reserved for the human**. Also still open: rotating the **3 API keys** (human-only),
+  formal **WER**, the Edge run, and the acoustic judgement on the paced TTS.
+- Next: **REAL MICROPHONE VALIDATION of the S36 voice changes.** Three new claims a real `bn-BD`
+  recogniser can disprove, none of which any test can settle: what it returns for `সব ঠিক আছে` /
+  `all right`, whether the eleven-digit early stop fires at the right moment on live speech, and
+  whether the spoken completion is audible over a waiting room.
+
 ## Session 35 — 2026-08-12 — **Voice-first confirmation (yes/no by speech), the header clock, context-aware questions, TTS pacing** — 547 → 622 tests
 - Did: worked all 8 findings of the second manual-testing round in one pass, loop-engineered
   (reproduce → root cause → smallest fix → targeted tests → browser measurement → next). **ADR-0056.**

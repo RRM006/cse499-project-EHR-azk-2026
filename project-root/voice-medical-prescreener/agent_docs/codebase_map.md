@@ -4,6 +4,76 @@
 > re-exploring the whole project each session. Update it whenever you add or move
 > a folder/file. Keep each note to one line.
 
+**Last updated:** 2026-08-13 (**Session 36 — ONE new production file, SEVEN new test files, no
+schema change (Alembic stays 0012), no dependency change.**
+
+**NEW production file — `backend/app/services/question_tools.py`** (Finding 3). The session-scoped
+context tools behind an M7 question, and the record of why they are NOT MCP tools (ADR-0057 b —
+no tool-calling loop exists, the round-trips are the scarce free-tier resource, a second context
+path rebuilds a disagreement S35 removed, and session scoping here is structural because every
+function takes `visit`). Four exports: `get_patient_context()` (age/sex/area ONLY — never the name,
+phone, weight or BP that sit on the same row), `get_question_context()` (collected · missing ·
+already_asked · the recent conversation **bounded to `MAX_CONTEXT_TURNS = 24`**, which never
+truncates a normal ~18-turn visit), `unsafe_question_reason()` (the output guard on M7's generated
+question — dosage amounts and explicit prescribing/diagnosing phrases; ⚠ HIGH-PRECISION,
+LOW-RECALL, deliberately does NOT ban "ওষুধ"/"medicine"/"diagnosis", and is NOT a medical-safety
+classifier), and `safe_fallback_question()` (the deterministic bilingual replacement, so a rejected
+question never costs the patient their turn).
+
+**NEW test files** (all under `backend/tests/`):
+- **`test_kiosk_resume_layout.py`** (8) — Finding 1. The grid track that outlived its occupant, the
+  pairing that must not drift, the specificity argument against both responsive overrides, and the
+  `min-width: 0` on the question text column.
+- **`test_kiosk_session_isolation.py`** (16) — Finding 2. The epoch, the ordering (`sessionEpoch += 1`
+  FIRST), the engine teardown (handlers detached BEFORE `abort()`, and `abort()` not `stop()`), the
+  four timers, the re-entry guards, "removed not merely hidden", and the stale-response guard on
+  each of the eight async patient paths.
+- **`test_question_tools.py`** (27) — Finding 3. The MCP rejection, the minimum context, the
+  isolation proofs (patient A's context/asked-questions/conversation can never reach patient B), the
+  bound, and the output guard in both directions — legitimate questions PASS, prescriptions fail.
+- **`test_kiosk_phone_early_stop.py`** (13) — Finding 4. Where the decision is made (inside
+  `onresult`, before `restartSilenceWindow()`), when it must not fire, that it exits through the
+  ordinary turn path without bypassing the read-back, and the one-verification-only guard.
+- **`test_kiosk_review_completion.py`** (12) — Finding 5. The vocabulary additions, why `all`/`সব`
+  are YES words rather than filler, the routing ahead of the read-back gate, and that a real
+  correction still reaches the existing pipeline untouched.
+- **`test_auto_raw_transcript.py`** (12) — Finding 6. Real backend renders (the filename, its lack
+  of patient identity, the raw bytes, an empty visit) plus the kiosk wiring (once-only, unawaited,
+  silent on the auto path, dropped when stale).
+- **`test_kiosk_patient_feedback.py`** (13) — Finding 7, **including the test that pins S5 as NOT
+  implemented** so a later session cannot assume it landed here.
+
+**Changed production files:**
+- **`frontend/kiosk.js`** — NEW `sessionEpoch` / `sessionToken()` / `endSession()` /
+  `startNewSession()`; `maybeCompletePhone()`; `otpSending`; `reviewCorrectionOpen()` /
+  `maybeFinishReview()`; `autoTranscriptDownloaded` + `downloadRawTranscript({auto})`;
+  `SUBMITTED_ALOUD`; `renderConvoProgress()` / `hideConvoProgress()`; `CONFIRM_YES` gains
+  `alright`/`all`/`সব`/`সবকিছু` and `CONFIRM_FILLER` gains `s`; `updateSubmitVisibility()` also
+  respects `submitting`; `confirmSubmit()`'s hand-written teardown replaced by one call.
+- **`frontend/kiosk.html`** — `.summary-body.no-float`, `.resume-q-body`, `.doctor-stage
+  .progress-chip`, `#convo-progress`; the resume row's inline `flex:1` became a class.
+- **`backend/app/services/followup.py`** — `patient_context()` now RENDERS what
+  `get_patient_context()` returns; the conversation comes from the bounded tool; M7's output passes
+  `unsafe_question_reason()` before it is stored or spoken. `datetime`/`timezone`/`Patient` imports
+  dropped (they moved to the tool).
+- **`backend/app/services/documents/__init__.py`** — the transcript kind's human-facing download
+  name is now `raw-transcript-visit-<8>-<date>.docx`. ⚠ The stored `kind` is UNCHANGED — it is the
+  API contract and both staff portals read it.
+
+**Five existing tests updated, none weakened** — four pinned the hand-written teardown inside
+`confirmSubmit()` line by line (that list is exactly what S36 replaced with one seam, and they are
+now stricter: the timer test checks all FOUR cancels rather than the three somebody remembered), and
+one widened `updateSubmitVisibility`'s condition by the `submitting` term.
+
+⚠ **A trap worth knowing before editing `frontend/kiosk.js`:** the vocabulary tests parse
+`CONFIRM_YES` / `CONFIRM_NO` / `CONFIRM_FILLER` straight out of the SERVED file by matching quoted
+tokens, so **an apostrophe in a comment inside those literals is read as vocabulary**. This happened
+in S36 and was caught by the pre-existing `test_the_two_vocabularies_do_not_overlap`.
+
+---
+
+### Session 35 (previous)
+
 **Last updated:** 2026-08-12 (**Session 35 — ONE new production file, FOUR new test files, no schema
 change (Alembic stays 0012), no dependency change. One element MOVED (see below).**
 

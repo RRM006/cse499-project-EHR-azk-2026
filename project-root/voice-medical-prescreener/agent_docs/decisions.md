@@ -1524,3 +1524,130 @@ separate, still-**unproven** question tracked in `current_task.md`.
   NOT proven: anything involving a real microphone — including what a `bn-BD` recogniser actually
   returns for a spoken "হ্যাঁ", which is now on the critical path — and the acoustic quality of the
   paced TTS. Both are live-run questions.
+
+---
+
+## ADR-0057 — 2026-08-13 — S36: the patient SESSION is a boundary with an epoch; MCP evaluated and rejected; a complete phone number ends its own turn
+
+- Context: a post-S35 hardening cycle with seven items. Two are defects with real user harm (one
+  privacy, one layout), two are voice-recognition gaps, one is an architecture question (MCP), one
+  is a deliverable (the raw transcript), and one is usability. Three of the seven turned out to have
+  the SAME root shape: something belonging to a finished patient, a finished turn or a finished
+  question was still alive afterwards.
+
+- Decision (a) — **the patient session is an explicit boundary with an EPOCH, and `endSession()` is
+  the only place that knows what a finished patient owns.** `resetState()` built a fresh `state`
+  object and emptied the chat thread, which LOOKED like a reset. It was not one. Measured, before
+  the fix: the SpeechRecognition engine was still running (and `r.onend` restarts it while
+  `listening` is true, so the previous patient's voice was transcribed into the NEXT patient's phone
+  dock); `finalBuffer` still held their words; the review read-through kept reading their answers
+  aloud; the phone ticker was never cancelled; and their summary cards stayed in the DOM.
+  ⚠ The dangerous one is none of those: **every in-flight `api()` promise wrote into the new
+  session**, because `state` is a module-level variable that resetState() REPLACES rather than
+  mutates. The worst case is `verifyOtp()` — a late response installed the previous patient's
+  `visit.uuid` into the new patient's session, and every answer the new patient gave was POSTed onto
+  the old patient's visit. Clearing variables cannot fix that: a promise that has already resolved
+  is going to run. So the fix is a counter that makes an older continuation identify itself as
+  stale — the same shape as S3's `armToken` and S34's read-aloud queue token, which already solve
+  exactly this for the microphone and the TTS queue. `sessionToken()` captures it; every `await` on
+  a patient-facing path checks it before writing.
+- Decision (a2) — **`startNewSession()` is COMPLETE, not a pair of halves.** It ends the session,
+  builds clean state, clears the avatar override, restores voice mode and shows the phone screen.
+  The hand-written teardown it replaced is precisely why: a list maintained by remembering had
+  already forgotten the phone ticker, the recognition engine and `finalBuffer`. There is nothing
+  left for a caller to forget. `endSession()` is deliberately NOT called from `resetState()`, which
+  also runs at module load where those globals are in their temporal dead zone (the S33 trap).
+
+- Decision (b) — **MCP was evaluated and REJECTED; the three tool responsibilities are implemented
+  as in-process functions instead** (`services/question_tools.py`). Four facts decided it:
+  (1) there is no tool-calling loop to attach a protocol to — `call_module()` is a ONE-SHOT
+  system+user request that returns text, while MCP presumes an agent that can call, read and call
+  again; (2) those round-trips are the scarce resource — ADR-0026 exists to spread ~1,000-1,500 free
+  requests/day across three buckets, and M7 sits in the LIVE loop, the worst place to spend three or
+  four calls where one will do; (3) a second context path is the defect class this project keeps
+  fixing — S35 built `collected_context()` as the exact mirror of `missing_summary_fields()` so they
+  could never disagree, and a server assembling context its own way rebuilds that disagreement one
+  layer further from the tests; (4) **session scoping here is STRUCTURAL and a protocol would weaken
+  it** — every function takes `visit` and reads only rows joined to it, so a function that is not
+  given visit B cannot return visit B. Over a transport that becomes a runtime property enforced by
+  passing the right argument, which is strictly weaker than one enforced by the call signature.
+- Decision (b2) — **what the rejection does NOT excuse.** Two real gaps found while evaluating were
+  closed: the conversation handed to M7 was the ENTIRE unbounded history (now the most recent
+  `MAX_CONTEXT_TURNS = 24`, which never truncates a normal ~18-turn visit but caps a pathological
+  one before it hits a free-tier token limit), and the model's question was only ever ASKED not to
+  prescribe. It is now CHECKED on the way out by `unsafe_question_reason()`, with a deterministic
+  server-authored fallback so a rejected question never costs the patient their turn.
+  ⚠ That guard is HIGH-PRECISION and LOW-RECALL by design and must never be described as a
+  medical-safety classifier: it catches dosage amounts and explicit prescribing/diagnosing phrases,
+  and deliberately does NOT ban "ওষুধ" / "medicine" / "diagnosis", because asking ABOUT those is
+  exactly what M7 should be doing. Rule #2 rests on the whole design, not on this function.
+
+- Decision (c) — **a complete phone number ends its own turn.** It is the ONE answer in the kiosk
+  whose completeness is knowable the instant it arrives (eleven digits, starting 01). Applying the
+  S4 silence window to it was a defect: after the last digit the mic stayed open and whatever
+  arrived joined the same utterance, so a repeated digit pushed the count past eleven and
+  `phoneFromSpeech()` returned null for a number that had already been said correctly — the patient
+  was told it was not understood and asked to start again. ⚠ This does NOT skip the read-back:
+  ADR-0053's reason still holds (a wrong digit sends the code to a stranger's handset) and S35
+  already made that step require no button. What is removed is a timer with nothing left to wait for.
+
+- Decision (d) — **"ঠিক আছে" / "all right" is a valid answer to the correction question.** Once
+  rejectReview() has asked "কোন তথ্যটি ঠিক করতে চান?", the patient may reasonably answer that there
+  is nothing to correct. That sentence previously had nowhere to go: it was read back as a symptom
+  and STORED as the answer, and the same question was asked again — on a voice-first kiosk, a loop
+  the patient could not leave by speaking. Only a YES finishes; an ordinary sentence is `null` and
+  is therefore a real correction, and `no` is left to that same pipeline because on THIS question it
+  is genuinely unclear and ending a screening on an unclear signal cannot be undone. It reuses
+  `parseConfirmation()` — no second confirmation system — and `all` / `সব` are YES words rather than
+  filler, which is what makes the "that is all" family work at all.
+
+- Decision (e) — **the raw transcript downloads itself at completion, and its NAME says which
+  transcript it is.** Same endpoint, same verbatim writer (rule #1); what changed is that nobody has
+  to find the button. It is fired from the one guarded submit, carries its own once-guard, is NOT
+  awaited (the "all done" screen must not wait on a .docx render), and fails SILENTLY on the
+  automatic path — an error banner about a download the patient cannot act on, over a visit that was
+  submitted successfully, is noise. ⚠ A render still in flight when the kiosk is handed over is
+  DROPPED, because saving one patient's transcript into the next patient's browser is exactly the
+  leak (a) exists to prevent; a missed download is the cheaper failure. The human-facing filename
+  became `raw-transcript-visit-<8>-<date>.docx` — "transcript" is ambiguous once a corrected text
+  exists in the same system — and carries no name and no phone number (rule #4). The stored `kind`
+  is unchanged, so the API contract and VISIT_DOCUMENT_KINDS are untouched.
+
+- Decision (f) — **the review grid's narrow column exists only while the float does.** MEASURED
+  defect: `setResumeMode()` hides `#summary-float`, and a hidden grid item stops being PLACED while
+  its TRACK does not go away — auto-placement dropped the summary cards into the 170px column with a
+  231px card inside it (471px → 170px, measured at 730x694). That is the reported "alignment breaks
+  at the final question", and it is why the fix is one CSS rule keyed to the same condition that
+  hides the float, not a pixel nudge.
+
+- Decision (g) — **say the completion out loud, and claim progress only where it is a fact.** Every
+  question in this kiosk is spoken, and then the most important moment of the visit was text-only —
+  for the patient this project is built for, that is the one screen they cannot read. The progress
+  chip is shown ONLY during the scripted opening, because `INTAKE_SCRIPT` has a known length and the
+  M7 loop that follows ends on completeness, not on a count known in advance. A progress bar that
+  lies is worse than no progress bar.
+
+- Rejected (1) — **implementing S5's permission/visibility recovery**, even though Finding 7 brushes
+  against it. It cannot be built without deciding what happens to the half-captured answer in
+  `finalBuffer`, and discarding a patient's words is the open rule #1 decision `current_task.md`
+  reserves for the human. ⛔ **S5 REMAINS UNIMPLEMENTED** — verified by inspection at the end of the
+  session and pinned by a test: `no_speech_ms` and `max_answer_ms` are still read by nothing, and
+  there is no `visibilitychange` handler and no permission-recovery path anywhere in the kiosk.
+- Rejected (2) — clearing the language preference at the session boundary. `localStorage` holds the
+  kiosk's EN/BN choice and nothing else; it is a property of the machine in the waiting room, not of
+  the patient, and clearing it would flip a Bangla-configured kiosk back to English between patients.
+- Rejected (3) — treating `no` on the correction question as "nothing to correct". Natural, but
+  ambiguous enough that a mis-recognition would submit a screening the patient was mid-way through
+  fixing.
+- Rejected (4) — renaming the stored document `kind`. Only the human-facing download name changed;
+  `kind` is the API contract and two staff portals read it.
+
+- Status: Accepted (code shipped, **723 tests pass, 2 skipped, 0 failures**; was 622). Alembic
+  unchanged at **0012** — no schema change, no migration, no new dependency.
+  NOT proven: the S36 voice behaviour under a real microphone. Every voice result this session
+  comes from driving the shipped handlers with scripted recogniser results in a browser engine, so
+  what a real `bn-BD` recogniser returns for `সব ঠিক আছে`, `all right` and the eleven digit words
+  remains a live-run question. ⚠ To be precise, because S33-S35 overstated this: real-mic STT/TTS
+  **is** proven for the S25-era flow (S25's human live run passed on Windows 11 + Chrome + a real
+  mic). What is unproven is everything voice-related added SINCE, in S33-S36. Acoustic quality is likewise not claimed. Whether the M7 model OBEYS the bounded context
+  is Tier-3 and is not claimed either; only the guard on its OUTPUT is.

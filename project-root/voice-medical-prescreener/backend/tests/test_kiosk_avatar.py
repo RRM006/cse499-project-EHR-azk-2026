@@ -118,10 +118,22 @@ def test_the_error_face_expires_with_its_banner():
 
 
 def test_the_done_face_is_set_on_submit_and_cleared_for_the_next_patient():
-    body = kiosk_js().split("async function confirmSubmit() {")[1].split("\n}\n")[0]
+    """⚠ S36 (ADR-0057) moved the CLEAR, not the rule. It used to be one line of a
+    hand-written teardown inside confirmSubmit's logout timer; it now lives in
+    startNewSession(), the single seam that hands the kiosk to the next patient. The
+    reason is the reason for the whole session-boundary work: a teardown maintained by
+    remembering had already forgotten the phone ticker, the recognition engine and
+    `finalBuffer`. There is nothing left for a caller to forget."""
+    js = kiosk_js()
+    body = js.split("async function confirmSubmit() {")[1].split("\n}\n")[0]
     assert "setAvatarOverride('done');" in body
-    assert "setAvatarOverride(null);" in body, "the next patient must not inherit 'All done'"
-    assert body.index("setAvatarOverride('done');") < body.index("setAvatarOverride(null);")
+    assert "startNewSession();" in body
+    assert body.index("setAvatarOverride('done');") < body.index("startNewSession();")
+
+    handover = js.split("function startNewSession() {")[1].split("\n}")[0]
+    assert "setAvatarOverride(null);" in handover, "the next patient must not inherit 'All done'"
+    # …and the clear still happens only AFTER the previous session is torn down
+    assert handover.index("endSession();") < handover.index("setAvatarOverride(null);")
 
 
 def test_reset_state_never_touches_the_override():
