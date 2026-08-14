@@ -25,6 +25,7 @@ from backend.app.schemas.dashboard import (
     ConditionEditRequest,
     DashboardItemOut,
     FieldEditRequest,
+    FieldVerifyRequest,
     VitalsEditRequest,
 )
 from backend.app.schemas.patient import PatientOut
@@ -32,6 +33,7 @@ from backend.app.schemas.profile import SUMMARY_FIELD_KEYS, CaseProfileOut, Sugg
 from backend.app.schemas.triage import HandoffOut, QueueStatsOut
 from backend.app.schemas.visit import VisitOut
 from backend.app.services.audit import audit
+from backend.app.services.completion import field_has_text
 from backend.app.services.requirements import missing_requirements
 from backend.app.services.risk import assess_visit, latest_assessment
 from backend.app.services.triage import (
@@ -92,6 +94,7 @@ def _to_item(db: Session, visit: Visit) -> DashboardItemOut:
         fields_filled=len(SUMMARY_FIELD_KEYS) - len(empty),
         fields_total=len(SUMMARY_FIELD_KEYS),
         fields_verified=human_verified_count(profile),
+        fields_empty=empty,
     )
 
 
@@ -370,6 +373,74 @@ def edit_profile_field(
     return profile
 
 
+@router.post("/visits/{visit_uuid}/profile/fields/{field_key}/verify",
+             response_model=CaseProfileOut)
+def verify_profile_field(
+    visit_uuid: str, field_key: str, payload: FieldVerifyRequest,
+    db: Session = Depends(get_db),
+) -> CaseProfileOut:
+    """S38 (C2) — record "I read this field and it is correct", WITHOUT editing it.
+
+    The gap this closes, recorded as deliberately deferred in ADR-0058 (Rejected 2): a
+    medic could only signal that they had checked a field by EDITING it — retyping the
+    model's own words to change ``source`` to ``'human'``. That is a false edit in a
+    medical record, and it made "verified" and "corrected" indistinguishable
+    afterwards.
+
+    ⚠ This writes provenance and NOTHING else. ``value``/``value_en``/``value_bn`` are
+    untouched, and ``source`` stays ``'ai'`` — because the model DID write the value,
+    and overwriting that would erase where it came from. Verification is an additional
+    fact about a field, not a replacement for its history.
+
+    ⚠ Rule #1 is unaffected twice over: this touches only the DERIVED profile, and even
+    there it does not touch a value.
+
+    Verifying an EMPTY field is refused: "I have checked this blank" is not a claim
+    anyone can make, and it would let a case reach 10/10 verified with nothing in it.
+    """
+    if field_key not in SUMMARY_FIELD_KEYS:
+        raise HTTPException(
+            status_code=400,
+            detail=f"Unknown field '{field_key}'. Expected one of: {', '.join(SUMMARY_FIELD_KEYS)}",
+        )
+    visit = _get_visit_or_404(db, visit_uuid)
+    editor = db.get(User, payload.editor_id)
+    if editor is None or editor.role not in ("medic", "doctor", "admin"):
+        raise HTTPException(status_code=403, detail="Editor must be a medic, doctor, or admin.")
+    profile = db.query(CaseProfile).filter(CaseProfile.visit_id == visit.id).first()
+    if profile is None:
+        raise HTTPException(status_code=400, detail="No profile yet — run intake first.")
+
+    fields = dict((profile.entities or {}).get("summary_fields") or {})
+    field = dict(fields.get(field_key) or {})
+    if not field_has_text(field):
+        raise HTTPException(
+            status_code=400,
+            detail="An empty field cannot be verified — record a value first.",
+        )
+
+    if payload.verified:
+        field["verified_by"] = editor.id
+        field["verified_at"] = datetime.now(timezone.utc).isoformat()
+    else:
+        # Un-verifying is allowed (a mis-click is a mis-click) and removes the claim
+        # entirely rather than recording a negative one.
+        field.pop("verified_by", None)
+        field.pop("verified_at", None)
+    fields[field_key] = field
+
+    entities = dict(profile.entities or {})
+    entities["summary_fields"] = fields
+    profile.entities = entities
+    profile.updated_at = datetime.now(timezone.utc)
+    db.commit()
+    db.refresh(profile)
+    audit(db, action="profile.field_verify", entity_type="visit", entity_id=visit.uuid,
+          actor_id=editor.id, clinic_id=visit.clinic_id,
+          detail={"field": field_key, "verified": payload.verified})
+    return profile
+
+
 @router.patch("/patients/{patient_id}/vitals", response_model=PatientOut)
 def edit_patient_vitals(
     patient_id: int, payload: VitalsEditRequest, db: Session = Depends(get_db)
@@ -385,15 +456,19 @@ def edit_patient_vitals(
     patient = db.get(Patient, patient_id)
     if patient is None:
         raise HTTPException(status_code=404, detail=f"Patient {patient_id} not found")
-    updates = (payload.weight_kg, payload.bp, payload.display_name, payload.sex, payload.age_years)
+    updates = (payload.weight_kg, payload.bp, payload.display_name, payload.sex,
+               payload.age_years, payload.height_cm)
     if all(v is None for v in updates):
         raise HTTPException(
             status_code=400,
-            detail="Nothing to update — send weight_kg, bp, display_name, sex, or age_years.",
+            detail="Nothing to update — send weight_kg, height_cm, bp, display_name, "
+                   "sex, or age_years.",
         )
 
     if payload.weight_kg is not None:
         patient.weight_kg = payload.weight_kg
+    if payload.height_cm is not None:
+        patient.height_cm = payload.height_cm
     if payload.bp is not None:
         patient.bp = payload.bp.strip()
     if payload.display_name is not None:
@@ -406,7 +481,7 @@ def edit_patient_vitals(
     db.refresh(patient)
     # Audit only what was actually edited (None = field not sent).
     detail = {k: v for k, v in {
-        "weight_kg": payload.weight_kg, "bp": payload.bp,
+        "weight_kg": payload.weight_kg, "height_cm": payload.height_cm, "bp": payload.bp,
         "display_name": payload.display_name, "sex": payload.sex,
         "age_years": payload.age_years,
     }.items() if v is not None}

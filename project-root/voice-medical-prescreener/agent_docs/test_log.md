@@ -1487,3 +1487,99 @@ the phone screen with `submitting` released, the thread empty, and voice mode re
 - First ML test will be: Phase 0 demo — can it transcribe ~10 spoken Bangla/Banglish
   sentences live, and is the raw text stored unchanged? (latency + a rough
   by-hand WER on those 10 sentences).
+
+---
+
+## 2026-08-14 — Session 38 — Staff-portal UX + clinical workflow hardening (A1-A7, B1-B7, C1-C4)
+
+- **Setup:** Windows 11, Python 3.14, `.venv`, `pytest backend/tests/` with
+  `PYTHONIOENCODING=utf-8`. Offline: no LLM, no network — the M16 tests fake both boundaries
+  (`ddgs` search + the provider `_attempt`), and every other suite writes straight to an in-memory
+  SQLite session.
+- **Result — FULL SUITE: 931 passed, 2 skipped, 0 failed** (175 s). Baseline at the start of the
+  session was re-verified before any change: **767 passed, 2 skipped** (554 s).
+- **Alembic:** head moved **0012 → 0013** (`0013_height_and_clinical_notes`); **18 tables**.
+
+### New test files (+164 net)
+
+| File | Tests | What it pins |
+|---|---:|---|
+| `test_clinical_reference.py` | 30 | the Dhaka clock rolls over at **18:00 UTC**, not midnight UTC; the three date-policy categories; BMI arithmetic and its **refusal** to compute from implausible input; both WHO ladders disagreeing at 23.9; the published WHO thresholds (7.0 / 11.1 mmol/L, 6.5 % HbA1c); that `glucose_reference()` **has no parameter to pass a reading to** (asserted on the signature — it is a safety property); the test vocabulary and its alias search |
+| `test_migration_0013.py` | 6 | fresh + in-place upgrade from 0012; **no BMI column under any spelling**; an existing patient upgrades to `height_cm IS NULL`, not 0; the `kind`/`status` CHECK constraints bite at the DATABASE level; downgrade removes both additions |
+| `test_staff_portal_s38.py` | 39 | static-source assertions over the shipped portals: no hard-coded date/time in the clock markup; every Dhaka formatter is `hour12`; `dhakaTodayIso` never uses `toISOString`; the auto-refresh **holds on a search result and on a hidden tab** and cannot be stacked by a second login; the meter is keyboard-reachable, stops propagation, and distinguishes verified from filled; BMI is **fetched, not recomputed in JS** (no `18.5`/`27.5` anywhere in staff.js); no BMI reaches any write payload; the glucose panel reads **no** patient value; the empty branch of `renderQueue` still renders the workspace; motion stays behind the reduced-motion guard |
+| `test_date_policy.py` | 11 | through the REAL `POST /prescription`: today accepted, backdated **and** post-dated refused with the allowed date in the message, a missing date stamped rather than rejected, a follow-up in the past refused but today/next-month accepted, an empty follow-up left empty — and **a historical visit's `started_at`/`submitted_at` untouched** while a prescription is written today for it; a rejected date reaches **neither** storage nor a document |
+| `test_ehr_export.py` | 28 | `type: "document"` with the Composition first; **every internal `urn:uuid` reference resolves inside the bundle** (walked recursively); LOINC-coded vitals with UCUM units and the BP panel split into 8480-6/8462-4; BMI derived in the export (72 kg @ 165 cm → 26.4); a malformed BP produces **no** coded reading; only the birth YEAR asserted; **the AI suggested condition appears nowhere in the serialised bundle**; the tier is a `RiskAssessment` and `critical` survives as `critical` alongside the standard `high`; the transcript reproduced **exactly** and not replaced by its correction; Bangla via the standard `_title` translation extension and not a `title_bn` field; nothing clinical is written by an export |
+| `test_workflow_notes.py` | 31 | C2 leaves the value **and `source`** untouched, an empty field cannot be verified, verification is audited and never touches an utterance; C1 shows only the asking medic's referrals and **counts** unattributed pre-S37 ones instead of inventing owners; C3 recall ordering by due date, past dates refused, no double-resolve; C4 note→inbox→done, a handover note takes no due date; a note never becomes clinical data and carries no chat-shaped fields |
+
+Additional coverage inside existing files: **15** in `test_assistant.py` (the web search receives the
+question and nothing else even with case context on; context off by default; the de-identified
+prompt contains the picture and none of the identifiers; **no raw transcript**; suggested tests
+bounded/cleaned; the output guard does not fire on dosage ranges but does on patient-directed
+instructions; a flagged answer is delivered with a stronger disclaimer) and **4** in
+`test_medic_summary.py` (height on the existing vitals endpoint, implausible heights refused, no BMI
+accepted or returned).
+
+### ⚠ Three existing tests were modified — the honest account
+
+- `test_prescription_docx.py` and `test_doctor_history.py`: the fixture literals `"2026-07-06"` /
+  `"2026-07-13"` / `"2026-08-13"` were made **relative** to today. No assertion in either file ever
+  read those values; leaving them would have rotted into a 400 under the new date policy.
+- `test_assistant.py`: one assertion checked the exact phrase `"drug-information assistant"` in
+  M16's system prompt. The module legitimately widened past drugs, so it now asserts the property
+  that assertion was a proxy for — that M16's own prompt is used and that it is INFORMATION-ONLY.
+- **No test was weakened, deleted, or changed to make a failure disappear.**
+
+### Manual browser verification (real uvicorn + a THROWAWAY seeded SQLite DB)
+
+⚠ Rule #4: a scratch DB with **8 synthetic cases** (invented names, phones and symptoms) was used
+for everything below. **The real dev DB was NOT modified this session** — unlike S37, which changed
+two rows.
+
+Confirmed by hand, at 1280 / 768 / 375 px and in both languages:
+- header clock showing the real date and a ticking 12-hour time (`9:25:23 am` / `Friday, 14 August
+  2026`; Bangla: `৯:২৩:১০ AM` / `শুক্রবার, ১৪ আগস্ট, ২০২৬`);
+- the "Live · every 15s · updated 9:26 am" line, and it switching to "Auto-refresh held while you
+  read this list" when the sidebar shows referrals or the inbox;
+- triage order against the synthetic set: `critical 47m → high 92m → unassessed 12m → medium 205m →
+  medium 33m → low 8m` (worst first, longest wait first inside a tier);
+- the segmented meter (`aria-label` "9 of 10 pre-screening questions answered, 3 verified by a
+  person"; ticks `verified,verified,verified,filled×6,empty`), and clicking it opening
+  "Still empty: • 10. Current Concern / Question" **without** opening the case;
+- Intake & Vitals: 165 cm + 72 kg → **BMI 26.4 kg/m² · WHO: Overweight · WHO Asian cut-offs:
+  Increased risk**, saved and persisted, "Still to record" cleared, editor closed on save;
+- the glucose chart rendering all four contexts with both unit systems and the ADA note;
+- the prescription inline (`case-detail` still `flex`, `prescription-screen` inside it), `rx-date`
+  `value = min = max = 2026-08-14`, follow-up `min = 2026-08-14`, `.rx-two-col` at `332.6px 332.6px`
+  on desktop and one column at 375px;
+- test search "cbc" → suggestion → chip, free text "Serum magnesium (not in list)" → chip, remove →
+  payload `tests` follows;
+- the FHIR bundle generated and re-read in the browser: `type: "document"`, first resource
+  `Composition`, 10 resources, `content-type: application/fhir+json`, filename
+  `ehr-fhir-r4-visit-9f48ddfb-20260814.json`, 7 sections ending with "Patient's own words (verbatim,
+  unedited)";
+- per-field verify: badge `AI-Extracted` → `✔ Checked`, button → `↺ Undo check`, value **unchanged**
+  (`synthetic value 2`), note "✔ Checked by a staff member · 14 Aug 2026, 10:01 am";
+- a recall and a handover note written by the doctor and appearing in the medic inbox, then closed;
+- a live forward appearing in **My referrals** attributed to the forwarding medic;
+- **no page-level horizontal scroll and no overflowing element** at 1280 / 768 / 375 in EN and BN.
+
+### Defects found and fixed during this session
+
+| # | Defect | How it was found |
+|---|---|---|
+| 1 | the 15 s auto-refresh **replaced a phone-search result** with the full queue | reading `searchPhone` against the timer |
+| 2 | the prescription date used `toISOString()` = the **UTC** date, so a prescription written 00:00-06:00 Dhaka was dated **yesterday** | reading the form while writing the date policy |
+| 3 | the doctor workspace **never restored its placeholder** once a case had been opened | browser: switching scope left the previous case on screen |
+| 4 | (mine) the meter's negative margin made it **139px inside a 131px wrapper** | measured in the browser |
+| 5 | (mine) the header's right-hand group does not wrap, so the new clock pushed the page **17px sideways at 375px** | measured at the mobile preset |
+| 6 | (mine) `renderWorkspaceState()` was **never reached** because `renderQueue` returns early on the empty branch — exactly the case B7 reports | browser: the empty state did not change |
+
+### Not measured (unchanged from S25/S37)
+
+- **WER / precision-recall:** still not formally measured. S25's live run was qualitative and
+  remains the only voice evidence.
+- **Appearance:** the frontend tests are static-source assertions (the S28 no-JS-runner decision).
+  That the portals *look* right is a human judgement; the browser checks above are described
+  honestly as hand checks, not as automated coverage.
+- **The FHIR bundle against a real receiving system:** not attempted. Structural validity is tested;
+  interoperability with a specific EHR is not, and is not claimed.

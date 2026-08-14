@@ -80,6 +80,14 @@ function setLanguage(lang) {
 
 function t(en, bn) { return currentLanguage === 'bn' ? bn : en; }
 
+/* S38 — a NUMBER in the active language's digits. Bangla renders ১৫, not 15, and a
+   sentence that is Bangla everywhere except its numerals reads as half-translated.
+   The queue's own counts already come out of toLocaleString via the date helpers;
+   this is for numbers built into interpolated strings. */
+function localeNum(n) {
+  return Number(n).toLocaleString(currentLanguage === 'bn' ? 'bn-BD' : 'en-GB');
+}
+
 /* STRUCT-2: every portal header offers Logout back to the Portal Directory at "/".
    Auth is stubbed (no server session to clear), so logout = leave the page; each
    portal's in-memory state is discarded by the navigation itself. */
@@ -97,19 +105,55 @@ function parseUtc(value) {
   return new Date(hasZone ? s : s + 'Z');
 }
 
+/* S38 (A7): every clock in the staff portals is a 12-hour clock with AM/PM.
+   The 24-hour `en-GB` default was a developer's clock, not a clinic's — Bangladeshi
+   staff write and read "3:40 PM", and a queue row saying "15:40" is one extra
+   translation step for the exact user this project is built for (elderly and
+   non-technical). `hour: 'numeric'` rather than '2-digit' so it reads "3:40 PM",
+   not "03:40 PM". The Bangla locale renders both the digits and the day-period in
+   Bangla script. */
+const DHAKA = 'Asia/Dhaka';
+function _locale() { return currentLanguage === 'bn' ? 'bn-BD' : 'en-GB'; }
+
 function dhakaTime(value) {
   const d = parseUtc(value);
   if (isNaN(d)) return '—';
-  return d.toLocaleTimeString(currentLanguage === 'bn' ? 'bn-BD' : 'en-GB',
-    { timeZone: 'Asia/Dhaka', hour: '2-digit', minute: '2-digit' });
+  return d.toLocaleTimeString(_locale(),
+    { timeZone: DHAKA, hour: 'numeric', minute: '2-digit', hour12: true });
 }
 
 function dhakaDateTime(value) {
   const d = parseUtc(value);
   if (isNaN(d)) return '—';
-  return d.toLocaleString(currentLanguage === 'bn' ? 'bn-BD' : 'en-GB',
-    { timeZone: 'Asia/Dhaka', day: '2-digit', month: 'short', year: 'numeric',
-      hour: '2-digit', minute: '2-digit' });
+  return d.toLocaleString(_locale(),
+    { timeZone: DHAKA, day: '2-digit', month: 'short', year: 'numeric',
+      hour: 'numeric', minute: '2-digit', hour12: true });
+}
+
+/* A7 — the LIVE clock: what the actual date and time are RIGHT NOW in Dhaka.
+   Distinct from the two formatters above, which render a STORED moment. Nothing is
+   hard-coded and nothing is passed in: it reads the system clock every call, so a
+   caller ticking it on an interval shows a running clock.
+   ⚠ `timeZone: 'Asia/Dhaka'` is safe in the browser (every modern engine ships the
+   full IANA database); the SERVER cannot rely on that — Windows has no tz database —
+   which is why backend/app/services/clinical_dates.py uses a fixed +06:00 offset
+   instead. The two agree because Bangladesh has had no DST since 2010. */
+function dhakaNowParts() {
+  const now = new Date();
+  return {
+    date: now.toLocaleDateString(_locale(),
+      { timeZone: DHAKA, weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' }),
+    time: now.toLocaleTimeString(_locale(),
+      { timeZone: DHAKA, hour: 'numeric', minute: '2-digit', second: '2-digit', hour12: true }),
+  };
+}
+
+/* A7 / B5 — today's Dhaka calendar date as YYYY-MM-DD, for defaulting and for the
+   `min`/`max` of a date input. `toISOString()` would give the UTC date, which is
+   YESTERDAY for the first six hours of every Dhaka day — that is exactly the bug the
+   prescription form shipped with. `en-CA` is used because it formats as ISO. */
+function dhakaTodayIso() {
+  return new Date().toLocaleDateString('en-CA', { timeZone: DHAKA });
 }
 
 /* fetch wrapper: throws Error with the backend's detail message on failure. */

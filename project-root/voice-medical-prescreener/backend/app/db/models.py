@@ -6,9 +6,9 @@ column (``corrected_text``) and never overwrites the raw words.
 """
 
 import uuid
-from datetime import datetime, timezone
+from datetime import date, datetime, timezone
 
-from sqlalchemy import JSON, Boolean, CheckConstraint, DateTime, Float, ForeignKey, Integer, String, Text, UniqueConstraint
+from sqlalchemy import JSON, Boolean, CheckConstraint, Date, DateTime, Float, ForeignKey, Integer, String, Text, UniqueConstraint
 from sqlalchemy.orm import Mapped, mapped_column
 
 from backend.app.db.database import Base
@@ -86,6 +86,11 @@ class Patient(Base):
     # weight is medic-editable, bp is a free-form reading like "120/80".
     weight_kg: Mapped[float | None] = mapped_column(Float, nullable=True)
     bp: Mapped[str | None] = mapped_column(String(32), nullable=True)
+    # S38 (rev 0013, ADR-0060): height in CENTIMETRES, the other half of a BMI.
+    # ⚠ BMI itself is never stored — it is a pure function of these two columns
+    # (services/clinical_reference.bmi) and a stored copy would go stale the moment
+    # a weight is corrected.
+    height_cm: Mapped[float | None] = mapped_column(Float, nullable=True)
     consent: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False, server_default="0")
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=_utcnow)
 
@@ -295,6 +300,61 @@ class OtpCode(Base):
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=_utcnow)
     expires_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
     consumed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+
+
+class ClinicalNote(Base):
+    """S38 (rev 0013, ADR-0060) — an attributable, visit-linked workflow note.
+
+    ONE table serves the two requested workflow features, because they are the same
+    shape and differ only in ``kind``:
+
+      * ``recall``        — the doctor schedules the patient to come back. ``due_date``
+                            is when, ``body`` is why, ``status`` is the lifecycle.
+      * ``handover_note`` — the doctor sends a short instruction BACK to the medic,
+                            which the status flow otherwise never allows (it runs one
+                            way: patient -> medic -> doctor). ``recipient_role`` is who
+                            it is for; the medic marks it done.
+
+    ⚠ What this is NOT, and must never become: a chat table. There is no thread, no
+    reply, no read receipt and no per-user delivery — a note is written once, addressed
+    to a ROLE (not a person, because whoever is on the triage desk this shift is the
+    right recipient), and closed. The brief is explicit: *"Do not build a chat
+    application."*
+
+    ⚠ Rule #2: a note is workflow text, never a clinical conclusion. It is stored and
+    displayed separately from ``prescriptions`` (the treatment) and
+    ``risk_assessments`` (the tier), it is authored by a human, and no AI writes one.
+    """
+
+    __tablename__ = "clinical_notes"
+    __table_args__ = (
+        CheckConstraint("kind IN ('recall','handover_note')", name="ck_clinical_notes_kind"),
+        CheckConstraint("status IN ('open','done','cancelled')", name="ck_clinical_notes_status"),
+        CheckConstraint(
+            "recipient_role IS NULL OR recipient_role IN ('doctor','medic','desk','admin')",
+            name="ck_clinical_notes_recipient_role",
+        ),
+    )
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    clinic_id: Mapped[int] = mapped_column(ForeignKey("clinics.id"), nullable=False)
+    visit_id: Mapped[int] = mapped_column(ForeignKey("visits.id"), nullable=False, index=True)
+    patient_id: Mapped[int | None] = mapped_column(
+        ForeignKey("patients.id"), nullable=True, index=True
+    )
+    author_id: Mapped[int] = mapped_column(ForeignKey("users.id"), nullable=False)
+    kind: Mapped[str] = mapped_column(String(24), nullable=False)
+    recipient_role: Mapped[str | None] = mapped_column(String(16), nullable=True)
+    body: Mapped[str] = mapped_column(Text, nullable=False)
+    #: Recall only. A DATE, not a timestamp: a clinic recalls someone "on the 3rd",
+    #: never at 14:07, and storing a time would invent precision nobody supplied.
+    due_date: Mapped[date | None] = mapped_column(Date, nullable=True)
+    status: Mapped[str] = mapped_column(
+        String(16), nullable=False, default="open", server_default="open"
+    )
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=_utcnow)
+    resolved_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    resolved_by: Mapped[int | None] = mapped_column(ForeignKey("users.id"), nullable=True)
 
 
 class ModuleEvent(Base):

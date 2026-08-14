@@ -31,6 +31,10 @@ class PatientOut(BaseModel):
     # Vitals (rev 0010) for the staff detail views; weight is medic-editable (MEDIC-6).
     weight_kg: float | None = None
     bp: str | None = None
+    # S38 (rev 0013): height in centimetres — the other half of a BMI. The BMI itself
+    # is NOT a field here: it is derived on demand from height + weight, so it can
+    # never disagree with the two values it is made of.
+    height_cm: float | None = None
     consent: bool
     created_at: datetime
 

@@ -16,6 +16,136 @@
 
 ---
 
+## Session 38 — 2026-08-14 — **Staff-portal UX + clinical workflow hardening: a real Dhaka clock and a real date policy, an editable intake form with derived BMI, a glucose REFERENCE (not a limit), the prescription inline at the bottom with searchable tests, a FHIR R4 EHR export, M16 widened to tests + case-context, and the four workflow features S37 deferred** — 767 → 931 tests
+- Did: a nineteen-item brief worked continuously (inspect → plan → implement → test → verify →
+  fix → document), across both staff portals and the backend behind them. **Four new ADRs: 0060**
+  (the derived/stored boundary + the four workflow features), **0061** (the date policy), **0062**
+  (the FHIR export), **0063** (the M16 widening). **Alembic 0012 → 0013** — the first schema change
+  since S25, and deliberately small: **one column and one table**, with the reasons and the rejected
+  alternatives recorded before either was written. **No new Python dependency.** **No module changed
+  status; M15 stays 🟨.**
+- **The rule that shaped the session: most of it added no storage at all.** The medic's referral
+  history, the FHIR bundle, the completeness detail, the BMI and the whole reference layer are
+  questions asked of rows that already exist. Where the brief asked for something with genuinely no
+  home, it got exactly one: `patients.height_cm`, and a single `clinical_notes` table serving BOTH
+  the recall and the back-channel because they are the same shape.
+- **MEDIC — A1..A7.** "Triage" is now explained where the word is used (a one-click disclosure, not
+  a tutorial: worst tier first, then longest wait, and why an unassessed case sits above Moderate).
+  The **10/10 line became a control** — ten segments instead of one bar, verified drawn differently
+  from merely filled, keyboard-reachable, and clicking it lists exactly which fields are still empty
+  from the server's own `fields_empty`. **Intake & Vitals was rebuilt as a working form**: labelled
+  fields instead of five bare placeholders, prefilled with what is already stored, a button that
+  says *Edit* once anything has been recorded, and it survives a language toggle mid-edit. Height
+  joins weight and BP, and **BMI computes live as they are typed** — from
+  `GET /api/reference/bmi`, so the published cut-offs exist in one place, reported under BOTH the
+  WHO international and the **WHO Asian action points** (a BMI of 24 is "normal" internationally and
+  "increased risk" for this population).
+- **The medic queue's auto-refresh was silently destroying work.** It already ran every 15 s, and
+  `searchPhone()` renders into the same list — so a medic looking up a returning patient watched
+  their result replaced by the full queue fifteen seconds later, for no visible reason. The timer is
+  now shared (one copy, not one per portal), **holds while a search result or another list is on
+  screen**, holds while the tab is hidden and refreshes once on return, says which of those states
+  it is in, and **no longer re-runs the entrance stagger on a background refresh** — a healthy queue
+  had been re-flashing every 15 seconds.
+- **A6 — the human asked for "a diabetic limit"; there isn't one, and shipping one would have been
+  the most dangerous thing in the session.** `glucose_reference()` takes **no argument at all**: it
+  returns the published chart — fasting / 2-h OGTT / random / HbA1c — each with the sample conditions
+  that make its numbers mean anything, both mmol/L and mg/dL, the **WHO/ADA disagreement at the
+  lower fasting bound stated out loud** rather than silently resolved, and a source per row.
+- **DOCTOR — B1..B7.** The prescription form **moved inline to the bottom of the case** instead of
+  replacing it, so writing a prescription no longer means losing sight of the case it is for.
+  Advice/Lifestyle and Required Tests became **two vertical cards** side by side, stacking with no
+  breakpoint to maintain. **Required Tests became a token editor** over a ~50-entry bilingual
+  vocabulary (a Python module, not a table): type to search, click to add, type anything not on the
+  list, remove any chip — and **Enter always commits what was TYPED, never the highlighted
+  suggestion**, because the doctor's own words must win. "Assigned (0)" no longer shows *"Select a
+  patient from the queue"* over an empty queue: the workspace now says what its emptiness means, and
+  the placeholder is restored when a case is closed (it never was before).
+- **B1 — "Accept & Write to EHR" now actually produces an EHR record.** An **HL7 FHIR R4 document
+  Bundle** (Composition, Patient, Encounter, Organization, Practitioner, LOINC-coded vital-sign
+  Observations with UCUM units, RiskAssessment, and MedicationRequest/ServiceRequest/Condition once
+  a prescription exists), downloadable as `application/fhir+json` through the existing `documents`
+  table and route — no new subsystem, no dependency. ⚠ Claimed honestly as *structurally valid and
+  semantically conservative*: not certified, not profiled, and a receiver must still map it.
+  ⚠ **The AI's suggested condition is excluded from the bundle entirely** — its disclaimer does not
+  survive ingestion by another system, so the data must not travel; the doctor's own typed diagnosis
+  IS exported. ⚠ `critical` is not silently downgraded: it maps to `high` in the standard
+  `risk-probability` set AND travels exactly in our own system, because the standard set has no
+  "critical".
+- **B5 — the date policy, by CATEGORY.** "Cannot use previous date anywhere" applied literally would
+  rewrite the record, so: system/historical timestamps are **never touched**; the prescription date
+  must be **today**; a follow-up or recall must **not be in the past**. Enforced server-side (a
+  `min` attribute is a courtesy, not a control) and BEFORE the write, so a rejected date reaches
+  neither the stored payload nor the .docx. ⚠ **A real bug fixed on the way:** the form stamped
+  `toISOString()`, the **UTC** date — so a prescription written between midnight and 6 a.m. Dhaka
+  was dated the previous day on the document the patient carries to a pharmacy.
+- **A7/B5 — one clock, and it is Bangladesh's.** A live header clock in both portals (real date,
+  running 12-hour time with AM/PM, ticking, bilingual), and every stored timestamp re-rendered
+  12-hour. ⚠ Server-side "today" uses a **fixed UTC+06:00 offset, not `ZoneInfo`**: Windows ships no
+  IANA tz database and `zoneinfo` raises on this project's own dev machine. Bangladesh has had no
+  DST since 2010, so the fixed offset is exact rather than approximate, and identical on Windows and
+  Arch with nothing installed.
+- **B6 — M16 widened, with privacy enforced structurally.** One service, one seam, one round-trip,
+  now covering medicines (uses, dosing ranges, age considerations, cautions, contraindications,
+  adverse reactions), diagnostic tests (what/why/measures/preparation), and — on the doctor's
+  **explicit opt-in** — which tests might suit this patient. ⚠ **The web search receives the typed
+  question and nothing else, by signature**, so no future edit can send clinical data to a third
+  party; the LLM's case context is de-identified (age, sex, area, vitals, the derived 10 fields) and
+  carries **no name, no phone and no raw transcript**. Suggested tests come back as chips the doctor
+  CLICKS to insert — nothing is ordered until a human generates the prescription. A **new** output
+  guard catches patient-directed instructions; ⚠ it deliberately does NOT reuse M7's dosage rule,
+  because here a dosage range is the correct answer. A flagged reply is **delivered with a stronger
+  server-authored disclaimer**, not deleted.
+- **C1–C4 — the four features S37 deferred, all built.** *Referral history:* derived from
+  `audit_log.actor_id` (which S37 added), so no new storage — and it **reports what it cannot
+  attribute** rather than inventing an owner for pre-S37 referrals. *Per-field verification:*
+  `verified_by`/`verified_at` inside the existing `summary_fields` JSON, so a medic can record "I
+  read this and it is correct" **without editing the field** — which was previously the only way,
+  and put a false edit in a medical record. An empty field cannot be verified. *Recall* and
+  *doctor→medic back-channel:* one `clinical_notes` table, addressed to a **role** not a person, no
+  thread, no reply, no read receipts.
+- Decided: ADR-0060 (a)–(i) with six rejections, ADR-0061 (a)–(f) with four, ADR-0062 (a)–(j) with
+  five, ADR-0063 (a)–(h) with five.
+- Broke / problem: **three defects found and fixed during the loop, plus three of my own.**
+  (1) the auto-refresh eating a phone search (above); (2) the UTC prescription date (above); (3) the
+  doctor workspace never restoring its placeholder after a case was opened, so switching to an empty
+  scope left the previous patient's case on screen. Mine: the completeness meter's negative margin
+  made it 139px wide inside a 131px wrapper (measured) and it scrolled inside itself; the header's
+  right-hand group does not wrap, so adding a clock pushed the page 17px sideways at 375px; and the
+  first draft of `renderWorkspaceState` was never reached because `renderQueue` returns early on the
+  empty branch — which is *exactly* the case B7 reports. All three were caught in the browser, not
+  by a test, and the third now has a test.
+- ⚠ **Three existing tests were modified, and this is the honest account of why.** Two fixture date
+  literals (`test_prescription_docx`, `test_doctor_history`) were made relative — no assertion in
+  either file ever read them, and leaving them would have rotted into a 400 under the new date
+  policy. One assertion in `test_assistant` checked the exact phrase *"drug-information assistant"*
+  in M16's system prompt; the module legitimately widened past drugs, so it now asserts the property
+  that mattered (M16's own prompt, and that it is INFORMATION-ONLY). **No test was weakened or
+  deleted, and no test was changed to make a failure disappear.**
+- Verified: **931 passed, 2 skipped, 0 failures** (was 767/2). New files:
+  `test_clinical_reference.py` (30), `test_migration_0013.py` (6), `test_staff_portal_s38.py` (39),
+  `test_date_policy.py` (11), `test_ehr_export.py` (28), `test_workflow_notes.py` (31), plus 15 in
+  `test_assistant.py` and 4 in `test_medic_summary.py`. Live browser run against a real uvicorn and
+  a **throwaway** SQLite DB seeded with 8 synthetic cases (rule #4 — the real dev DB was NOT
+  touched this session): the clock, the refresh line, the triage explainer, the segmented meter and
+  its detail panel, the rebuilt intake form saving height/weight/BP with live BMI, the glucose
+  chart, the inline prescription with its pinned dates, test search → select → free-text → remove,
+  the FHIR bundle generated and re-read (10 resources, Composition first, `application/fhir+json`),
+  per-field verify (AI-Extracted → ✔ Checked with the value unchanged), a recall and a handover note
+  round-tripping into the medic inbox, and the referral history attributing a live forward. Layout
+  checked at 1280 / 768 / 375 in both languages with **no page-level horizontal scroll**.
+- Deferred: the medic portal has no recall LIST of its own (recalls appear in the shared inbox
+  filtered by `kind`, which is enough for one clinic and avoids a fourth sidebar tab); the FHIR
+  bundle is not validated against a national implementation guide; the test vocabulary is
+  Bangladesh-outpatient-shaped and not exhaustive. Still open from earlier cycles: **Step S5**, the
+  mid-turn word-loss rule #1 decision (the human's), rotating the **3 API keys**, formal **WER**,
+  and the Edge run.
+- Next: **a human pass over both portals.** Everything above is test-pinned and was exercised in a
+  browser, but three things only a person can settle: whether the glucose reference reads as
+  *reference* rather than as guidance, whether the FHIR export is the right shape for whatever
+  system this clinic would actually hand it to, and whether the doctor→medic note is a channel this
+  clinic wants at all or a source of noise.
+
 ## Session 37 — 2026-08-13 — **The staff portals get their ROLES: a medic operations layer (triage order, wait, completeness, pre-handoff vitals, advisory handover check) and a doctor longitudinal layer (patient timeline, prescription history, completed-cases scope); plus a staff depth/motion layer** — 723 → 767 tests
 - Did: a full audit-then-build cycle over `/medic/` and `/doctor/`, loop-engineered (read the real
   code → find the gap → smallest fix → targeted tests → browser measurement → regression → next).

@@ -6,46 +6,86 @@
 
 **Status keys:** ⬜ Not started · 🟨 In progress · 🟦 Blocked · ✅ Done · ⛔ Retired
 
-**Last updated:** 2026-08-13 (**Session 37 — the two STAFF portals were audited as ROLES and given
-the layers each role was missing. 723 → 767 tests pass, 2 skipped, 0 failures.** New ADRs
-**0058** (features + data ownership) and **0059** (the staff depth/motion layer). **Alembic stays
-0012 — `models.py` and `migrations/` are UNTOUCHED: no new table, no new column, no migration, no
-new dependency.** New reference doc: **`agent_docs/portal_roles.md`** — what each portal is for, the
-data-ownership matrix, and what was deliberately NOT built.
-⚠ **NO MODULE CHANGED STATUS.** The work lands inside **M14 (Doctor Dashboard)** and the medic side
-of the same staff layer, both already ✅; M13 storage is untouched. **M15 stays 🟨.**
-**MEDIC — an operations layer, all derived (ADR-0058):** the queue is now ordered by **urgency**
-(worst tier first, then longest wait) instead of newest-first, which had a Critical patient waiting
-40 minutes sorting BELOW a Low-risk one who submitted seconds ago; an **unassessed** case sorts
-between High and Medium, not last. Rows carry wait time, a red-flag chip and an intake-completeness
-meter. A **floor-load strip** shows waiting / critical / high / not-assessed / longest wait.
-⚠ **The clearest defect of the session:** the medic's vitals + identity editor lived ONLY on the
-post-referral screen, so the medic could record weight and BP only AFTER handing the case over —
-every case reached the doctor with none. The same endpoint and the same `patients` row now sit in
-the case workspace, before the referral. A new **handover check** reports what the doctor is about
-to be missing and is **ADVISORY — it can never block a forward**, because a Critical patient must
-reach a doctor with incomplete paperwork rather than wait for it. The referral is now attributed to
-the forwarding medic in `audit_log.actor_id` (it was the one staff write with no actor).
-**DOCTOR — a longitudinal layer (ADR-0058):** `prescriptions` was a **write-only table** — rows were
-created and nothing ever read one back, so a repeat medication was undetectable from inside the
-portal, and the doctor could see only the one visit in front of them. A **patient timeline** now
-shows prior visits and prior prescriptions from EVERY doctor. ⚠ It carries **no transcript** (a
-prior visit is opened through the existing `GET /api/visits/{uuid}` and read from the one immutable
-copy — rule #1) and it ranks, trends and interprets **nothing** (rule #2). Reviewing a case used to
-make it VANISH (the queue lists only `awaiting_doctor`), so a doctor who accepted a case and then
-wanted to write its prescription had no route back; the case now stays open, changes state, and a
-**Completed** scope lists their finished consultations.
-**UI/UX (ADR-0059):** `frontend_shared/motion.css`, staff portals only — depth, tier rails, a
-stagger that follows the triage ranking, skeleton loading rows, and role identity that stops the two
-portals reading as one screen (medic = amber `TRIAGE` desk, doctor = indigo `CLINICAL` workspace).
-⚠ **Accessibility outranks the effect:** every `animation` and `@keyframes` is inside
-`@media (prefers-reduced-motion: no-preference)`, proven by two tests that parse the shipped file,
-and nothing is conveyed by movement alone.
-⚠ **Real-microphone status, corrected (Phase 1 of the S37 brief):** the human has confirmed the
-real-mic run of the **S33-S36** voice changes **was carried out**. Recorded exactly that far —
-**no per-claim results were supplied and none are documented**, and no defects came back. Do NOT
-repeat "no microphone has exercised S33-S36" (no longer true) and do NOT upgrade the three specific
-S36 claims to "verified" (no evidence). S25's itemised evidence stands unchanged.
+**Last updated:** 2026-08-14 (**Session 38 — the staff-portal UX + clinical-workflow brief is
+COMPLETE: all nineteen requested items (A1-A7, B1-B7, C1-C4). 767 → 931 tests pass, 2 skipped, 0
+failures.** New ADRs **0060** (the derived/stored boundary + the four workflow features), **0061**
+(the date policy), **0062** (the FHIR EHR export) and **0063** (the M16 widening).
+**Alembic 0012 → 0013** — the first schema change since S25, and deliberately minimal: **ONE column
+(`patients.height_cm`) and ONE table (`clinical_notes`)**, each with its rejected alternatives
+recorded before it was written. **18 tables. No new Python dependency.**
+⚠ **NO MODULE CHANGED STATUS.** The work lands inside **M14 (Doctor Dashboard)**, the medic side of
+the same staff layer (both already ✅) and **M16** (the doctor-side assistant). **M15 stays 🟨.**
+
+**The governing rule of the session: most of it added no storage at all.** The medic's referral
+history, the FHIR bundle, the queue's completeness detail, the BMI and the entire clinical-reference
+layer are all DERIVED — different QUESTIONS asked of rows that already exist, exactly as in S37.
+
+**MEDIC (A1-A7).** "Triage" is explained where the word is used (a one-click disclosure, not a
+tutorial). The **10/10 line became a control**: ten segments instead of one bar, verified drawn
+differently from merely filled, keyboard-reachable, and clicking it names which fields are still
+empty from the server's own `fields_empty`. **Intake & Vitals was rebuilt into a working form** —
+labelled fields, prefilled with what is stored, a button that says *Edit* once anything exists, and
+it survives a language toggle mid-edit; height joins weight and BP and **BMI computes live**, under
+BOTH the WHO international and the WHO **Asian** action points (a BMI of 24 is "normal"
+internationally and "increased risk" for this population).
+⚠ **A real defect found: the queue's auto-refresh was destroying the medic's own work.** It ran
+every 15 s and `searchPhone()` renders into the same list, so a phone lookup was silently replaced
+by the full queue fifteen seconds later. The timer is now shared, **holds** while a search result or
+another list is on screen, holds while the tab is hidden, refreshes once on return, says which state
+it is in, and no longer re-runs the entrance stagger on a background refresh.
+⚠ **A6 — the human asked for "a diabetic limit"; there isn't one.** `glucose_reference()` takes **no
+argument at all**: it returns the published chart (fasting / 2-h OGTT / random / HbA1c), each row
+with the sample conditions that make its numbers mean anything, both mmol/L and mg/dL, the WHO-vs-ADA
+disagreement stated out loud, and a source per row. A function that mapped a reading to a band is one
+refactor from printing a finding beside a patient's name (rule #2).
+
+**DOCTOR (B1-B7).** The prescription form **moved inline to the bottom of the case** instead of
+replacing it. Advice/Lifestyle and Required Tests became **two vertical cards**. **Required Tests is
+now a token editor** over a ~50-entry bilingual vocabulary (a Python module, not a table): search,
+click to add, type anything not listed, remove any chip — and **Enter always commits what was
+TYPED**, never the highlighted suggestion. "Assigned (0)" no longer shows "Select a patient" over an
+empty queue.
+**B1 — "Accept & Write to EHR" now produces an actual EHR record:** an **HL7 FHIR R4 document
+Bundle** (Composition first, Patient, Encounter, Organization, Practitioner, LOINC-coded vital-sign
+Observations with UCUM units, RiskAssessment, and MedicationRequest/ServiceRequest/Condition once a
+prescription exists), served as `application/fhir+json` through the EXISTING `documents` table and
+route. ⚠ Claimed honestly: **structurally valid and semantically conservative — not certified, not
+profiled**, and a receiver must still map it. ⚠ **The AI suggested condition is excluded entirely**
+(its disclaimer does not survive ingestion elsewhere); the doctor's own typed diagnosis IS exported.
+⚠ `critical` is never silently downgraded.
+**B5 — the date policy, by CATEGORY:** historical timestamps are **never touched**, a prescription
+must be dated **today**, a follow-up/recall must **not be in the past** — enforced server-side and
+BEFORE the write. ⚠ It fixed a real bug: the form stamped `toISOString()`, the **UTC** date, so a
+prescription written between midnight and 6 a.m. Dhaka was dated the previous day.
+
+**A7 — one clock, and it is Bangladesh's.** A live 12-hour header clock in both portals, and every
+stored timestamp re-rendered 12-hour. ⚠ Server-side "today" uses a **fixed UTC+06:00 offset, not
+`ZoneInfo`**: Windows ships no IANA tz database. Bangladesh has had no DST since 2010, so the fixed
+offset is exact rather than approximate.
+
+**B6 — M16 widened, with privacy enforced structurally.** One service, one seam, one round-trip, now
+covering medicines, diagnostic tests, and — on **explicit opt-in** — which tests might suit this
+patient. ⚠ **The web search receives the doctor's typed question and nothing else, by signature**;
+the LLM's case context is de-identified and carries **no name, no phone and no raw transcript**.
+Suggested tests are chips the doctor **clicks** to insert — nothing is ordered until a human
+generates the prescription. A **new** output guard catches patient-directed instructions and
+deliberately does **not** reuse M7's dosage rule, because here a dosage range is the correct answer.
+
+**C1-C4 — the four features S37 deferred, all built.** Referral history **derived from
+`audit_log.actor_id`** (which S37 added), and it **reports what it cannot attribute** rather than
+inventing an owner. Per-field verification inside the existing `summary_fields` JSON, so a medic can
+record "I read this and it is correct" **without editing the field** — previously the only way, and
+it put a false edit in a medical record. Recall + doctor→medic back-channel on **one**
+`clinical_notes` table, addressed to a **role** not a person, with no thread, reply or read receipts.
+
+⚠ **Real-microphone status is UNCHANGED by S38** — it touched no voice code. The S37 record stands:
+the human confirmed the S33-S36 real-mic run **was carried out**, **no per-claim results were
+supplied and none are documented**, and no defects came back. S25's itemised evidence stands.
+⚠ **S38's frontend tests are static-source assertions** (the S28 no-JS-runner decision): they prove
+wiring and containment, not appearance. Everything visual was checked by hand in a browser this
+session against a **throwaway** seeded DB (rule #4 — the dev DB was not modified).
+
+Prior: 2026-08-13 (**Session 37 — the two STAFF portals were audited as ROLES; 723 → 767 tests, ADRs 0058/0059, Alembic stayed 0012.**)
 Prior: 2026-08-13 (**Session 36 — the post-S35 hardening cycle is CLOSED; all seven items
 shipped in one pass. 622 → 723 tests pass, 2 skipped, 0 failures.** New ADR **0057**. **Alembic stays
 0012 — no schema change, no migration, no new dependency.**

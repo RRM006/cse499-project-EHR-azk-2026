@@ -23,7 +23,18 @@ from backend.app.schemas.profile import SUMMARY_FIELD_KEYS
 from backend.app.services.documents.docx_writer import _apply_bengali_font, _fmt_dt
 
 #: Visit-grain values for documents.kind ("prescription" joins in the DOCTOR-6 step).
-VISIT_DOCUMENT_KINDS = ("transcript", "summary_report")
+#: S38 (B1): "ehr_bundle" is the FHIR R4 document Bundle — the only kind here that is
+#: NOT a .docx, which is why generate_visit_document branches on format rather than
+#: assuming one (services/ehr_export owns its content).
+VISIT_DOCUMENT_KINDS = ("transcript", "summary_report", "ehr_bundle")
+
+#: Which file format each visit-grain kind produces. Keeping this beside the kinds is
+#: what stops a new kind being added with a silently wrong extension.
+VISIT_DOCUMENT_FORMATS = {
+    "transcript": "docx",
+    "summary_report": "docx",
+    "ehr_bundle": "json",
+}
 
 # Bilingual labels for the 10 fixed fields (EN / BN, matching the kiosk's numbering).
 _FIELD_LABELS: dict[str, str] = {

@@ -22,6 +22,14 @@
         <button class="lang-btn" data-lang="en" onclick="setLanguage('en')">English</button>
         <button class="lang-btn" data-lang="bn" onclick="setLanguage('bn')">বাংলা</button>
       </div>
+      <!-- S38 (A7): the real Dhaka date + a running 12-hour clock. Nothing here is
+           hard-coded or rendered once — dhakaNowParts() reads the system clock and a
+           1s tick redraws it, so a portal left open overnight is never showing
+           yesterday. Bangladesh time regardless of the PC's own zone. -->
+      <div class="clock-box" id="live-clock" title="Bangladesh time (Asia/Dhaka)">
+        <div class="clock-time" id="clock-time">—</div>
+        <div class="clock-date" id="clock-date"></div>
+      </div>
       <div style="font-size:.8rem; font-weight:600; color:var(--text-muted);" id="user-tag"></div>
       <!-- STRUCT-2: back to the Portal Directory at "/" -->
       <button class="btn btn-secondary" onclick="logout()" style="padding:6px 14px; font-size:.75rem;"
@@ -66,11 +74,37 @@
 
     <div class="staff-grid">
       <div class="queue-sidebar">
-        <div class="queue-header" style="display:flex; justify-content:space-between; align-items:center; gap:8px;">
-          <span><span data-en="Triage Queue" data-bn="ট্রায়াজ তালিকা">Triage Queue</span> (<span id="queue-count">0</span> <span data-en="active" data-bn="সক্রিয়">active</span>)</span>
-          <span style="font-size:.66rem; font-weight:700; color:var(--text-muted); text-transform:uppercase;"
-                title="Worst risk first, then longest wait"
-                data-en="⚑ Urgency order" data-bn="⚑ জরুরি অনুসারে">⚑ Urgency order</span>
+        <div class="queue-header" style="display:flex; flex-direction:column; gap:6px; align-items:stretch;">
+          <div style="display:flex; align-items:center; gap:6px; flex-wrap:wrap;">
+            <span id="medic-scope-label" data-en="Triage Queue" data-bn="ট্রায়াজ তালিকা">Triage Queue</span>
+            (<span id="queue-count">0</span> <span data-en="active" data-bn="সক্রিয়">active</span>)
+            <!-- S38 (A1): the word "Triage" explained where it is used. A disclosure,
+                 not a tutorial — the brief says "Do not create a large tutorial". -->
+            <button class="info-btn" id="triage-info-btn" onclick="toggleTriageInfo()"
+                    aria-expanded="false" aria-controls="triage-info"
+                    title="What does Triage mean?">i</button>
+          </div>
+          <!-- S38 (C1/C4): the two lists the medic role now also owns — the referrals
+               THEY forwarded (derived from audit_log) and notes the doctor sent back.
+               Same segmented control the doctor portal already uses. -->
+          <span class="seg" style="align-self:flex-start;">
+            <button class="seg-btn active" id="seg-queue" onclick="switchMedicView('queue')" data-en="Queue" data-bn="তালিকা">Queue</button>
+            <button class="seg-btn" id="seg-referrals" onclick="switchMedicView('referrals')" data-en="My referrals" data-bn="আমার রেফারাল">My referrals</button>
+            <button class="seg-btn" id="seg-inbox" onclick="switchMedicView('inbox')" data-en="Inbox" data-bn="ইনবক্স">Inbox</button>
+          </span>
+          <!-- S38 (A2): the auto-refresh states what it is doing (filled by
+               onQueueRefreshState(); "held" is a real, named state, not silence),
+               beside the ordering rule. Both are meta about the list, so they share a
+               row — three items on the title line wrapped at the sidebar's 340px. -->
+          <div style="display:flex; justify-content:space-between; align-items:center; gap:8px; flex-wrap:wrap;">
+            <div class="refresh-line" id="refresh-line" style="display:none;">
+              <span class="refresh-dot"></span><span id="refresh-text"></span>
+            </div>
+            <span style="font-size:.62rem; font-weight:700; color:var(--text-muted); text-transform:uppercase; white-space:nowrap;"
+                  title="Worst risk first, then longest wait"
+                  data-en="⚑ Urgency order" data-bn="⚑ জরুরি অনুসারে">⚑ Urgency order</span>
+          </div>
+          <div class="explainer" id="triage-info" style="display:none;"></div>
         </div>
         <div id="queue-list"></div>
       </div>
@@ -145,9 +179,236 @@
   <script src="/shared/shared.js"></script>
   <script src="/shared/staff.js"></script>
   <script>
-    const PORTAL = { role: 'medic', userId: null, canEdit: true, onCaseLoaded: onMedicCaseLoaded };
+    const PORTAL = {
+      role: 'medic', userId: null, canEdit: true, onCaseLoaded: onMedicCaseLoaded,
+      /* S38 (B7): what the RIGHT-hand panel says when there is nothing to select.
+         "Select a patient from the queue" pointing at an empty queue is the confusing
+         blank the brief describes. staff.js calls this; the wording is the role's. */
+      /* The post-referral confirmation is a full-width screen of its own; while it is
+         up the workspace is NOT empty, even though no case is selected. Without this
+         the placeholder would appear above the confirmation the medic just earned. */
+      workspaceBusy: () => {
+        const screen = document.getElementById('postref-screen');
+        return !!screen && screen.style.display !== 'none';
+      },
+      /* S38 (C1/C4): the timer follows the QUEUE only. The referral history and the
+         inbox are lists the medic went looking for; refreshing the queue over them
+         would be the same defect A2 fixed for the phone search. */
+      autoRefreshPaused: () => medicView !== 'queue',
+      emptyWorkspace: ({ searching }) => searching
+        ? { glyph: '🔍',
+            title: t('No patient found', 'কোনো রোগী পাওয়া যায়নি'),
+            detail: t('That mobile number has no visit on record. Clear the search to return to the triage queue.',
+                      'ঐ মোবাইল নম্বরে কোনো ভিজিট নেই। ট্রায়াজ তালিকায় ফিরতে অনুসন্ধান মুছুন।') }
+        : { glyph: '✅',
+            title: t('No cases waiting', 'অপেক্ষমাণ কোনো কেস নেই'),
+            detail: t('Every submitted pre-screening has been forwarded. New cases appear here on their own.',
+                      'জমা হওয়া সব প্রাক-পরীক্ষা পাঠানো হয়েছে। নতুন কেস নিজে থেকেই এখানে আসবে।') },
+    };
     let currentRisk = null;   // kept so the panel re-renders on language toggle
     let currentHandoff = null;   // S37: latest advisory readiness for the open case
+
+    /* ---- S38 (A7): the live Dhaka clock ---- */
+    function tickClock() {
+      const now = dhakaNowParts();
+      const timeBox = document.getElementById('clock-time');
+      const dateBox = document.getElementById('clock-date');
+      if (timeBox) timeBox.textContent = now.time;
+      if (dateBox) dateBox.textContent = now.date;
+    }
+    tickClock();
+    setInterval(tickClock, 1000);
+
+    /* ---- S38 (C1/C4): the medic's other two lists ----
+
+       The sidebar shows one of three things. Only 'queue' is a live work list, so the
+       auto-refresh timer follows it: the other two are things the medic went looking
+       for, and a timer that replaced them would be the same defect A2 just fixed. */
+    let medicView = 'queue';
+
+    function switchMedicView(view) {
+      medicView = view;
+      ['queue', 'referrals', 'inbox'].forEach((name) => {
+        document.getElementById(`seg-${name}`).classList.toggle('active', name === view);
+      });
+      document.getElementById('medic-scope-label').textContent =
+        view === 'referrals' ? t('My referrals', 'আমার রেফারাল')
+        : view === 'inbox' ? t('Inbox', 'ইনবক্স')
+        : t('Triage Queue', 'ট্রায়াজ তালিকা');
+      // The urgency-order chip and the triage explainer only describe the QUEUE.
+      document.getElementById('triage-info').style.display = 'none';
+      if (view === 'queue') { queueAnimateNext = true; loadQueue(); }
+      else if (view === 'referrals') loadReferrals();
+      else loadInbox();
+      // Say "held" immediately rather than at the timer's next tick — otherwise the
+      // line claims the list on screen is live when the timer is deliberately not
+      // touching it.
+      queueRefreshPaused = view !== 'queue';
+      renderQueueRefreshState();
+    }
+
+    /* C1 — the cases this medic forwarded. Derived server-side from audit_log; the
+       list is honest about what it cannot attribute (see services/triage). */
+    async function loadReferrals() {
+      const box = document.getElementById('queue-list');
+      box.innerHTML = '';
+      let data;
+      try { data = await api('GET', `/api/medics/${PORTAL.userId}/referrals`); }
+      catch (e) { return showError(e.message); }
+      document.getElementById('queue-count').textContent = data.referrals.length;
+      if (!data.referrals.length) {
+        renderQueueMessage(t('No referrals recorded for you yet.',
+                             'আপনার নামে এখনো কোনো রেফারাল নেই।'), null, '📤');
+      }
+      data.referrals.forEach((ref) => {
+        const row = document.createElement('div');
+        row.className = 'queue-item tier-' + (ref.tier || 'none');
+        row.tabIndex = 0;
+        row.innerHTML = `<div class="queue-item-meta"><span></span>${tierBadge(ref.tier)}</div>`
+          + `<div class="queue-item-name"></div><div class="queue-item-problem"></div>`
+          + `<div class="queue-item-problem sub"></div>`;
+        row.querySelector('.queue-item-meta span').textContent = dhakaDateTime(ref.referred_at);
+        row.querySelector('.queue-item-name').textContent =
+          ref.patient_name || ref.patient_phone || ref.visit_uuid.slice(0, 8);
+        row.querySelector('.queue-item-problem').textContent = ref.main_problem || '—';
+        row.querySelector('.sub').textContent =
+          `→ ${ref.doctor_name || t('unassigned', 'অনির্ধারিত')} · ${statusLabel(ref.visit_status)}`;
+        const open = () => openCase(ref.visit_uuid);
+        row.onclick = open;
+        row.onkeydown = (e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); open(); } };
+        box.appendChild(row);
+      });
+      if (data.unattributed_total) {
+        // Said out loud rather than hidden: a medic seeing a short list would
+        // otherwise reasonably conclude the feature is broken.
+        const note = document.createElement('div');
+        note.className = 'empty-state';
+        note.style.cssText = 'padding:12px 16px; font-size:.72rem; text-align:left;';
+        note.textContent = t(
+          `${data.unattributed_total} earlier referral(s) in this clinic were recorded before the system tracked which medic forwarded them, so they cannot appear in anyone's list.`,
+          `এই ক্লিনিকের ${data.unattributed_total}টি পুরোনো রেফারাল রেকর্ড হয়েছিল যখন কোন মেডিক পাঠিয়েছেন তা সংরক্ষণ হতো না, তাই সেগুলো কারো তালিকায় দেখা যাবে না।`);
+        box.appendChild(note);
+      }
+    }
+
+    /* C4 — notes the doctor sent back to the desk. */
+    let medicInbox = [];
+    async function loadInbox() {
+      const box = document.getElementById('queue-list');
+      box.innerHTML = '';
+      try { medicInbox = await api('GET', '/api/notes?recipient_role=medic&status=open'); }
+      catch (e) { return showError(e.message); }
+      document.getElementById('queue-count').textContent = medicInbox.length;
+      if (!medicInbox.length) {
+        return renderQueueMessage(t('No messages from the doctors.',
+                                    'ডাক্তারদের কাছ থেকে কোনো বার্তা নেই।'), null, '📭');
+      }
+      medicInbox.forEach((note) => {
+        const row = document.createElement('div');
+        row.className = 'queue-item';
+        row.innerHTML = `<div class="queue-item-meta"><span></span><span></span></div>`
+          + `<div class="queue-item-name"></div><div class="note-body"></div>`
+          + `<div style="margin-top:7px; display:flex; gap:6px;"></div>`;
+        const meta = row.querySelectorAll('.queue-item-meta span');
+        meta[0].textContent = dhakaDateTime(note.created_at);
+        meta[1].textContent = note.author_name || '';
+        row.querySelector('.queue-item-name').textContent =
+          note.patient_name || t('(no name)', '(নাম নেই)');
+        row.querySelector('.note-body').textContent = note.body;   // human text — textContent
+        const actions = row.querySelector('div:last-child');
+        const openBtn = document.createElement('button');
+        openBtn.className = 'btn btn-secondary fx-lift';
+        openBtn.style.cssText = 'padding:4px 10px; font-size:.74rem;';
+        openBtn.textContent = '↗ ' + t('Open case', 'কেস খুলুন');
+        openBtn.onclick = (e) => { e.stopPropagation(); openCase(note.visit_uuid); };
+        const doneBtn = document.createElement('button');
+        doneBtn.className = 'btn btn-accent fx-lift';
+        doneBtn.style.cssText = 'padding:4px 10px; font-size:.74rem;';
+        doneBtn.textContent = '✔ ' + t('Done', 'সম্পন্ন');
+        doneBtn.onclick = async (e) => {
+          e.stopPropagation();
+          doneBtn.disabled = true;
+          try {
+            await api('PATCH', `/api/notes/${note.id}`,
+                      { status: 'done', actor_id: PORTAL.userId });
+            loadInbox();
+          } catch (err) { showError(err.message); doneBtn.disabled = false; }
+        };
+        actions.appendChild(openBtn);
+        actions.appendChild(doneBtn);
+        box.appendChild(row);
+      });
+    }
+
+    /* Shared with the doctor portal's timeline: codes on the wire, labels here. */
+    const STATUS_LABELS = {
+      in_progress:     { en: 'in progress',     bn: 'চলমান' },
+      awaiting_review: { en: 'awaiting medic',  bn: 'মেডিকের অপেক্ষায়' },
+      awaiting_doctor: { en: 'awaiting doctor', bn: 'ডাক্তারের অপেক্ষায়' },
+      reviewed:        { en: 'reviewed',        bn: 'পর্যালোচিত' },
+      closed:          { en: 'closed',          bn: 'সমাপ্ত' },
+    };
+    function statusLabel(code) {
+      const entry = STATUS_LABELS[code];
+      return entry ? t(entry.en, entry.bn) : (code || '—');
+    }
+
+    /* ---- S38 (A1): what "Triage" means ---- */
+    function toggleTriageInfo() {
+      const box = document.getElementById('triage-info');
+      const btn = document.getElementById('triage-info-btn');
+      const open = box.style.display === 'none';
+      box.style.display = open ? 'block' : 'none';
+      btn.setAttribute('aria-expanded', String(open));
+      if (open) renderTriageInfo();
+    }
+
+    function renderTriageInfo() {
+      const box = document.getElementById('triage-info');
+      if (!box || box.style.display === 'none') return;
+      // Built as markup because every word of it is fixed chrome written here — no
+      // patient, staff or model text goes anywhere near this element.
+      box.innerHTML = t(
+        `<b>Triage</b> means putting patients in the order they need to be seen, rather than
+         the order they arrived. This list is sorted for you:
+         <ul>
+           <li>highest risk first — Critical, then High, then not-yet-assessed, then Moderate, then Low;</li>
+           <li>within the same risk, whoever has waited longest comes first.</li>
+         </ul>
+         A case with no risk assessment yet sits above Moderate on purpose: "we do not know yet"
+         is not the same as "we know it is fine".`,
+        `<b>ট্রায়াজ</b> মানে রোগীদের আসার ক্রমে নয়, বরং কাকে আগে দেখা দরকার সেই ক্রমে সাজানো।
+         এই তালিকা আপনার জন্য সাজানো আছে:
+         <ul>
+           <li>আগে সবচেয়ে বেশি ঝুঁকি — ঝুঁকিপূর্ণ, তারপর উচ্চ, তারপর নিরূপণ বাকি, তারপর মাঝারি, শেষে স্বাভাবিক;</li>
+           <li>একই ঝুঁকির মধ্যে যিনি সবচেয়ে বেশিক্ষণ অপেক্ষা করছেন তিনি আগে।</li>
+         </ul>
+         যে কেসের ঝুঁকি এখনো নিরূপণ হয়নি সেটি ইচ্ছাকৃতভাবে মাঝারির উপরে রাখা হয় — "এখনো জানি না"
+         আর "জানি যে ঠিক আছে" এক কথা নয়।`);
+    }
+
+    /* ---- S38 (A2): say what the auto-refresh is doing ---- */
+    function onQueueRefreshState({ lastRefreshAt, paused, intervalMs, searching }) {
+      const line = document.getElementById('refresh-line');
+      const text = document.getElementById('refresh-text');
+      if (!line || !text) return;
+      line.style.display = 'inline-flex';
+      line.classList.toggle('paused', !!paused);
+      const seconds = localeNum(Math.round(intervalMs / 1000));
+      if (searching) {
+        text.textContent = t('Search result — auto-refresh held', 'অনুসন্ধানের ফল — স্বয়ংক্রিয় রিফ্রেশ থেমে আছে');
+      } else if (paused && medicView !== 'queue') {
+        text.textContent = t('Auto-refresh held while you read this list',
+                             'এই তালিকা দেখার সময় স্বয়ংক্রিয় রিফ্রেশ থেমে আছে');
+      } else if (paused) {
+        text.textContent = t('Auto-refresh paused (tab in background)', 'স্বয়ংক্রিয় রিফ্রেশ থেমে আছে (ট্যাব পেছনে)');
+      } else {
+        text.textContent = lastRefreshAt
+          ? t(`Live · every ${seconds}s · updated `, `সরাসরি · প্রতি ${seconds} সেকেন্ডে · হালনাগাদ `)
+            + dhakaTime(lastRefreshAt)
+          : t(`Live · every ${seconds}s`, `সরাসরি · প্রতি ${seconds} সেকেন্ডে`);
+      }
+    }
 
     /* S37 — the medic's case view loads three things: the identity/vitals the medic
        is responsible for, the risk panel, and the advisory handoff readiness. */
@@ -227,13 +488,16 @@
         sel.innerHTML = `<option value="">${t('-- Choose Doctor --', '-- ডাক্তার নির্বাচন করুন --')}</option>` +
           doctors.map((d) => `<option value="${d.id}">${d.name}</option>`).join('');
         loadQueue();
-        setInterval(loadQueue, 15000); // keep the queue fresh
+        // S38 (A2): the timer lives in staff.js now — it holds during a phone search
+        // and while the tab is hidden, and it reports its state to the header line.
+        startQueueAutoRefresh();
       } catch (e) { showError(e.message); }
     }
 
     /* MEDIC-5: the header button's one clear job — full queue back, filter gone. */
     function refreshQueue() {
       document.getElementById('phone-search').value = '';
+      queueAnimateNext = true;   // an explicit refresh IS a new list; let it animate in
       loadQueue();
     }
 
@@ -291,6 +555,26 @@
 
     /* ---- S37 (ADR-0058): identity + vitals, captured BEFORE the referral ---- */
 
+    /* S38 (A4/A5/A6) — Intake & Vitals rebuilt as a working clinical form.
+
+       What was wrong with the previous version, concretely: it was a single row of
+       five unlabelled placeholder-only inputs that wrapped unpredictably, it offered
+       no way to CLEAR a value that had been entered wrongly, there was nowhere to put
+       a height, and the button said "Record" whether or not anything had been
+       recorded — so a medic correcting a weight had to guess that "Record" also meant
+       "Edit". A form staff have to guess at is a form that gets skipped.
+
+       Now: a labelled grid that always shows what is already stored, opens with those
+       values prefilled, computes BMI live as height and weight are typed (A5), and
+       carries the glucose reference chart as a disclosure beside it (A6).
+
+       ⚠ Still exactly ONE store: the same `patients` row, through the same
+       `PATCH /api/patients/{id}/vitals`, audit-logged as before. Height is the single
+       new column (rev 0013); **BMI is never sent and never stored** — it is derived
+       from height and weight on demand (ADR-0060). */
+
+    let intakeOpen = false;   // survives a re-render (language toggle, save)
+
     function renderIntakeCard() {
       const card = document.getElementById('intake-card');
       if (!card || !currentCase) return;
@@ -301,7 +585,20 @@
       if (!p.display_name) missing.push(t('name', 'নাম'));
       if (!age) missing.push(t('age', 'বয়স'));
       if (p.weight_kg === null || p.weight_kg === undefined) missing.push(t('weight', 'ওজন'));
+      if (p.height_cm === null || p.height_cm === undefined) missing.push(t('height', 'উচ্চতা'));
       if (!p.bp) missing.push(t('blood pressure', 'রক্তচাপ'));
+
+      const anyRecorded = !!(p.display_name || age || p.weight_kg != null
+                             || p.height_cm != null || p.bp);
+      const field = (label, control, hint) =>
+        `<label style="display:flex; flex-direction:column; gap:3px;">
+           <span style="font-size:.68rem; font-weight:700; text-transform:uppercase; color:var(--text-muted);">${label}</span>
+           ${control}
+           ${hint ? `<span style="font-size:.66rem; color:var(--text-muted);">${hint}</span>` : ''}
+         </label>`;
+      const num = (id, min, max, step, ph) =>
+        `<input class="input-field" id="${id}" type="number" min="${min}" max="${max}" step="${step}"
+                style="padding:7px 10px; width:100%;" placeholder="${ph}">`;
 
       card.innerHTML =
         `<div style="display:flex; justify-content:space-between; align-items:center; gap:14px; flex-wrap:wrap;">
@@ -309,23 +606,50 @@
              <h3 style="font-size:1.05rem; color:var(--primary-color);">🧾 ${t('Intake & Vitals', 'ভর্তি তথ্য ও ভাইটাল')}</h3>
              <p style="font-size:.8rem; color:var(--text-muted);">${t('Recorded by you before the doctor sees the case.', 'ডাক্তার কেসটি দেখার আগে আপনি এগুলো রেকর্ড করবেন।')}</p>
            </div>
-           <button class="btn btn-secondary fx-lift" id="intake-toggle" style="padding:6px 14px; font-size:.8rem;">✏️ ${t('Record', 'রেকর্ড')}</button>
+           <div style="display:flex; gap:8px; flex-wrap:wrap;">
+             <button class="btn btn-secondary fx-lift" id="glucose-toggle" style="padding:6px 12px; font-size:.78rem;"
+                     title="${t('Blood sugar reference values', 'রক্তে সুগারের রেফারেন্স মান')}">🩸 ${t('Sugar reference', 'সুগার রেফারেন্স')}</button>
+             <!-- The label states which of the two jobs the button is doing, so a medic
+                  correcting a weight does not have to guess that "Record" means "Edit". -->
+             <button class="btn btn-secondary fx-lift" id="intake-toggle" style="padding:6px 14px; font-size:.8rem;">✏️ ${
+               anyRecorded ? t('Edit', 'সম্পাদনা') : t('Record', 'রেকর্ড')}</button>
+           </div>
          </div>
          <div id="intake-line" style="font-size:.92rem;"></div>
+         <div id="bmi-readout" style="font-size:.84rem;"></div>
          <div id="intake-missing" style="font-size:.78rem; font-weight:600; color:var(--warning-color);"></div>
-         <div id="intake-editor" style="display:none; gap:8px; align-items:center; flex-wrap:wrap; padding:10px; background:#F4FAF8; border-radius:8px;">
-           <input class="input-field" id="in-name" style="width:180px; padding:6px 10px;" placeholder="${t('Name', 'নাম')}">
-           <input class="input-field" id="in-age" type="number" min="1" max="129" style="width:90px; padding:6px 10px;" placeholder="${t('Age', 'বয়স')}">
-           <select class="input-field" id="in-sex" style="width:130px; padding:6px 10px;">
-             <option value="">${t('Gender', 'লিঙ্গ')}</option>
-             <option value="male">${t('Male', 'পুরুষ')}</option>
-             <option value="female">${t('Female', 'মহিলা')}</option>
-             <option value="other">${t('Other', 'অন্যান্য')}</option>
-           </select>
-           <input class="input-field" id="in-weight" type="number" min="1" max="499" step="0.1" style="width:120px; padding:6px 10px;" placeholder="${t('Weight (kg)', 'ওজন (কেজি)')}">
-           <input class="input-field" id="in-bp" style="width:140px; padding:6px 10px;" placeholder="${t('BP e.g. 120/80', 'রক্তচাপ যেমন ১২০/৮০')}">
-           <button class="btn btn-primary fx-lift" style="padding:6px 14px; font-size:.8rem;" onclick="saveIntake(this)">${t('Save', 'সংরক্ষণ')}</button>
-           <button class="btn btn-secondary fx-lift" style="padding:6px 14px; font-size:.8rem;" onclick="document.getElementById('intake-editor').style.display='none'">${t('Cancel', 'বাতিল')}</button>
+         <div class="explainer" id="glucose-panel" style="display:none;"></div>
+         <div id="intake-editor" style="display:none; flex-direction:column; gap:12px; padding:12px; background:#F4FAF8; border-radius:8px;">
+           <div style="display:grid; grid-template-columns:repeat(auto-fit, minmax(150px, 1fr)); gap:10px;">
+             ${field(t('Name', 'নাম'), `<input class="input-field" id="in-name" style="padding:7px 10px; width:100%;" placeholder="${t('Full name', 'পুরো নাম')}">`)}
+             ${field(t('Age (years)', 'বয়স (বছর)'), num('in-age', 1, 129, 1, t('e.g. 45', 'যেমন ৪৫')))}
+             ${field(t('Gender', 'লিঙ্গ'),
+               `<select class="input-field" id="in-sex" style="padding:7px 10px; width:100%;">
+                  <option value="">${t('Not recorded', 'লেখা হয়নি')}</option>
+                  <option value="male">${t('Male', 'পুরুষ')}</option>
+                  <option value="female">${t('Female', 'মহিলা')}</option>
+                  <option value="other">${t('Other', 'অন্যান্য')}</option>
+                </select>`)}
+           </div>
+           <div style="display:grid; grid-template-columns:repeat(auto-fit, minmax(150px, 1fr)); gap:10px;">
+             ${field(t('Height', 'উচ্চতা'), num('in-height', 30, 260, 0.5, t('e.g. 165', 'যেমন ১৬৫')),
+                     t('centimetres (cm)', 'সেন্টিমিটার (সেমি)'))}
+             ${field(t('Weight', 'ওজন'), num('in-weight', 1, 499, 0.1, t('e.g. 62.5', 'যেমন ৬২.৫')),
+                     t('kilograms (kg)', 'কিলোগ্রাম (কেজি)'))}
+             ${field(t('Blood pressure', 'রক্তচাপ'),
+               `<input class="input-field" id="in-bp" style="padding:7px 10px; width:100%;" placeholder="120/80">`,
+                     t('systolic / diastolic, mmHg', 'সিস্টোলিক / ডায়াস্টোলিক, mmHg'))}
+           </div>
+           <!-- A5: recomputed as the medic types, from the SERVER's one definition of
+                the bands — so the portal cannot drift from the reference module. -->
+           <div id="bmi-live" style="font-size:.82rem; min-height:1.2em;"></div>
+           <div style="display:flex; gap:8px; flex-wrap:wrap;">
+             <button class="btn btn-primary fx-lift" style="padding:7px 16px; font-size:.82rem;" onclick="saveIntake(this)">${t('Save', 'সংরক্ষণ')}</button>
+             <button class="btn btn-secondary fx-lift" style="padding:7px 16px; font-size:.82rem;" onclick="closeIntakeEditor()">${t('Cancel', 'বাতিল')}</button>
+             <span style="font-size:.72rem; color:var(--text-muted); align-self:center;">${t(
+               'Clearing a box leaves the stored value unchanged.',
+               'কোনো ঘর ফাঁকা রাখলে আগের সংরক্ষিত মান অপরিবর্তিত থাকে।')}</span>
+           </div>
          </div>`;
 
       // Patient/staff text — textContent only, never innerHTML.
@@ -334,20 +658,141 @@
       if (p.external_ref) parts.push(p.external_ref);
       parts.push(age ? `${t('Age', 'বয়স')} ${age}` : `${t('Age', 'বয়স')} —`);
       if (p.sex) parts.push(genderLabel(p.sex));
+      parts.push(p.height_cm != null ? `${p.height_cm} cm` : `${t('Height', 'উচ্চতা')} —`);
       parts.push(p.weight_kg != null ? `${p.weight_kg} kg` : `${t('Weight', 'ওজন')} —`);
       parts.push(p.bp ? `BP ${p.bp}` : 'BP —');
       document.getElementById('intake-line').textContent = parts.join('  ·  ');
       document.getElementById('intake-missing').textContent =
         missing.length ? `⚠ ${t('Still to record', 'এখনো রেকর্ড করা বাকি')}: ${missing.join(', ')}` : '';
 
-      document.getElementById('intake-toggle').onclick = () => {
-        document.getElementById('in-name').value = p.display_name || '';
-        document.getElementById('in-age').value = age;
-        document.getElementById('in-sex').value = p.sex || '';
-        document.getElementById('in-weight').value = p.weight_kg != null ? p.weight_kg : '';
-        document.getElementById('in-bp').value = p.bp || '';
-        document.getElementById('intake-editor').style.display = 'flex';
-      };
+      showBmi('bmi-readout', p.weight_kg, p.height_cm);
+      document.getElementById('intake-toggle').onclick = () => openIntakeEditor(p, age);
+      document.getElementById('glucose-toggle').onclick = toggleGlucosePanel;
+      if (intakeOpen) openIntakeEditor(p, age);
+    }
+
+    function openIntakeEditor(p, age) {
+      document.getElementById('in-name').value = p.display_name || '';
+      document.getElementById('in-age').value = age || '';
+      document.getElementById('in-sex').value = p.sex || '';
+      document.getElementById('in-height').value = p.height_cm != null ? p.height_cm : '';
+      document.getElementById('in-weight').value = p.weight_kg != null ? p.weight_kg : '';
+      document.getElementById('in-bp').value = p.bp || '';
+      document.getElementById('intake-editor').style.display = 'flex';
+      intakeOpen = true;
+      ['in-height', 'in-weight'].forEach((id) => {
+        document.getElementById(id).oninput = liveBmi;
+      });
+      liveBmi();
+    }
+
+    function closeIntakeEditor() {
+      intakeOpen = false;
+      const editor = document.getElementById('intake-editor');
+      if (editor) editor.style.display = 'none';
+    }
+
+    /* A5 — the BMI shown while typing. Debounced and fetched from
+       GET /api/reference/bmi rather than recomputed in JS: the cut-offs are published
+       clinical constants, and a second copy of the ladders here is how the portal and
+       the reference module quietly start disagreeing. A failed call simply shows
+       nothing — a missing BMI is harmless, a wrong one is not. */
+    let bmiTimer = null;
+    function liveBmi() {
+      clearTimeout(bmiTimer);
+      bmiTimer = setTimeout(() => {
+        const h = document.getElementById('in-height');
+        const w = document.getElementById('in-weight');
+        if (!h || !w) return;
+        showBmi('bmi-live', w.value, h.value);
+      }, 250);
+    }
+
+    /* A6 — the glucose reference. The human asked for "a diabetic limit"; there is no
+       such single number, so this shows the published chart WITH the measurement
+       context each row depends on, and says in both languages that it is a reference,
+       not a diagnosis. Nothing here reads a patient value (rule #2). */
+    let glucoseRef = null;
+    async function toggleGlucosePanel() {
+      const panel = document.getElementById('glucose-panel');
+      const open = panel.style.display === 'none';
+      panel.style.display = open ? 'block' : 'none';
+      if (!open) return;
+      if (!glucoseRef) {
+        panel.textContent = t('Loading reference…', 'রেফারেন্স আসছে…');
+        try { glucoseRef = await api('GET', '/api/reference/glucose'); }
+        catch (e) { panel.textContent = e.message; return; }
+      }
+      renderGlucosePanel();
+    }
+
+    function renderGlucosePanel() {
+      const panel = document.getElementById('glucose-panel');
+      if (!panel || !glucoseRef || panel.style.display === 'none') return;
+      panel.innerHTML = '';
+      const head = document.createElement('div');
+      head.style.cssText = 'font-weight:800; color:var(--primary-color); margin-bottom:4px;';
+      head.textContent = '🩸 ' + t('Blood glucose — reference values',
+                                   'রক্তে গ্লুকোজ — রেফারেন্স মান');
+      panel.appendChild(head);
+
+      const lead = document.createElement('div');
+      lead.style.cssText = 'margin-bottom:8px;';
+      lead.textContent = t(
+        'There is no single "diabetic limit". Which numbers apply depends entirely on how the sample was taken.',
+        'একটিমাত্র "ডায়াবেটিসের সীমা" বলে কিছু নেই। কোন মান প্রযোজ্য তা পুরোপুরি নির্ভর করে নমুনা কীভাবে নেওয়া হয়েছে তার উপর।');
+      panel.appendChild(lead);
+
+      glucoseRef.contexts.forEach((ctx) => {
+        const block = document.createElement('div');
+        block.style.cssText = 'margin-bottom:9px; padding-left:9px; border-left:2px solid var(--border-color);';
+        const name = document.createElement('div');
+        name.style.cssText = 'font-weight:700;';
+        name.textContent = t(ctx.name_en, ctx.name_bn);
+        block.appendChild(name);
+        const req = document.createElement('div');
+        req.style.cssText = 'font-size:.7rem; color:var(--text-muted); margin-bottom:3px;';
+        req.textContent = t(ctx.requires_context_en, ctx.requires_context_bn);
+        block.appendChild(req);
+        ctx.bands.forEach((band) => {
+          const row = document.createElement('div');
+          row.style.fontSize = '.72rem';
+          row.textContent = `• ${t(band.label_en, band.label_bn)}: ${bandRange(band)}`;
+          block.appendChild(row);
+        });
+        const note = t(ctx.note_en, ctx.note_bn);
+        if (note) {
+          const n = document.createElement('div');
+          n.style.cssText = 'font-size:.7rem; color:var(--text-muted); margin-top:3px; font-style:italic;';
+          n.textContent = note;
+          block.appendChild(n);
+        }
+        const src = document.createElement('div');
+        src.style.cssText = 'font-size:.64rem; color:var(--text-muted); margin-top:2px;';
+        src.textContent = ctx.source;
+        block.appendChild(src);
+        panel.appendChild(block);
+      });
+
+      const disc = document.createElement('div');
+      disc.style.cssText = 'font-size:.72rem; font-weight:700; color:var(--warning-color);';
+      disc.textContent = '⚠️ ' + (currentLanguage === 'bn'
+        ? glucoseRef.disclaimer_bn : glucoseRef.disclaimer);
+      panel.appendChild(disc);
+    }
+
+    /* One band -> "< 6.0 mmol/L (108 mg/dL)" etc. Both unit systems, because both are
+       in daily use in Bangladeshi labs and converting at the bedside invites errors. */
+    function bandRange(band) {
+      if (band.low_percent != null || band.high_percent != null) {
+        if (band.low_percent == null) return `< ${band.high_percent + 0.1}%`;
+        if (band.high_percent == null) return `≥ ${band.low_percent}%`;
+        return `${band.low_percent}–${band.high_percent}%`;
+      }
+      const pair = (mmol, mg) => `${mmol} mmol/L (${mg} mg/dL)`;
+      if (band.low_mmol_l == null) return `≤ ${pair(band.high_mmol_l, band.high_mg_dl)}`;
+      if (band.high_mmol_l == null) return `≥ ${pair(band.low_mmol_l, band.low_mg_dl)}`;
+      return `${band.low_mmol_l}–${pair(band.high_mmol_l, band.high_mg_dl)}`;
     }
 
     async function saveIntake(btn) {
@@ -371,6 +816,16 @@
         }
         body.weight_kg = w;
       }
+      // A5: the same plausible-human bounds the BMI calculator uses, so a height that
+      // would silently produce no BMI cannot be stored in the first place.
+      if (val('in-height')) {
+        const h = Number(val('in-height'));
+        if (!isFinite(h) || h < 30 || h > 260) {
+          return showError(t('Enter a height in centimetres, between 30 and 260.',
+                             'সেন্টিমিটারে উচ্চতা লিখুন, ৩০ থেকে ২৬০ এর মধ্যে।'));
+        }
+        body.height_cm = h;
+      }
       if (val('in-bp')) body.bp = val('in-bp');
       if (Object.keys(body).length === 1) {
         return showError(t('Nothing to update.', 'পরিবর্তনের কিছু নেই।'));
@@ -378,6 +833,7 @@
       btn.disabled = true;
       try {
         currentCase.detail.patient = await api('PATCH', `/api/patients/${p.id}/vitals`, body);
+        closeIntakeEditor();          // a successful save closes the form
         renderIntakeCard();
         // Identity feeds the handoff warnings, so re-ask rather than guess.
         await loadHandoff(currentCase);
@@ -465,6 +921,12 @@
       // S37: the three new surfaces re-render from state, same as everything else.
       renderStats(null);
       if (currentCase) { renderIntakeCard(); renderHandoff(); }
+      // S38: the clock, the explainer, the refresh line and the glucose chart follow
+      // the toggle too. The intake editor stays open across it (intakeOpen).
+      tickClock();
+      renderTriageInfo();
+      renderQueueRefreshState();
+      renderGlucosePanel();
     }
 
     async function submitForward() {
@@ -499,8 +961,11 @@
     function backToQueue() {
       postrefSnap = null;
       document.getElementById('postref-screen').style.display = 'none';
-      document.getElementById('no-case').style.display = 'block';
+      // S38: the placeholder is rendered by staff.js now, so it says what the queue
+      // being empty actually MEANS instead of "select a patient" over nothing.
+      queueAnimateNext = true;
       loadQueue();
+      renderWorkspaceState();
     }
 
     async function downloadSummaryReport(btn) {
@@ -632,8 +1097,12 @@
              </span>
              <button class="btn btn-secondary" id="weight-edit-btn" style="padding:5px 12px; font-size:.78rem;">✏️ ${t('Edit', 'সম্পাদনা')}</button>
            </div>` +
+           row(t('Height', 'উচ্চতা'), 'pr-height') +
            row(t('Blood Pressure', 'রক্তচাপ'), 'pr-bp') +
-        `</div>
+          // S38: the doctor is about to receive this summary, so it carries the BMI
+          // the medic saw — derived here as everywhere else, never a stored copy.
+          `<div id="pr-bmi" style="font-size:.85rem;"></div>
+        </div>
          <div class="card" style="display:flex; flex-direction:column; gap:10px;">
            <h3 style="font-size:1rem; color:var(--primary-color);">${t('AI Risk Assessment', 'এআই ঝুঁকি নিরূপণ')}</h3>
            <div id="pr-risk" style="display:flex; align-items:center; gap:10px; flex-wrap:wrap;"></div>
@@ -659,7 +1128,10 @@
       document.getElementById('pr-gender').textContent = genderLabel(p.sex);
       document.getElementById('pr-weight').textContent =
         p.weight_kg != null ? `${p.weight_kg} kg` : '—';
+      document.getElementById('pr-height').textContent =
+        p.height_cm != null ? `${p.height_cm} cm` : '—';
       document.getElementById('pr-bp').textContent = p.bp || '—';
+      showBmi('pr-bmi', p.weight_kg, p.height_cm);
       document.getElementById('weight-edit-btn').onclick = () => {
         document.getElementById('weight-input').value = p.weight_kg != null ? p.weight_kg : '';
         document.getElementById('weight-editor').style.display = 'inline-flex';

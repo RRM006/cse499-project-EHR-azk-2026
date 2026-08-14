@@ -8,6 +8,8 @@ empty diagnosis stays empty — the AI suggested condition can never leak in (ru
 
 from io import BytesIO
 
+from datetime import date, timedelta
+
 import pytest
 from docx import Document as DocxDocument
 from fastapi.testclient import TestClient
@@ -20,6 +22,7 @@ from backend.app.db.models import (
     CaseProfile, Clinic, Document, Patient, Prescription, User, Visit,
 )
 from backend.app.main import app
+from backend.app.services.clinical_dates import dhaka_today_iso
 from backend.app.services.documents.storage import FilesystemStorage
 
 
@@ -72,7 +75,12 @@ def env(tmp_path, monkeypatch):
 
 def _payload(diagnosis="Viral fever"):
     return {
-        "language": "en", "date": "2026-07-06",
+        # S38 (B5): the prescription date must be TODAY in Dhaka and the follow-up must
+        # not be in the past — both enforced server-side now. These were fixed literals
+        # ("2026-07-06" / "2026-07-13"), which no assertion in this file ever looked at;
+        # they are computed so the fixture stays valid on every future run rather than
+        # rotting into a 400 tomorrow.
+        "language": "en", "date": dhaka_today_iso(),
         "clinic": {"name": "Demo Clinic", "address": "Dhanmondi, Dhaka"},
         "doctor": {"id": 1, "name": "Dr. M. Rahman", "qualification": "MBBS, FCPS (Medicine)",
                    "registration_no": "BMDC-A-40001", "specialization": "Internal Medicine"},
@@ -82,7 +90,8 @@ def _payload(diagnosis="Viral fever"):
         "diagnosis": diagnosis,
         "medicines": [{"name": "Napa", "strength": "500mg", "dosage": "1+0+1",
                        "timing": "after meals", "duration": "5 days"}],
-        "advice": "Rest and fluids", "tests": "CBC", "followup_date": "2026-07-13",
+        "advice": "Rest and fluids", "tests": "CBC",
+        "followup_date": (date.fromisoformat(dhaka_today_iso()) + timedelta(days=7)).isoformat(),
     }
 
 

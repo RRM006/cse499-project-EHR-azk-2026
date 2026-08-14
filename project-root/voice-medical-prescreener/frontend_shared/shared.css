@@ -119,6 +119,9 @@ body {
 .source-badge { font-size: .65rem; font-weight: 700; padding: 3px 8px; border-radius: 4px; text-transform: uppercase; white-space: nowrap; }
 .source-ai { background: #E6F7F5; color: var(--secondary-color); border: 1px solid #C7EBE6; }
 .source-human { background: #F0FDF4; color: var(--accent-color); border: 1px solid #DCFCE7; }
+/* S38 (C2): a human read the model's value and agreed with it — distinct from having
+   CHANGED it, which is what source-human means. */
+.source-verified { background: #ECFDF5; color: #047857; border: 1px solid #A7F3D0; }
 
 /* --- safety panel (doctor) --- */
 .safety-panel { background: #FFF5F5; border: 1.5px solid #FEB2B2; border-radius: var(--radius); padding: 18px; display: flex; gap: 18px; }

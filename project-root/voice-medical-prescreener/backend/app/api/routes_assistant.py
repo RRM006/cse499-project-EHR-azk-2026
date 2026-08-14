@@ -1,10 +1,15 @@
-"""P3-3: the doctor portal's AI drug-information assistant (module M16).
+"""P3-3: the doctor portal's AI clinical-information assistant (module M16).
 
 POST /api/visits/{uuid}/assistant/drug-info — visit-scoped so every call lands in
 module_events against the case the doctor is reviewing (visit_id is NOT NULL
 there, and the audit linkage is wanted anyway). Doctor-triggered only; the reply
-always carries the server-attached "verify before prescribing" disclaimer
-(rule #2 — informational, never a prescribing decision).
+always carries a server-attached disclaimer (rule #2 — informational, never a
+prescribing decision).
+
+S38 (B6): the assistant now covers medicines, diagnostic tests, and — only on the
+doctor's explicit ``use_case_context`` opt-in — which tests might be useful for the
+patient in front of them. The PATH is unchanged on purpose: one endpoint, one seam,
+one round-trip. Its name is kept for compatibility with the shipped portal.
 """
 
 from fastapi import APIRouter, Depends, HTTPException
@@ -27,6 +32,8 @@ def drug_info(
     if visit is None:
         raise HTTPException(status_code=404, detail=f"Visit {visit_uuid} not found")
     try:
-        return DrugInfoOut(**answer_drug_question(db, visit, payload.question))
+        return DrugInfoOut(**answer_drug_question(
+            db, visit, payload.question, use_case_context=payload.use_case_context
+        ))
     except LLMCallError as exc:
         raise HTTPException(status_code=502, detail=str(exc))

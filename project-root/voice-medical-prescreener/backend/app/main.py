@@ -21,7 +21,9 @@ from backend.app.api.routes_documents import router as documents_router
 from backend.app.api.routes_dashboard import router as dashboard_router
 from backend.app.api.routes_followup import router as followup_router
 from backend.app.api.routes_history import router as history_router
+from backend.app.api.routes_notes import router as notes_router
 from backend.app.api.routes_prescription import router as prescription_router
+from backend.app.api.routes_reference import router as reference_router
 from backend.app.api.routes_report import router as report_router
 from backend.app.api.routes_risk import router as risk_router
 from backend.app.api.routes_transcripts import router as transcripts_router
@@ -75,6 +77,8 @@ app.include_router(dashboard_router)
 app.include_router(report_router)
 app.include_router(prescription_router)
 app.include_router(assistant_router)
+app.include_router(reference_router)
+app.include_router(notes_router)
 app.include_router(config_router)
 app.include_router(tts_router)
 

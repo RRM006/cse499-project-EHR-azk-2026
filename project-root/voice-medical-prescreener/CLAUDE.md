@@ -22,16 +22,15 @@ We build it one module at a time.
 original 20-step build AND the **"Context Fixed Problem 2.0" cycle** are done (teal redesign,
 bilingual portals, background-assessed submit, Dhaka times, M16 assistant, and **real OTP**:
 hashed/expiring/single-use codes behind a pluggable sender seam, `OTP_CHANNEL=dev|textbee`,
-`000000` bypass dev-channel-only — ADR-0045). DB = Alembic head **0012** (17 tables) — still 0012
-as of S37. **192 tests passed at S25; the current count is 767 (see the S37 paragraph below).**
+`000000` bypass dev-channel-only — ADR-0045). DB = Alembic head **0013**
+(18 tables) as of S38 — it had held at 0012 since S25. **192 tests passed at S25; the current count
+is 931 (see the S38 paragraph below).**
 **S25: the human live real-mic run PASSED on Windows 11** — TC-V1/V2/V3/F2/R1 all ✅ (STT "very
-accurate", ~2 s latency, TTS spoke, follow-ups good). On that gate **Modules 1–14 went ✅** (M5
-retired, **M15 stays 🟨** = future retrain/regression pipeline). What's left is NOT build work:
-**rotate the 3 API keys** before any public demo (still pending) + optionally log formal
-WER/precision-recall as thesis evidence (S25 was qualitative). Manual-testing findings go in
-`agent_docs/context fixed problem 3.0.md`; the **three** faculty future requirements (quantized
-summary model, quantized STT/TTS, a fully voice-driven follow-up loop) in
-`agent_docs/faculty_future_features.md`.
+accurate", ~2 s latency). On that gate **Modules 1-14 went ✅** (M5 retired, **M15 stays 🟨** =
+future retrain/regression pipeline). What's left is NOT build work: **rotate the 3 API keys** before
+any public demo (still pending) + optionally log formal WER/precision-recall as thesis evidence.
+Manual-testing findings go in `agent_docs/context fixed problem 3.0.md`; the three faculty future
+requirements in `agent_docs/faculty_future_features.md`.
 **The faculty Requirement 3 + 3b build (voice-first Patient Portal, ADR-0048 — supersedes
 ADR-0027's voice-only rule) is built through Step S4** — mic opens itself after TTS → visible 3-2-1
 confirmation window → the turn ends on silence → next question, **with typing always available as
@@ -41,31 +40,63 @@ S3 = auto-listen behind an echo guard; S4 = the endpointer). Plan + 12-point liv
 `max_answer_ms` cap, permission/visibility recovery) — verified absent and pinned by a test; its
 permission/visibility half is **blocked** on the open mid-turn word-loss rule #1 decision, which is
 the human's to make. **S6–S7 are not built either** and each needs its own "go".
-**Session 37 (2026-08-13) then audited the two STAFF portals as ROLES** (ADR-0058 features + data
-ownership, ADR-0059 the depth/motion layer) and gave each the layer it was missing. **MEDIC:** the
-queue is ordered by **urgency** (worst tier first, then longest wait) instead of newest-first; rows
-carry wait time, a red-flag chip and an intake-completeness meter; a floor-load strip; **vitals and
-identity are captured BEFORE the referral** (they had been recordable only on the POST-referral
-screen, so every case reached the doctor with no weight and no BP); an **advisory** handover check
-that **can never block a forward**; and the referral is attributed to the forwarding medic.
-**DOCTOR:** a patient **timeline** + **prescription history** (`prescriptions` had been a
-*write-only* table), a **Completed** scope so a reviewed case stays reachable instead of vanishing,
-and review controls that hide once the case is reviewed. **Every S37 view is DERIVED and read-only —
-no new table, no new column, `db/models.py` and `migrations/` untouched.** UI: new
-`frontend_shared/motion.css` (staff portals only; every animation behind `prefers-reduced-motion`).
-→ **767 tests pass, 2 skipped.** Full role/ownership reference: **`agent_docs/portal_roles.md`**.
-⚠ **Real-mic status (corrected in S37):** the human has confirmed the real-microphone run of the
-**S33–S36** voice changes **was carried out**. Recorded exactly that far: **no per-claim results
-were supplied and none are documented**, and no defects came back. Do not repeat "no microphone has
-exercised S33–S36" (no longer true), and do not upgrade the three specific S36 claims to "verified"
-(no evidence). S25's itemised evidence stands unchanged.
-**Sessions 34–36 before that ran three manual-testing/hardening cycles** (ADR-0055/0056/0057):
-the spoken-answer read-back, spoken yes/no confirmation everywhere, one header clock, TTS pacing,
-and in **S36** a real **patient-session boundary** (an epoch stopping one patient's in-flight
-responses, recognition engine and buffers reaching the next), the phone number **ending its own
-turn** at eleven digits, "ঠিক আছে"/"all right" **finishing the review**, the raw transcript
-**downloading itself**, an **output guard on M7's question**, and **MCP evaluated and REJECTED**
-(ADR-0057 b). → 723 tests at the end of S36. Details: `changelog.md`.
+**Session 38 (2026-08-14) completed a nineteen-item staff-portal UX + clinical-workflow brief**
+(A1-A7 medic, B1-B7 doctor, C1-C4 workflow) — ADRs **0060/0061/0062/0063**, and the first schema
+change since S25: **Alembic 0012 → 0013**, deliberately just **one column (`patients.height_cm`) and
+one table (`clinical_notes`)**, no new dependency. Most of the brief added **no storage at all**.
+**MEDIC:** "Triage" is explained where the word is used; the 10/10 line became an interactive
+segmented meter that names which fields are empty; **Intake & Vitals was rebuilt into a real form**
+with height and a **live BMI** (WHO + WHO **Asian** bands, derived and never stored); and the queue's
+auto-refresh — which had been **silently replacing a medic's phone-search result every 15 s** — now
+holds on a search, holds on a hidden tab, says which state it is in, and stops re-flashing the list.
+⚠ **A6: the human asked for "a diabetic limit"; there is no such number**, so the portal shows the
+published chart (fasting / OGTT / random / HbA1c) with the sample conditions each row depends on,
+both unit systems, and the WHO-vs-ADA disagreement stated out loud — `glucose_reference()` takes
+**no argument at all**.
+**DOCTOR:** the prescription is **inline at the bottom of the case** instead of replacing it;
+Advice and Required Tests are two vertical cards; **Required Tests is a searchable token editor**
+over a ~50-entry bilingual vocabulary (a module, not a table) where **Enter always commits what was
+typed**; "Assigned (0)" says what its emptiness means; and **"Accept & Write to EHR" now produces an
+actual record** — an **HL7 FHIR R4 document Bundle** served as `application/fhir+json` through the
+existing documents table. ⚠ Claimed honestly as *structurally valid and semantically conservative*
+— not certified, not profiled. ⚠ **The AI suggested condition is excluded from it entirely** (the
+disclaimer does not survive ingestion elsewhere); the doctor's own diagnosis is exported.
+**DATES (ADR-0061):** policed **by category** — historical timestamps are never touched, a
+prescription must be dated today, a follow-up/recall must not be in the past — enforced server-side
+BEFORE the write. It fixed a real bug: the form stamped the **UTC** date, so a prescription written
+between midnight and 6 a.m. Dhaka was dated the previous day. All staff clocks are now 12-hour with
+a live Dhaka header clock; server-side "today" uses a **fixed UTC+06:00 offset, not `ZoneInfo`**
+(Windows has no tz database; Bangladesh has had no DST since 2010).
+**M16 (ADR-0063)** widened to medicines **and diagnostic tests** and, on **explicit opt-in**, which
+tests might suit this patient. ⚠ The web search receives the doctor's typed question **and nothing
+else, by signature**; the LLM's case context is de-identified and carries **no raw transcript**;
+suggested tests are chips the doctor **clicks** in — nothing is ordered until a human generates the
+prescription.
+**C1-C4** — the four features S37 deferred are all built, each only after the reason for deferring
+it was removed: the medic's referral history is **derived from `audit_log.actor_id`** and reports
+what it **cannot** attribute; per-field verification lives inside the existing `summary_fields` JSON
+and **does not touch the value or `source`**; and the recall and the doctor→medic note share one
+table, addressed to a **role**, with no thread and no reply. → **931 tests pass, 2 skipped.**
+
+**Session 37 (2026-08-13) gave the two STAFF portals their ROLES** (ADR-0058/0059): the medic queue
+ordered by **urgency** not recency, wait/red-flag/completeness chips, a floor-load strip, **vitals
+captured BEFORE the referral**, an **advisory** handover check that **can never block a forward**,
+and referrals attributed to the forwarding medic; for the doctor, a patient **timeline** +
+prescription history (`prescriptions` had been a *write-only* table) and a **Completed** scope so a
+reviewed case stays reachable. Every S37 view is derived and read-only. UI:
+`frontend_shared/motion.css` (staff only; every animation behind `prefers-reduced-motion`).
+→ 767 tests. Full role/ownership reference: **`agent_docs/portal_roles.md`**.
+**Sessions 34-36 ran three manual-testing/hardening cycles** (ADR-0055/0056/0057): the spoken-answer
+read-back, spoken yes/no confirmation, one header clock, TTS pacing, and in **S36** a real
+**patient-session boundary** (an epoch stopping one patient's in-flight responses reaching the
+next), the phone number ending its own turn at eleven digits, "ঠিক আছে" finishing the review, the
+auto-downloading raw transcript, an **output guard on M7's question**, and **MCP evaluated and
+REJECTED** (ADR-0057 b). → 723 tests. Details: `changelog.md`.
+⚠ **Real-mic status (unchanged since S37; S38 touched no voice code):** the human confirmed the
+real-microphone run of the **S33-S36** voice changes **was carried out**. Recorded exactly that far:
+**no per-claim results were supplied and none are documented**, and no defects came back. Do not
+repeat "no microphone has exercised S33-S36" (no longer true), and do not upgrade the three specific
+S36 claims to "verified" (no evidence). S25's itemised evidence stands unchanged.
 
 ## NON-NEGOTIABLE RULES (never break these)
 

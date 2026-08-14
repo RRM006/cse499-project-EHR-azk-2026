@@ -148,6 +148,59 @@ def test_vitals_guard_rails(env):
                         json={"editor_id": medic}).status_code == 400
 
 
+# --- S38 (A4/A5, rev 0013): height rides on the SAME row and the SAME endpoint ---
+
+
+def test_height_is_recorded_through_the_existing_vitals_endpoint(env):
+    """ADR-0060: height is the other half of a BMI and belongs with the vitals that are
+    already on ``patients`` — not in a second store and not on a second route."""
+    client, TestSession, ids = env
+    r = client.patch(f"/api/patients/{ids['patient_id']}/vitals",
+                     json={"height_cm": 168.5, "editor_id": ids["medic_id"]})
+    assert r.status_code == 200, r.text
+    assert r.json()["height_cm"] == 168.5
+    # And it reaches the staff detail screens through the call they already make.
+    assert client.get(f"/api/visits/{ids['visit_uuid']}").json()["patient"]["height_cm"] == 168.5
+
+    db = TestSession()
+    log = db.query(AuditLog).filter(AuditLog.action == "patient.vitals_edit").one()
+    assert log.detail == {"height_cm": 168.5}   # only what was actually edited
+    db.close()
+
+
+def test_height_alone_is_enough_to_be_a_real_update(env):
+    """The 'nothing to update' 400 must not fire when height is the only field sent —
+    recording a height before a weight is a normal order of work."""
+    client, _, ids = env
+    assert client.patch(f"/api/patients/{ids['patient_id']}/vitals",
+                        json={"height_cm": 150, "editor_id": ids["medic_id"]}).status_code == 200
+
+
+def test_an_implausible_height_is_refused_by_the_schema(env):
+    """Bounds mirror services/clinical_reference: a height the BMI calculator would
+    refuse must not be storable, or the record keeps a value that silently shows no
+    BMI with no explanation."""
+    client, _, ids = env
+    pid, medic = ids["patient_id"], ids["medic_id"]
+    for bad in (17, 1.7, 300, -5):
+        assert client.patch(f"/api/patients/{pid}/vitals",
+                            json={"height_cm": bad, "editor_id": medic}).status_code == 422, bad
+
+
+def test_no_bmi_is_ever_accepted_or_returned(env):
+    """ADR-0060: BMI is derived on demand. If it were storable it would go stale the
+    moment a weight was corrected, and two numbers would disagree in the record."""
+    client, _, ids = env
+    detail = client.get(f"/api/visits/{ids['visit_uuid']}").json()["patient"]
+    assert not [k for k in detail if "bmi" in k.lower()]
+    # An unknown field is ignored rather than stored (pydantic default), and certainly
+    # never echoed back as if it had been accepted.
+    r = client.patch(f"/api/patients/{ids['patient_id']}/vitals",
+                     json={"height_cm": 170, "bmi": 99, "editor_id": ids["medic_id"]})
+    assert r.status_code == 200
+    assert "bmi" not in r.json()
+
+
 def test_summary_docx_carries_condition_disclaimer_and_vitals(env):
     client, _, ids = env
     client.patch(f"/api/patients/{ids['patient_id']}/vitals",

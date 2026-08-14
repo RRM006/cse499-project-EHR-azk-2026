@@ -22,6 +22,80 @@ let currentCase = null;   // { uuid, detail, profile }
 let lastQueueItems = [];  // kept so the queue re-renders on language toggle
 let queueLoadedOnce = false;  // S37: skeletons only before the FIRST paint
 
+/* S38 (A2) — the auto-refresh, made VISIBLE and made SAFE.
+
+   It already existed as a bare `setInterval(loadQueue, 15000)` in each portal, with
+   two problems that only show up in use:
+
+   1. **It destroyed the medic's own work.** `searchPhone()` renders a patient's
+      history into the same list; fifteen seconds later the timer fired `loadQueue()`
+      and silently replaced it with the full queue. A medic looking up a returning
+      patient watched their result vanish for no visible reason. The brief is explicit:
+      *"Do NOT refresh in a way that destroys the user's current interaction/input."*
+   2. **It was invisible and unconditional.** Nothing on screen said the list was live,
+      so a stale-looking queue was indistinguishable from a broken one — and it kept
+      polling at full rate against a backgrounded tab all night.
+
+   The fix keeps ONE timer, owned here rather than duplicated per portal:
+     * it holds while a phone search is on screen, and resumes when the search clears;
+     * it holds while the tab is hidden, and refreshes ONCE immediately on return, so
+       a medic coming back to the tab sees current data without waiting out the period;
+     * it publishes `lastQueueRefreshAt` and calls `onQueueRefreshState()`, which is
+       what lets the portals draw a live "updated 3:42:07 PM" line instead of nothing;
+     * a refresh never re-runs the entrance animation (see `queueAnimateNext`), because
+       a queue that re-flashes every 15 seconds reads as an error, not as freshness. */
+const QUEUE_REFRESH_MS = 15000;
+let queueTimer = null;
+let lastQueueRefreshAt = null;   // Date of the last SUCCESSFUL queue render
+let queueRefreshPaused = false;  // why the timer is holding, for the status line
+let queueAnimateNext = true;     // stagger the rows on this render only
+
+function startQueueAutoRefresh() {
+  if (queueTimer !== null) return;      // idempotent: re-login must not stack timers
+  queueTimer = setInterval(autoRefreshQueue, QUEUE_REFRESH_MS);
+  document.addEventListener('visibilitychange', () => {
+    // Coming back to the tab is the one moment a medic MOST needs current data, and
+    // the one moment the timer is most likely to have just fired into a hidden tab.
+    if (!document.hidden) autoRefreshQueue();
+    renderQueueRefreshState();
+  });
+}
+
+function autoRefreshQueue() {
+  // A search result is the medic's own question; the timer does not get to answer a
+  // different one. Cleared the moment they clear the box (refreshQueue / loadQueue).
+  // `PORTAL.autoRefreshPaused` extends the same rule to any other list a portal has
+  // put in the sidebar (S38: the medic's referral history and inbox) — those are
+  // things a person went looking for, and overwriting them would be exactly the
+  // defect A2 exists to fix.
+  if (typeof PORTAL === 'object' && PORTAL.autoRefreshPaused && PORTAL.autoRefreshPaused()) {
+    queueRefreshPaused = true;
+    renderQueueRefreshState();
+    return;
+  }
+  if (queueIsSearchResult || document.hidden) {
+    queueRefreshPaused = true;
+    renderQueueRefreshState();
+    return;
+  }
+  queueRefreshPaused = false;
+  queueAnimateNext = false;   // a background refresh must not re-animate the list
+  loadQueue();
+}
+
+/* Portals opt in by defining onQueueRefreshState(); the shared code never assumes
+   a particular element exists. */
+function renderQueueRefreshState() {
+  if (typeof onQueueRefreshState === 'function') {
+    onQueueRefreshState({
+      lastRefreshAt: lastQueueRefreshAt,
+      paused: queueRefreshPaused || document.hidden,
+      intervalMs: QUEUE_REFRESH_MS,
+      searching: queueIsSearchResult,
+    });
+  }
+}
+
 /* S37 — which list the sidebar is showing. 'queue' is the working list; 'recent' is
    the doctor's own completed consultations (ADR-0058). The medic has no 'recent'
    (nothing attributes a referral to an individual medic) and the server refuses it,
@@ -42,14 +116,18 @@ async function loadQueue() {
     const items = await api('GET', `/api/dashboard?${params}`);
     queueIsSearchResult = false;
     renderQueue(items);
+    lastQueueRefreshAt = new Date();
+    queueRefreshPaused = false;
   } catch (e) {
     // Handled here rather than re-thrown: loadQueue runs on a 15s timer and from
     // several callers, and an unhandled rejection in a timer is invisible to staff.
     // The failure is shown IN the sidebar, where the missing list actually is.
     queueLoadedOnce = true;
     renderQueueMessage(t('Could not load the queue.', 'তালিকা লোড করা যায়নি।'), e.message);
+    renderQueueRefreshState();
     return;
   }
+  renderQueueRefreshState();
   if (typeof onQueueLoaded === 'function') onQueueLoaded(lastQueueItems);
 }
 
@@ -118,7 +196,11 @@ async function searchPhone() {
   try {
     const items = await api('GET', `/api/dashboard?phone=${encodeURIComponent(phone)}`);
     queueIsSearchResult = true;
+    queueAnimateNext = true;   // a search result IS a new list; it may animate in
     renderQueue(items);
+    // S38: the auto-refresh holds from here until the search is cleared, so the timer
+    // can never overwrite the answer the medic just asked for.
+    renderQueueRefreshState();
   } catch (e) { showError(e.message); }
 }
 
@@ -137,13 +219,23 @@ function renderQueue(items) {
             : t('No cases in the queue.', 'তালিকায় কোনো কেস নেই।')),
       null,
       queueIsSearchResult ? '🔍' : '✅');
+    // ⚠ The empty branch is EXACTLY the case B7 reports, so the workspace has to be
+    // told here too. Returning before this is how the right-hand panel kept saying
+    // "Select a patient from the queue" while the queue beside it said there was none.
+    queueAnimateNext = false;
+    renderWorkspaceState();
     return;
   }
   items.forEach((item, idx) => {
     const div = document.createElement('div');
     // S37: the tier is on the row itself (a colour rail) as well as in the badge,
     // so the ranking is legible while scrolling, not only when reading each row.
-    div.className = 'queue-item fx-queue tier-' + (item.tier || 'none')
+    // S38: `fx-queue` is applied only when this render is a NEW list (first paint,
+    // scope change, search, explicit refresh). A 15-second background refresh
+    // rebuilds the same rows, and re-running the stagger every 15 seconds made a
+    // healthy queue look like it was constantly reloading.
+    div.className = 'queue-item tier-' + (item.tier || 'none')
+      + (queueAnimateNext ? ' fx-queue' : '')
       + (currentCase && currentCase.uuid === item.visit_uuid ? ' active' : '');
     div.style.setProperty('--i', idx);
     div.tabIndex = 0;   // the queue is keyboard-reachable, like every other control
@@ -167,6 +259,68 @@ function renderQueue(items) {
     };
     box.appendChild(div);
   });
+  // One render = one entrance. The next render re-earns it (search / scope / refresh).
+  queueAnimateNext = false;
+  renderWorkspaceState();
+}
+
+/* S38 (B7) — the RIGHT-hand panel must also answer "why is there nothing here?".
+
+   The sidebar has had an empty state since S37; the workspace never did. So selecting
+   "Assigned (0)" left the medic or doctor looking at a panel that said "Select Patient
+   — click a patient to scan risk alerts", pointing at a list with no patients in it.
+   Worse, once a case had been opened `#no-case` was hidden and nothing ever restored
+   it, so switching to an empty scope left the PREVIOUS patient's case on screen as if
+   it were still in the queue.
+
+   This is deliberately shared rather than per-portal: the failure was identical in
+   both, and a second copy would fix it in one and not the other. Portals customise the
+   wording through `PORTAL.emptyWorkspace`. */
+let placeholderDefaults = null;   // the markup's own "select a patient" copy
+
+function renderWorkspaceState() {
+  const placeholder = document.getElementById('no-case');
+  const detail = document.getElementById('case-detail');
+  if (!placeholder || !detail) return;
+  const glyph = placeholder.querySelector('div');
+  const heading = placeholder.querySelector('h3');
+  const body = placeholder.querySelector('p');
+  if (!glyph || !heading || !body) return;
+
+  // Captured once, before anything overwrites it, so the default copy can be put back
+  // when the queue refills. The bilingual pairs are taken from the markup's own
+  // data-en/data-bn rather than re-typed here — one source for that text.
+  if (placeholderDefaults === null) {
+    placeholderDefaults = {
+      glyph: glyph.textContent,
+      title: { en: heading.dataset.en, bn: heading.dataset.bn },
+      detail: { en: body.dataset.en, bn: body.dataset.bn },
+    };
+  }
+
+  // A case that is open stays open — a doctor reading a completed case must not have
+  // it snatched away because the working queue emptied underneath them. Likewise a
+  // portal showing another full-width screen (the medic's post-referral confirmation)
+  // owns the workspace, and the placeholder must not appear underneath it.
+  if (currentCase) return;
+  if (typeof PORTAL === 'object' && PORTAL.workspaceBusy && PORTAL.workspaceBusy()) return;
+
+  detail.style.display = 'none';
+  placeholder.style.display = 'block';
+
+  const copy = (lastQueueItems.length || !(typeof PORTAL === 'object' && PORTAL.emptyWorkspace))
+    ? { glyph: placeholderDefaults.glyph,
+        title: t(placeholderDefaults.title.en, placeholderDefaults.title.bn),
+        detail: t(placeholderDefaults.detail.en, placeholderDefaults.detail.bn) }
+    : PORTAL.emptyWorkspace({ scope: queueScope, searching: queueIsSearchResult });
+
+  glyph.textContent = copy.glyph;
+  heading.textContent = copy.title;
+  body.textContent = copy.detail;
+  // These carry data-en/data-bn from the markup; leaving them would let
+  // applyLanguage() put "Select Patient" back over the empty-state sentence on the
+  // next language toggle. This function re-renders both languages itself instead.
+  [heading, body].forEach((el) => { delete el.dataset.en; delete el.dataset.bn; });
 }
 
 /* S37 — the three operational facts a staff member needs BEFORE opening a case:
@@ -195,23 +349,123 @@ function renderQueueChips(box, item) {
     box.appendChild(flag);
   }
 
+  box.appendChild(buildCompletenessMeter(item));
+}
+
+/* S38 (A3) — the completeness indicator, from a line into a control.
+
+   It used to be a 62px bar and the text "7/10", which told a medic a number without
+   telling them anything they could act on: seven of WHICH ten, and had a human looked
+   at any of them? Three changes, all of them from data the row already carries:
+
+     * **Ten segments, one per field.** A continuous bar is a percentage; ten ticks are
+       ten questions, which is what the medic is actually about to work through. Each
+       segment says which field it is, so hovering the third tick names the third field.
+     * **Verified is drawn differently from merely filled.** `fields_verified` counts
+       the fields a human has confirmed (C2). "Filled" means the model wrote something;
+       "verified" means a person agreed. Those are not the same fact and were being
+       shown as one.
+     * **It opens.** Click or press Enter and the row expands a plain list of exactly
+       which fields are still empty — `fields_empty` from the server, so the panel can
+       never disagree with the meter above it.
+
+   ⚠ Clicking the meter must NOT open the case: the medic is asking a question about
+   the row, not choosing it. Every handler stops propagation. Keyboard reaches it via
+   its own tabindex, and `aria-label` carries the same sentence the tooltip does, so
+   the information is not conveyed by the bar alone (ADR-0059's rule). */
+function buildCompletenessMeter(item) {
   const total = item.fields_total || 10;
   const filled = item.fields_filled || 0;
+  const verified = item.fields_verified || 0;
+  const empty = item.fields_empty || [];
+  const complete = filled >= total;
+
+  const wrap = document.createElement('span');
+  wrap.className = 'meter-wrap';
+
   const meter = document.createElement('span');
-  meter.className = 'meter';
-  meter.title = t('Pre-screening fields with an answer', 'উত্তরসহ প্রাক-পরীক্ষার ঘর');
+  meter.className = 'meter meter-interactive' + (complete ? ' complete' : '');
+  meter.tabIndex = 0;
+  meter.setAttribute('role', 'button');
+  const summary = complete
+    ? t(`All ${total} pre-screening questions answered`,
+         `সবগুলো (${total}) প্রাক-পরীক্ষার প্রশ্নের উত্তর আছে`)
+    : t(`${filled} of ${total} pre-screening questions answered, ${verified} verified by a person`,
+         `${total}টির মধ্যে ${filled}টি প্রশ্নের উত্তর আছে, ${verified}টি যাচাই করা`);
+  meter.title = summary + ' — ' + t('click for detail', 'বিস্তারিত দেখতে ক্লিক করুন');
+  meter.setAttribute('aria-label', summary);
+
   const track = document.createElement('span');
-  track.className = 'meter-track';
-  const fill = document.createElement('span');
-  fill.className = 'meter-fill' + (filled >= total ? ' full' : (filled <= total / 2 ? ' low' : ''));
-  fill.style.width = `${Math.round((filled / total) * 100)}%`;
-  track.appendChild(fill);
+  track.className = 'meter-track segmented';
+  const keys = Object.keys(STAFF_FIELD_LABELS);
+  keys.forEach((key, i) => {
+    const seg = document.createElement('span');
+    const isEmpty = empty.includes(key);
+    // Verified segments are counted from the left; the row does not carry WHICH ones
+    // are verified (only how many), so this shades a count, not specific fields —
+    // and the tooltip says exactly that rather than implying per-field knowledge.
+    const isVerified = !isEmpty && i < verified;
+    seg.className = 'seg-tick' + (isEmpty ? ' empty' : (isVerified ? ' verified' : ' filled'));
+    seg.title = `${i + 1}. ${t(STAFF_FIELD_LABELS[key].en, STAFF_FIELD_LABELS[key].bn)
+      .replace(/^\d+\.\s*/, '')} — ${isEmpty ? t('empty', 'খালি') : t('answered', 'উত্তর আছে')}`;
+    track.appendChild(seg);
+  });
+
   const num = document.createElement('span');
-  num.className = 'meter-num';
-  num.textContent = `${filled}/${total}`;
+  num.className = 'meter-num' + (complete ? ' full' : (filled <= total / 2 ? ' low' : ''));
+  num.textContent = complete ? `✓ ${filled}/${total}` : `${filled}/${total}`;
+
   meter.appendChild(track);
   meter.appendChild(num);
-  box.appendChild(meter);
+  if (verified > 0) {
+    const badge = document.createElement('span');
+    badge.className = 'meter-verified';
+    badge.textContent = `✔${verified}`;
+    badge.title = t('Fields a person has confirmed', 'যেসব ঘর একজন মানুষ নিশ্চিত করেছেন');
+    meter.appendChild(badge);
+  }
+
+  const detail = document.createElement('span');
+  detail.className = 'meter-detail';
+  detail.style.display = 'none';
+
+  const toggle = (e) => {
+    e.stopPropagation();          // the meter is a question about the row, not a click on it
+    e.preventDefault();
+    const open = detail.style.display === 'none';
+    detail.style.display = open ? 'block' : 'none';
+    if (open) fillMeterDetail(detail, { total, filled, verified, empty });
+  };
+  meter.onclick = toggle;
+  meter.onkeydown = (e) => { if (e.key === 'Enter' || e.key === ' ') toggle(e); };
+
+  wrap.appendChild(meter);
+  wrap.appendChild(detail);
+  return wrap;
+}
+
+function fillMeterDetail(box, { total, filled, verified, empty }) {
+  box.innerHTML = '';
+  const head = document.createElement('div');
+  head.className = 'meter-detail-head';
+  head.textContent = `${filled}/${total} ${t('answered', 'উত্তর আছে')} · ${verified} ${t('verified', 'যাচাইকৃত')}`;
+  box.appendChild(head);
+  if (!empty.length) {
+    const done = document.createElement('div');
+    done.textContent = '✓ ' + t('Nothing left to collect.', 'সংগ্রহের আর কিছু বাকি নেই।');
+    box.appendChild(done);
+    return;
+  }
+  const label = document.createElement('div');
+  label.className = 'meter-detail-head';
+  label.textContent = t('Still empty:', 'এখনো খালি:');
+  box.appendChild(label);
+  empty.forEach((key) => {
+    const entry = STAFF_FIELD_LABELS[key];
+    const row = document.createElement('div');
+    row.textContent = '• ' + (entry ? t(entry.en, entry.bn) : key);
+    box.appendChild(row);
+  });
 }
 
 async function openCase(uuid) {
@@ -273,25 +527,62 @@ function renderFields(profile) {
     const label = STAFF_FIELD_LABELS[key];
     const card = document.createElement('div');
     card.className = 'field-card' + (idx === 0 ? ' open' : '');
+    /* S38 (C2): THREE states now, not two, because "the model wrote this", "a person
+       corrected it" and "a person read it and agreed" are three different facts. The
+       third had no way to be recorded before — a medic could only signal it by
+       EDITING the field, i.e. retyping the model's own words, which put a false edit
+       in a medical record. */
+    const verified = !!f.verified_by;
     const badge = f.source === 'human'
       ? `<span class="source-badge source-human">${t('Human Edited', 'মানব-সম্পাদিত')}</span>`
-      : `<span class="source-badge source-ai">${t('AI-Extracted', 'এআই-নির্ণীত')}</span>`;
+      : (verified
+          ? `<span class="source-badge source-verified">✔ ${t('Checked', 'যাচাইকৃত')}</span>`
+          : `<span class="source-badge source-ai">${t('AI-Extracted', 'এআই-নির্ণীত')}</span>`);
+    const hasText = !!fieldValue(f);
     card.innerHTML =
       `<div class="field-card-header"><span><span class="field-card-icon">${label.icon}</span>${t(label.en, label.bn)}</span><span>▾</span></div>` +
       `<div class="field-card-content">${badge}
          <div style="flex:1;">
            <div class="field-value" style="font-size:.95rem;line-height:1.5;"></div>
+           <div class="field-verified-note" style="display:none;font-size:.7rem;color:var(--accent-color);font-weight:600;margin-top:3px;"></div>
            <div class="field-editor" style="display:none;gap:8px;margin-top:8px;">
              <input class="input-field field-input" type="text">
              <button class="btn btn-primary" style="padding:6px 14px;font-size:.8rem;">${t('Save', 'সংরক্ষণ')}</button>
              <button class="btn btn-secondary" style="padding:6px 14px;font-size:.8rem;">${t('Cancel', 'বাতিল')}</button>
            </div>
          </div>` +
+      // Only offered where there is something to vouch FOR: "I checked this blank" is
+      // not a claim anyone can make, and the server refuses it too.
+      (PORTAL.canEdit && hasText && f.source !== 'human'
+        ? `<button class="btn ${verified ? 'btn-secondary' : 'btn-accent'} verify-btn" style="padding:6px 12px;font-size:.8rem;">`
+          + (verified ? `↺ ${t('Undo check', 'যাচাই বাতিল')}` : `✔ ${t('Looks right', 'ঠিক আছে')}`)
+          + `</button>`
+        : '') +
       (PORTAL.canEdit ? `<button class="btn btn-secondary edit-btn" style="padding:6px 12px;font-size:.8rem;">✏️ ${t('Edit', 'সম্পাদনা')}</button>` : '') +
       `</div>`;
     card.querySelector('.field-card-header').onclick = () => card.classList.toggle('open');
     // Bilingual DERIVED value (display-only; the medic edits write ALL slots).
     card.querySelector('.field-value').textContent = fieldValue(f) || '—';
+    if (verified) {
+      const note = card.querySelector('.field-verified-note');
+      note.style.display = 'block';
+      note.textContent = '✔ ' + t('Checked by a staff member', 'একজন কর্মী যাচাই করেছেন')
+        + (f.verified_at ? ` · ${dhakaDateTime(f.verified_at)}` : '');
+    }
+    const verifyBtn = card.querySelector('.verify-btn');
+    if (verifyBtn) {
+      verifyBtn.onclick = async () => {
+        verifyBtn.disabled = true;
+        try {
+          const updated = await api('POST',
+            `/api/visits/${currentCase.uuid}/profile/fields/${key}/verify`,
+            { editor_id: PORTAL.userId, verified: !verified });
+          currentCase.profile = updated;
+          renderFields(updated);
+          loadQueue();   // the queue's verified count follows
+        } catch (e) { showError(e.message); verifyBtn.disabled = false; }
+      };
+    }
     if (PORTAL.canEdit) {
       const editor = card.querySelector('.field-editor');
       const input = card.querySelector('.field-input');
@@ -401,6 +692,75 @@ function renderConditionCard(profile) {
 
 function toggleVerbatim() {
   document.getElementById('verbatim-panel').classList.toggle('collapsed');
+}
+
+/* ---- S38 (A5): BMI, shared by both staff portals ----
+
+   Both roles legitimately record vitals on the same `patients` row at different
+   moments (ADR-0058: one source of truth used twice, not duplication), so both need
+   to render a BMI — which makes this shared code rather than a second copy.
+
+   ⚠ The arithmetic and the band cut-offs are the SERVER's
+   (services/clinical_reference, GET /api/reference/bmi). Recomputing them here would
+   put published clinical constants in two places, which is the defect class this
+   codebase keeps removing. The cost is one small local request per change; the
+   benefit is that the portal cannot drift from the reference module.
+
+   ⚠ BMI is never sent to any write endpoint. It is derived from height and weight
+   every time it is displayed, so a corrected weight can never leave a stale BMI
+   behind (ADR-0060). */
+
+const BMI_BANDS = {
+  underweight:    { en: 'Underweight',    bn: 'কম ওজন' },
+  normal:         { en: 'Normal',         bn: 'স্বাভাবিক' },
+  overweight:     { en: 'Overweight',     bn: 'অতিরিক্ত ওজন' },
+  obese:          { en: 'Obese',          bn: 'স্থূল' },
+  increased_risk: { en: 'Increased risk', bn: 'ঝুঁকি বেড়েছে' },
+  high_risk:      { en: 'High risk',      bn: 'উচ্চ ঝুঁকি' },
+};
+
+function bmiBandLabel(code) {
+  const entry = BMI_BANDS[code];
+  return entry ? t(entry.en, entry.bn) : (code || '—');
+}
+
+async function showBmi(targetId, weight, height) {
+  const box = document.getElementById(targetId);
+  if (!box) return;
+  const wNum = Number(String(weight === null || weight === undefined ? '' : weight).trim());
+  const hNum = Number(String(height === null || height === undefined ? '' : height).trim());
+  // Nothing typed yet is not an error — it is simply nothing to show.
+  if (!weight || !height || !isFinite(wNum) || !isFinite(hNum)) { box.textContent = ''; return; }
+  let res;
+  try {
+    res = await api('GET', `/api/reference/bmi?weight_kg=${wNum}&height_cm=${hNum}`);
+  } catch (_) { box.textContent = ''; return; }   // a missing BMI is harmless; a wrong one is not
+  box.innerHTML = '';
+  if (res.bmi === null) {
+    // The server REFUSED to compute rather than returning something misleading — say
+    // so, because a silently blank readout looks like a broken page.
+    box.style.color = 'var(--warning-color)';
+    box.textContent = '⚠ ' + t(
+      'BMI not shown — check the height (cm) and weight (kg) are plausible.',
+      'বিএমআই দেখানো হচ্ছে না — উচ্চতা (সেমি) ও ওজন (কেজি) যাচাই করুন।');
+    return;
+  }
+  box.style.color = '';
+  const head = document.createElement('span');
+  head.style.cssText = 'font-weight:800; color:var(--primary-color);';
+  head.textContent = `BMI ${res.bmi} kg/m²`;
+  const bands = document.createElement('span');
+  bands.style.cssText = 'color:var(--text-muted); margin-left:8px;';
+  // Both ladders, both labelled. The Asian action points matter for this population:
+  // a BMI of 24 is "normal" internationally and "increased risk" here.
+  bands.textContent = `· WHO: ${bmiBandLabel(res.who)}`
+    + `  · ${t('WHO Asian cut-offs', 'WHO এশীয় সীমা')}: ${bmiBandLabel(res.asia)}`;
+  const note = document.createElement('div');
+  note.style.cssText = 'font-size:.72rem; color:var(--warning-color); font-weight:600;';
+  note.textContent = '⚠️ ' + (currentLanguage === 'bn' ? res.disclaimer_bn : res.disclaimer);
+  box.appendChild(head);
+  box.appendChild(bands);
+  box.appendChild(note);
 }
 
 /* MEDIC-1/DOCTOR-2: rebuild everything staff.js rendered in the new language.

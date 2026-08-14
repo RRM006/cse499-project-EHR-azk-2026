@@ -1813,3 +1813,254 @@ separate, still-**unproven** question tracked in `current_task.md`.
   correction applied afterwards, and it is mechanically checkable.
 
 - Status: Accepted (S37, 2026-08-13).
+
+---
+
+## ADR-0060 — 2026-08-14 — S38: two schema additions and four workflow features, with the boundary between DERIVED and STORED restated
+
+**Context.** S38 was a nineteen-item brief over both staff portals, delivered with an explicit
+standing rule: *"Before adding any table/column/model: search existing schema/models, determine
+whether the information already exists, reuse existing fields/services wherever possible, do NOT
+create duplicate representations of the same clinical data."* Most of the session honours that by
+adding nothing — the medic's referral history, the FHIR export, the completeness detail and the BMI
+are all questions asked of rows that already exist. This ADR records the two places where that was
+not possible, and the four features that were built on top.
+
+- Decision (a) — **`patients.height_cm` is a new column (rev 0013), and BMI is NOT.** A BMI needs a
+  height and the schema had nowhere to put one; `patients` already owns the staff-recorded vitals
+  (`weight_kg`, `bp`, rev 0010), so height belongs in that row and is edited through that same
+  endpoint. **BMI itself is never stored**: it is a pure function of two columns that are both
+  present, so a stored copy would be exactly the duplicate representation the brief forbids — one
+  that silently goes stale the moment a weight is corrected. It is derived at every point of use
+  (both portals, the FHIR export) from one implementation.
+- Decision (b) — **ONE `clinical_notes` table serves BOTH the recall (C3) and the doctor→medic
+  back-channel (C4).** They are the same shape: attributable, visit-linked, free text, an optional
+  due date, an open/closed lifecycle. The difference is a `kind` value, not a schema. Rejected
+  alternatives are in (1)–(3) below.
+- Decision (c) — **per-field verification (C2) lives INSIDE the existing `summary_fields` JSON**, as
+  `verified_by` / `verified_at` on the same per-field dict that already carries `source`,
+  `edited_by` and `edited_at`. No table, no column, no migration: the field's provenance already had
+  a home. S37 deferred this feature for needing "new per-field state"; the state turned out to
+  already have somewhere to live.
+- Decision (d) — **verifying is not editing, and it does not overwrite `source`.** Before S38 the
+  only way for a medic to record "I read this and it is correct" was to EDIT the field — retyping
+  the model's own words so `source` became `'human'`. That put a false edit in a medical record and
+  made "verified" and "corrected" indistinguishable afterwards. `POST .../verify` writes provenance
+  and nothing else: the value is untouched and `source` stays `'ai'`, because the model **did**
+  write the value and erasing that would destroy where it came from. An **empty** field cannot be
+  verified — "I checked this blank" is not a claim anyone can make, and allowing it would let a case
+  reach 10/10 verified with nothing in it.
+- Decision (e) — **the medic's completed-referral history (C1) is DERIVED from `audit_log`.** S37
+  refused this feature and was right to: nothing recorded which medic forwarded a case. S37 then
+  fixed the cause (`POST /assign` now writes the forwarding medic into `audit_log.actor_id`), which
+  makes the list derivable with no new storage. ⚠ **Referrals made before that change belong to
+  nobody**, and the endpoint reports `unattributed_total` rather than guessing an owner or silently
+  omitting them — a medic seeing a short list would otherwise reasonably conclude the feature is
+  broken.
+- Decision (f) — **a note is addressed to a ROLE, never to a person.** Whoever is on the triage desk
+  this shift is the right recipient; routing to an individual breaks the moment they go home.
+- Decision (g) — **the queue's completeness meter now ships `fields_empty`.** The list was already
+  computed server-side to produce the count and then thrown away; returning it lets the meter say
+  *which* fields are missing from the same call that produced the number, so the detail panel can
+  never disagree with the bar above it.
+- Decision (h) — **the static clinical reference data (BMI bands, glucose thresholds, the diagnostic
+  test vocabulary) is a Python module, not a table.** These are constants: identical for every
+  clinic, changed by a standards body rather than by a user, never queried or joined. A table would
+  add a migration, a seed, drift between deployments and an admin surface — to store three lists
+  that belong in version control where a reviewer can see them change.
+- Decision (i) — **there is no "diabetic limit".** The human asked for one; shipping a single number
+  would have been the most dangerous thing in the session. `glucose_reference()` takes **no
+  argument at all** — it returns the published chart with every measurement context, both unit
+  systems, the WHO/ADA disagreement at the lower fasting bound stated out loud, and the source of
+  each row. A function that accepted a reading and returned a band is one refactor away from
+  printing a finding beside a patient's name (rule #2).
+
+- Rejected (1) — **two tables, one per feature.** Near-identical columns, two sets of queries, two
+  places to fix a bug in the lifecycle.
+- Rejected (2) — **hosting recalls/notes in `audit_log`.** It is append-only and means "what
+  happened"; mutable workflow state in it would corrupt the audit trail's meaning, and it has no
+  index for a due-date query.
+- Rejected (3) — **a chat/messaging feature.** Explicitly out of scope in the brief. No thread, no
+  reply, no read receipts, no realtime: a note is written once, addressed to a role, and closed.
+- Rejected (4) — **storing BMI**, for the staleness reason in (a).
+- Rejected (5) — **a `glucose_mg_dl` column on `patients`.** A6 asked for a reference display, not a
+  data-capture field; a stored glucose with no recorded measurement context is a number nobody can
+  interpret, which is the exact failure the reference chart exists to prevent.
+- Rejected (6) — **letting the queue's verified count claim WHICH fields are verified.** The row
+  carries a count, so the meter shades N segments from the left and its tooltip says so, rather than
+  implying per-field knowledge the row does not have.
+
+- Status: Accepted (S38, 2026-08-14).
+
+---
+
+## ADR-0061 — 2026-08-14 — S38: the date policy — three categories, not one rule
+
+**Context.** The human's requirement was verbatim *"cannot use previous date anywhere"*, alongside
+the correct warning *"Do NOT blindly force today's date onto historical records"* and *"Do not
+corrupt historical timestamps."* Applied literally the first sentence would rewrite the record of
+when patients actually arrived.
+
+- Decision (a) — **every date belongs to exactly one of three categories, and the category decides
+  the rule** (`services/clinical_dates`):
+  * **A. System / historical** — `visits.started_at`, `submitted_at`, `completed_at`,
+    `audit_log.created_at`, `prescriptions.created_at`, `documents.created_at`, every date in the
+    doctor's timeline. **Never validated, never defaulted, never rewritten.** A past value there is
+    the point.
+  * **B. Authored now** — the date printed on a prescription. **Must be today** (Dhaka). Backdating
+    misdates a document the patient carries to a pharmacy; post-dating makes one visit look like
+    two.
+  * **C. Scheduled forward** — a follow-up date, a recall due date. **Must not be in the past**;
+    today is allowed (a same-day recheck is real) and there is no upper bound (a twelve-month recall
+    is legitimate).
+- Decision (b) — **the policy is enforced on the SERVER, not only by `min`/`max` on an input.** The
+  browser attributes are a courtesy to the doctor; a script, a replayed request or a future client
+  sails past them. The check runs BEFORE the write, so a rejected date never reaches the stored
+  payload **or** the generated .docx — those two disagreeing would be worse than either being wrong,
+  because the .docx is the copy that leaves the clinic.
+- Decision (c) — **"today" is the DHAKA date, computed from a FIXED UTC+06:00 offset.** The
+  prescription form was stamping `new Date().toISOString().slice(0, 10)` — the **UTC** date, which
+  is *yesterday* between 00:00 and 06:00 Dhaka. ⚠ A fixed offset rather than
+  `ZoneInfo("Asia/Dhaka")` because Windows ships no IANA tz database and `zoneinfo` raises on this
+  project's own dev machine without the optional `tzdata` package. Bangladesh Standard Time is
+  UTC+06:00 with **no DST** (the single experiment ran in 2009 and was abandoned in 2010), so the
+  fixed offset is exact rather than an approximation, and it behaves identically on Windows and
+  Arch with nothing installed. The browser may safely use `timeZone: 'Asia/Dhaka'` (every modern
+  engine ships the full database); the two agree.
+- Decision (d) — **a blank date is not an error.** A missing prescription date is stamped with today
+  rather than rejected, so an older client keeps working and simply gets the correct value; an empty
+  follow-up stays empty, because most prescriptions have none and validating a blank into a 400
+  would make an optional field mandatory.
+- Decision (e) — **validators return machine CODES** (`past_date`, `future_date`, `invalid_date`),
+  never sentences, so the portals render the bilingual message from their own label maps — the same
+  codes-on-the-wire rule the risk tiers follow (ADR-0030 f).
+- Decision (f) — **all staff clocks are 12-hour with AM/PM.** The 24-hour `en-GB` default was a
+  developer's clock; Bangladeshi staff read and write "3:40 PM", and this project's stated user is
+  elderly or non-technical.
+
+- Rejected (1) — **stamping today onto everything with a date.** It would corrupt the record of when
+  a patient actually came, which is the brief's own warning.
+- Rejected (2) — **client-side enforcement only.** Trivially bypassable, and the server is where the
+  .docx is rendered from.
+- Rejected (3) — **adding `tzdata` as a dependency** to learn a constant that has not changed since
+  2010.
+- Rejected (4) — **allowing a past prescription date for "back-entry".** Considered because two
+  existing tests used fixed past dates as fixtures. Those literals were incidental (no assertion
+  read them) and were made relative; weakening a correctness rule to preserve an accidental fixture
+  would have been the wrong trade.
+
+- Status: Accepted (S38, 2026-08-14).
+
+---
+
+## ADR-0062 — 2026-08-14 — S38: the EHR export is an HL7 FHIR R4 document Bundle, deliberately conservative
+
+**Context.** The brief asked for a "universal EHR download" and then, correctly, warned against
+inventing one: *"Prefer an established healthcare interoperability representation rather than
+inventing a custom 'universal EHR' format"* and *"Do NOT claim 'universal' if the format is only a
+project export format."*
+
+- Decision (a) — **HL7 FHIR R4, as a `Bundle` of `type: "document"`.** There is no universal EHR
+  file; FHIR is the interoperability standard modern health systems speak, and the document Bundle —
+  a `Composition` first, indexing the rest — is its standard way of saying "one clinical encounter,
+  self-contained". R4 over R5 because R4 is the version with deployment behind it.
+- Decision (b) — **claimed honestly.** It is a *structurally valid, semantically conservative* FHIR
+  R4 document: not certified, not profiled against a national implementation guide, and a receiving
+  system will still need to map it. That sentence is in the module docstring, not only here.
+- Decision (c) — **where a concept has no code we are confident of, it ships as TEXT.** A wrong LOINC
+  or SNOMED code is far worse than an uncoded string, because a wrong code is silently believed. The
+  doctor's typed diagnosis becomes a `Condition` with `code.text` and no coding — mapping a free-text
+  phrase to a code here would be this module inventing a diagnosis.
+- Decision (d) — **the AI's suggested condition (C1) is excluded from the bundle ENTIRELY.** Inside
+  this project it is displayed with a disclaimer, in a card labelled "not a diagnosis", to a
+  clinician who knows what it is. Exported, it would travel to a system that has no idea a model
+  wrote it, and **the disclaimer does not survive ingestion**. So it has no wire representation at
+  all. The doctor's own diagnosis, typed by them, IS exported — the distinction the export draws is
+  human versus model, not "no diagnoses ever".
+- Decision (e) — **the risk tier is a FHIR `RiskAssessment`, never a `Condition`.** The resource
+  choice is what encodes "this is not a diagnosis" for a receiving system, and the no-diagnosis
+  disclaimer is attached as a `note` so it survives the resource being ingested on its own.
+- Decision (f) — **`critical` is not silently downgraded.** The standard `risk-probability` value set
+  has no "critical", so the tier travels twice: mapped to `high` in the standard system (never
+  understating), and exactly as `critical` in `urn:niramoy:risk-tier`. A receiver that understands
+  only the standard set still gets a safe answer.
+- Decision (g) — **the verbatim transcript IS included**, escaped for XHTML and reproduced exactly
+  (rule #1) in its own labelled section, and never replaced by its correction. An EHR record of a
+  voice pre-screening that omitted the voice would be missing its primary source.
+- Decision (h) — **Bangla travels via the standard FHIR primitive extension** (`_title` + the
+  `translation` extension), not an invented `title_bn` field. A custom field is exactly what makes a
+  "FHIR" file un-ingestible.
+- Decision (i) — **no new subsystem and no new dependency.** A FHIR resource is a JSON object; the
+  module builds JSON objects. It reuses the existing `documents` table, storage and download route
+  (`format='json'`, `kind='ehr_bundle'`, media type `application/fhir+json`), so nothing about
+  retrieval is new.
+- Decision (j) — **assembled fresh per request**, like the `summary_report` .docx, so a re-export
+  always reflects the latest edits. A stale EHR file is worse than none.
+
+- Rejected (1) — **a bespoke "Niramoy EHR JSON".** It would be a project export format wearing a
+  universal label — precisely what the brief prohibits.
+- Rejected (2) — **a `fhir.resources` dependency.** A validation library for a hand-built document,
+  on a project whose whole constraint is running free and CPU-only.
+- Rejected (3) — **guessing SNOMED/LOINC codes for free-text clinical content**, for the reason in
+  (c).
+- Rejected (4) — **emitting a `Condition` derived from the risk tier or from the AI suggestion.**
+  Both would export a model's output as a clinical fact.
+- Rejected (5) — **CDA / a PDF as "the EHR format".** CDA is legacy and heavier; a PDF is a picture
+  of a record, not a record.
+
+- Status: Accepted (S38, 2026-08-14).
+
+---
+
+## ADR-0063 — 2026-08-14 — S38: M16 widens to tests and case-context, with privacy enforced structurally
+
+**Context.** B6 asked the drug assistant to also cover diagnostic tests and to be able to suggest
+tests for the patient in front of the doctor — while *"never presenting suggestions as diagnosis,
+never automatically ordering a test, never automatically prescribing"*, and *"do not create a second
+AI service if the existing one can be extended"*.
+
+- Decision (a) — **one service, one seam, one round-trip.** Same module, same endpoint path, same
+  provider chain, same `module_events` logging. The system prompt widened to three areas: medicines,
+  diagnostic tests, and which tests might suit this case.
+- Decision (b) — **patient context is OPT-IN and off by default** (`use_case_context`). A doctor
+  asking "what is metformin?" sends no patient data anywhere at all, and the portal shows a tick-box
+  plus a marker on any question that carried case data — a doctor should always be able to see which
+  questions did.
+- Decision (c) — **the web search NEVER receives patient data, as a STRUCTURAL guarantee.**
+  `_search()` takes the doctor's question and nothing else *by signature*, so no future edit can
+  accidentally send clinical data to DuckDuckGo (rule #4). A test asserts it by inspecting what was
+  searched.
+- Decision (d) — **the context sent to the LLM is de-identified and reuses the EXISTING builder.**
+  `question_tools.get_patient_context` (age, sex, body area — the minimum that module already
+  justified) plus the derived 10-field summary and vitals. **No name, no phone, no visit id, and no
+  raw transcript** — a doctor's convenience question is not a reason to ship a patient's own words to
+  a model. Reusing the existing builder is the S35/ADR-0057 lesson: two context builders are two
+  things that can disagree, one of them silently.
+- Decision (e) — **suggested tests come back as structured data the doctor may CLICK to insert.**
+  Nothing is ordered by their appearing; the insert is a human action, and the order itself exists
+  only once a human generates a prescription.
+- Decision (f) — **a NEW output guard, deliberately NOT the M7 one.** `question_tools`'
+  `unsafe_question_reason` bans dosage amounts, because a follow-up *question* never needs to state
+  one. Here a dosage range **is the correct answer** to the most common question the module gets, so
+  reusing it would delete the module's purpose. The M16 guard catches patient-DIRECTED instructions
+  and assertions only ("prescribe this patient…", "this patient has…").
+- Decision (g) — **a flagged answer is delivered, not deleted.** Hiding what the model said would be
+  worse for a doctor than showing it; instead the server REPLACES the disclaimer with a stronger one
+  and the portal renders it in the danger colour. The model cannot talk its way out of a
+  server-attached string.
+- Decision (h) — **`suggested_tests` is bounded and defensively cleaned.** A list long enough to be a
+  shotgun panel is not a suggestion (cap 8), and free-form model output — a bare string, a list of
+  dicts, numbered prose, duplicates — must degrade to a usable list rather than raise inside a
+  doctor's request.
+
+- Rejected (1) — **a second assistant service for tests.** Explicitly forbidden by the brief, and it
+  would double the quota cost of the one module that sits closest to the doctor.
+- Rejected (2) — **always including patient context.** It would send clinical data on every "what is
+  paracetamol?" — an unnecessary disclosure with no benefit.
+- Rejected (3) — **auto-inserting suggested tests into the prescription.** That is ordering a test
+  automatically, which the brief forbids twice.
+- Rejected (4) — **reusing the M7 dosage guard**, for the reason in (f).
+- Rejected (5) — **suppressing a flagged answer entirely.** A doctor who cannot see what the model
+  said cannot judge how much to trust the tool.
+
+- Status: Accepted (S38, 2026-08-14).

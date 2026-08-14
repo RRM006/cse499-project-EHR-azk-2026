@@ -153,14 +153,87 @@ body.portal-medic, body.portal-doctor { height: 100vh; overflow: hidden; }
 .meter-track {
   width: 62px; height: 5px; border-radius: 999px; background: #E2EFEC; overflow: hidden;
 }
-.meter-fill {
-  height: 100%; border-radius: 999px; background: var(--secondary-color);
-  transform-origin: left center;
-  transition: width var(--dur-slow) var(--ease-out), background var(--dur-base) linear;
-}
-.meter-fill.low  { background: var(--warning-color); }
-.meter-fill.full { background: var(--accent-color); }
 .meter-num { font-weight: 700; font-variant-numeric: tabular-nums; }
+.meter-num.low  { color: #B45309; }
+.meter-num.full { color: var(--accent-color); }
+
+/* S38 (A3) — the meter is now a CONTROL, so it needs the affordances of one: a
+   pointer, a hover state, a real focus ring, and ten segments instead of one bar.
+   Ten ticks are ten questions; a continuous bar was a percentage, which is not the
+   thing a medic is about to work through. */
+.meter-wrap { display: inline-flex; flex-direction: column; gap: 4px; align-items: flex-start; }
+/* Padding, no negative margin: the hover target needs to be bigger than the bar, but
+   `margin: -2px -4px` made the .meter 8px WIDER than the wrapper that sizes to it —
+   measured 139px inside 131px — so the row scrolled inside itself. */
+.meter-interactive { cursor: pointer; border-radius: 999px; padding: 2px 4px; }
+.meter-interactive:hover { background: #ECF5F3; }
+.meter-interactive:focus-visible { outline: none; box-shadow: var(--elev-focus); }
+
+.meter-track.segmented {
+  display: inline-flex; gap: 2px; width: auto; height: 8px;
+  background: none; overflow: visible;
+}
+.seg-tick { width: 5px; border-radius: 2px; background: #E2EFEC; }
+/* Three states, three colours — never conveyed by position alone (ADR-0059). */
+.seg-tick.empty    { background: #E2EFEC; box-shadow: inset 0 0 0 1px #CFE3DF; }
+.seg-tick.filled   { background: var(--secondary-color); }
+.seg-tick.verified { background: var(--accent-color); }
+
+.meter-verified {
+  font-weight: 800; font-size: .62rem; color: var(--accent-color);
+  background: #ECFDF5; border: 1px solid #D1FAE5; border-radius: 999px; padding: 0 5px;
+}
+.meter.complete .meter-num { color: var(--accent-color); }
+
+.meter-detail {
+  font-size: .7rem; line-height: 1.65; color: var(--text-muted);
+  background: var(--bg-main); border: 1px solid var(--border-color);
+  border-radius: 8px; padding: 7px 9px; max-width: 100%;
+}
+.meter-detail-head { font-weight: 700; color: var(--primary-color); }
+
+/* S38 (A2) — the auto-refresh, said out loud. A live list that never says it is live
+   is indistinguishable from a frozen one. */
+.refresh-line {
+  display: inline-flex; align-items: center; gap: 6px;
+  font-size: .66rem; font-weight: 600; color: var(--text-muted);
+  font-variant-numeric: tabular-nums;
+}
+.refresh-dot {
+  width: 7px; height: 7px; border-radius: 50%; background: var(--accent-color);
+  flex: none;
+}
+/* Held (tab hidden, or a phone search on screen) is a DIFFERENT state from live, and
+   it is stated in words as well as in colour. */
+.refresh-line.paused .refresh-dot { background: var(--warning-color); }
+
+/* S38 (A1) — the triage explainer. A disclosure, not a tutorial: one sentence about
+   what the word means and one about what the ordering does. */
+.explainer {
+  margin-top: 8px; font-size: .74rem; line-height: 1.6; color: var(--text-main);
+  background: #F4FAF8; border: 1px solid var(--border-color);
+  border-left: 3px solid var(--secondary-color);
+  border-radius: 8px; padding: 9px 11px;
+}
+.explainer b { color: var(--primary-color); }
+.explainer ul { margin: 6px 0 0 16px; }
+.info-btn {
+  background: none; border: 1px solid var(--border-color); border-radius: 999px;
+  width: 18px; height: 18px; line-height: 1; padding: 0; cursor: pointer;
+  font-size: .68rem; font-weight: 800; color: var(--text-muted); font-family: inherit;
+  display: inline-flex; align-items: center; justify-content: center; flex: none;
+}
+.info-btn:hover { background: #ECF5F3; color: var(--primary-color); }
+.info-btn:focus-visible { outline: none; box-shadow: var(--elev-focus); }
+
+/* S38 (A7) — the live header clock. Tabular figures so the seconds do not jitter the
+   line as they tick. */
+.clock-box { text-align: right; line-height: 1.25; }
+.clock-time {
+  font-size: .92rem; font-weight: 800; color: var(--primary-color);
+  font-variant-numeric: tabular-nums;
+}
+.clock-date { font-size: .66rem; font-weight: 600; color: var(--text-muted); }
 
 /* ------------------------------------------------------------------ *
  * 3. Stats strip (medic) — load at a glance
@@ -245,6 +318,64 @@ body.portal-medic, body.portal-doctor { height: 100vh; overflow: hidden; }
 .rx-meds { color: var(--text-main); font-weight: 600; }
 
 /* ------------------------------------------------------------------ *
+ * 5b. Prescription: two-column advice/tests + the test token editor (S38 B3/B4)
+ * ------------------------------------------------------------------ */
+
+/* Advice and Required Tests are two SEPARATE vertical cards, side by side where
+   there is room and stacked where there is not. `auto-fit` + `minmax` does that
+   with no breakpoint to keep in sync — below ~600px of available width the second
+   column simply wraps under the first. */
+.rx-two-col {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+  gap: 18px;
+  align-items: start;
+}
+
+/* S38 (C1/C4): the medic's referral rows and inbox rows reuse .queue-item, so these
+   are the two extra lines those rows carry. */
+.queue-item-problem.sub { font-size: .72rem; opacity: .85; }
+.note-body {
+  font-size: .82rem; line-height: 1.5; color: var(--text-main);
+  background: #F4FAF8; border-left: 3px solid var(--secondary-color);
+  border-radius: 6px; padding: 7px 10px; margin-top: 5px;
+  white-space: pre-wrap; word-break: break-word;
+}
+
+.chip-box { display: flex; flex-wrap: wrap; gap: 6px; min-height: 26px; align-items: center; }
+.chip {
+  display: inline-flex; align-items: center; gap: 6px;
+  font-size: .78rem; font-weight: 600;
+  background: #ECF5F3; color: var(--primary-color);
+  border: 1px solid var(--border-color); border-radius: 999px; padding: 3px 6px 3px 11px;
+}
+.chip-x {
+  background: none; border: none; cursor: pointer; font-family: inherit;
+  font-size: .7rem; line-height: 1; color: var(--text-muted);
+  padding: 3px 5px; border-radius: 50%;
+}
+.chip-x:hover { background: #FEE2E2; color: var(--danger-color); }
+.chip-x:focus-visible { outline: none; box-shadow: var(--elev-focus); }
+
+/* The suggestion list overlays the form rather than pushing it around — a list that
+   reflows the card as you type moves the Save button under your cursor. */
+.suggest-list {
+  position: absolute; top: calc(100% + 4px); left: 0; right: 0; z-index: 20;
+  background: var(--bg-white); border: 1px solid var(--border-color);
+  border-radius: var(--radius); box-shadow: var(--elev-3);
+  max-height: 244px; overflow-y: auto;
+}
+.suggest-row {
+  display: flex; flex-direction: column; gap: 1px; width: 100%; text-align: left;
+  background: none; border: none; cursor: pointer; font-family: inherit;
+  font-size: .84rem; color: var(--text-main);
+  padding: 7px 12px; border-bottom: 1px solid var(--bg-main);
+}
+.suggest-row:hover, .suggest-row:focus-visible { background: #ECF5F3; outline: none; }
+.suggest-bn { font-size: .72rem; color: var(--text-muted); }
+.suggest-empty { padding: 9px 12px; font-size: .78rem; color: var(--text-muted); }
+
+/* ------------------------------------------------------------------ *
  * 6. Loading + empty states
  * ------------------------------------------------------------------ */
 
@@ -327,6 +458,13 @@ body.portal-doctor .queue-header { border-bottom: 2px solid #E0E7FF; }
 @media (max-width: 700px) {
   body.portal-medic .portal-header,
   body.portal-doctor .portal-header { flex-wrap: wrap; row-gap: 8px; }
+  /* The header's right-hand group is an inline `display:flex` with no wrap, and S38
+     added a clock to it: at 375px the language toggle + clock + user + Logout came to
+     364px inside a 319px content box and pushed the page sideways by 17px. The header
+     itself already wrapped; its children did not. */
+  body.portal-medic .portal-header > div,
+  body.portal-doctor .portal-header > div { flex-wrap: wrap; row-gap: 6px; min-width: 0; }
+  .clock-box { text-align: left; }
   body.portal-medic .top-nav,
   body.portal-doctor .top-nav { flex-wrap: wrap; }
   body.portal-medic .top-nav > div,

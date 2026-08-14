@@ -18,6 +18,7 @@ from backend.app.services.documents.base import DocumentKind, DocumentWriter
 from backend.app.services.documents.docx_writer import DocxWriter
 from backend.app.services.documents.storage import DocumentStorage, build_storage
 from backend.app.services.documents.visit_docx import (
+    VISIT_DOCUMENT_FORMATS,
     VISIT_DOCUMENT_KINDS,
     render_prescription,
     render_visit_summary_report,
@@ -99,12 +100,14 @@ def generate_visit_document(
     kind: str,
     storage: DocumentStorage | None = None,
 ) -> Document:
-    """Render a VISIT-grain export (rev 0010): the full raw ``transcript`` (KIOSK-4)
-    or the staff ``summary_report`` (MEDIC-7). Stores the file and records a row
-    with ``visit_id`` set and ``utterance_id`` NULL.
+    """Render a VISIT-grain export (rev 0010): the full raw ``transcript`` (KIOSK-4),
+    the staff ``summary_report`` (MEDIC-7), or the ``ehr_bundle`` FHIR R4 document
+    (S38 / B1). Stores the file and records a row with ``visit_id`` set and
+    ``utterance_id`` NULL.
 
-    Both kinds are LOCAL — no API call. ``summary_report`` assembles a fresh M12
-    report every time (local too), so staff edits and overrides always show.
+    Every kind is LOCAL — no API call, no quota. ``summary_report`` assembles a fresh
+    M12 report every time and ``ehr_bundle`` is assembled fresh per request too, so
+    both always reflect staff edits and overrides made after any earlier export.
     """
     if kind not in VISIT_DOCUMENT_KINDS:
         raise ValueError(
@@ -114,12 +117,17 @@ def generate_visit_document(
 
     # Local imports: keep the module import-light and avoid a services cycle.
     from backend.app.db.repository_visits import list_visit_utterances
+    from backend.app.services.ehr_export import render_fhir_bundle
     from backend.app.services.report import generate_report
 
     patient = db.get(Patient, visit.patient_id) if visit.patient_id else None
     if kind == "transcript":
         utterances = list_visit_utterances(db, visit_id=visit.id)
         data = render_visit_transcript(visit, patient, utterances)
+    elif kind == "ehr_bundle":
+        # S38 (B1): NOT a .docx — a FHIR R4 document Bundle as JSON. It is assembled
+        # from rows that already exist and writes nothing (services/ehr_export).
+        data = render_fhir_bundle(db, visit)
     else:  # summary_report
         # Always assemble FRESH (local + free): the download must reflect staff
         # field edits and risk overrides made after any earlier report (MEDIC-7).
@@ -128,8 +136,9 @@ def generate_visit_document(
         data = render_visit_summary_report(visit, patient, report.sections or {})
 
     storage = storage or build_storage()
+    doc_format = VISIT_DOCUMENT_FORMATS[kind]
     doc_id = str(uuid.uuid4())
-    rel_path = f"{doc_id}.docx"
+    rel_path = f"{doc_id}.{doc_format}"
     storage.save_bytes(rel_path, data)
 
     stamp = visit.started_at.strftime("%Y%m%d") if visit.started_at else "visit"
@@ -140,15 +149,18 @@ def generate_visit_document(
     # The stored `kind` is unchanged — this is the human-facing download name only.
     # Deliberately carries no name and no phone number: a filename ends up in a
     # downloads folder, an email subject and a file listing (rule #4).
-    label = "raw-transcript" if kind == "transcript" else kind
+    # S38: "ehr_bundle" says nothing about what is inside to someone holding the file,
+    # so the download is named for the standard it implements.
+    _LABELS = {"transcript": "raw-transcript", "ehr_bundle": "ehr-fhir-r4"}
+    label = _LABELS.get(kind, kind)
     return repo.create_document(
         db,
         utterance_id=None,
         visit_id=visit.id,
-        filename=f"{label}-visit-{visit.uuid[:8]}-{stamp}.docx",
+        filename=f"{label}-visit-{visit.uuid[:8]}-{stamp}.{doc_format}",
         rel_path=rel_path,
         kind=kind,
-        doc_format="docx",
+        doc_format=doc_format,
         doc_id=doc_id,
     )
 

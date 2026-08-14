@@ -4,9 +4,46 @@
 > re-exploring the whole project each session. Update it whenever you add or move
 > a folder/file. Keep each note to one line.
 
-**Last updated:** 2026-08-13 (**Session 37 — FIVE new production files + ONE new agent doc, THREE
-new test files, no schema change (Alembic stays 0012 — `db/models.py` and `migrations/` are
-UNTOUCHED), no dependency change.**
+**Last updated:** 2026-08-14 (**Session 38 — EIGHT new production files, SIX new test files, and
+the first schema change since S25: Alembic 0012 → 0013, ONE column + ONE table, 18 tables.
+No new Python dependency.**)
+
+**NEW in S38 — staff-portal UX + clinical workflow (ADR-0060 derived/stored + the four workflow
+features, ADR-0061 the date policy, ADR-0062 the FHIR export, ADR-0063 the M16 widening):**
+
+| File | What it is |
+|---|---|
+| `backend/app/services/clinical_dates.py` | **NEW.** The ONE definition of "what date is it" and "which dates may a human type". Dhaka via a **fixed UTC+06:00 offset** (Windows ships no IANA tz database and `zoneinfo` raises here; Bangladesh has had no DST since 2010, so the offset is exact). Three policy categories — **system/historical (never touched)**, **authored-now (must be today)**, **scheduled-forward (never in the past)** — and validators returning machine CODES, never sentences. |
+| `backend/app/services/clinical_reference.py` | **NEW.** Static clinical constants: BMI bands (WHO international **and** WHO Asian action points), the glucose reference chart, and the ~50-entry bilingual diagnostic-test vocabulary. ⚠ `glucose_reference()` takes **no argument** — there is no function anywhere that maps a reading to a conclusion (rule #2). A module, deliberately not a table. |
+| `backend/app/services/ehr_export.py` | **NEW.** Builds the **HL7 FHIR R4 document Bundle** (`build_fhir_bundle` / `render_fhir_bundle`). Read-only; no dependency (a FHIR resource is a JSON object). ⚠ The AI suggested condition has **no representation** in it; the tier is a `RiskAssessment`, never a `Condition`; free-text clinical content ships **uncoded** rather than with a guessed code. |
+| `backend/app/services/notes.py` | **NEW.** Recalls (C3) + the doctor→medic back-channel (C4) on ONE table. Addressed to a **role**, never a person; no thread, no reply, no read receipts — it must not become a chat. |
+| `backend/app/schemas/reference.py` | **NEW.** `BmiOut` / `GlucoseReferenceOut` / `TestSuggestionOut`. No field anywhere accepts a patient reading. |
+| `backend/app/schemas/notes.py` | **NEW.** `NoteCreateRequest` / `NoteOut` / `ReferralOut` / `ReferralHistoryOut` (the last carries `unattributed_total` — honesty about pre-S37 referrals with no recorded medic). |
+| `backend/app/api/routes_reference.py` | **NEW.** `GET /api/reference/bmi`, `/glucose`, `/tests`. No patient id in any of them (rule #4 — cacheable, nothing personal in a query string). |
+| `backend/app/api/routes_notes.py` | **NEW.** `POST|GET /api/visits/{uuid}/notes`, `GET /api/notes`, `PATCH /api/notes/{id}`, `GET /api/medics/{id}/referrals`. |
+| `backend/migrations/versions/0013_height_and_clinical_notes.py` | **NEW.** `patients.height_cm` + the `clinical_notes` table with CHECK constraints on `kind`/`status`/`recipient_role`. ⚠ **No BMI column** — it is derived from two columns that are both present, and a stored copy would go stale the moment a weight was corrected. |
+| `backend/tests/test_clinical_reference.py` | **NEW (30).** The 18:00-UTC Dhaka rollover, the date categories, BMI arithmetic + its refusal on implausible input, the published WHO thresholds, and that `glucose_reference` has no parameter (asserted on the signature). |
+| `backend/tests/test_migration_0013.py` | **NEW (6).** Fresh + in-place upgrade, **no BMI column under any spelling**, the CHECK constraints biting at DB level, downgrade. |
+| `backend/tests/test_staff_portal_s38.py` | **NEW (39).** Static-source assertions over the shipped portals (the S28 no-JS-runner method). Carries a brace-matching `_fn_body()` helper — two earlier drafts sliced on `"\n}"` and on the parameter list and broke on correct code. |
+| `backend/tests/test_date_policy.py` | **NEW (11).** Through the REAL prescription route, including that a historical visit's timestamps survive a prescription written today. |
+| `backend/tests/test_ehr_export.py` | **NEW (28).** Structural FHIR correctness (every `urn:uuid` resolves) plus the safety boundaries. |
+| `backend/tests/test_workflow_notes.py` | **NEW (31).** C1-C4, including that verification leaves the value and `source` untouched. |
+
+**CHANGED in S38:**
+
+| File | What changed |
+|---|---|
+| `backend/app/db/models.py` | `patients.height_cm` (rev 0013) + the `ClinicalNote` model. |
+| `backend/app/services/triage.py` | `field_is_verified()` (source=human **or** `verified_by`), `verified_field_keys()`, `completed_referrals()` — the last derived from `audit_log.actor_id`, reporting `unattributed_total` rather than guessing an owner. |
+| `backend/app/services/assistant.py` | M16 widened to medicines + diagnostic tests + opt-in de-identified case context; `build_case_context()` reuses `question_tools.get_patient_context` (no second context builder); a **new** `unsafe_answer_reason()` that deliberately does **not** reuse M7's dosage rule; `suggested_tests` cleaned and bounded. ⚠ `_search()` still takes the question and nothing else, **by signature**. |
+| `backend/app/api/routes_dashboard.py` | `POST /visits/{uuid}/profile/fields/{key}/verify` (C2 — writes provenance only), `height_cm` on the vitals PATCH, `fields_empty` on the queue row. |
+| `backend/app/api/routes_prescription.py` | `_enforce_prescription_dates()` runs BEFORE the write, so a rejected date reaches neither the stored payload nor the .docx. |
+| `backend/app/services/documents/` + `routes_documents.py` | the `ehr_bundle` kind, `VISIT_DOCUMENT_FORMATS`, and `application/fhir+json`. |
+| `frontend_shared/shared.js` | `dhakaNowParts()`, `dhakaTodayIso()` (**never `toISOString`**), `localeNum()`; all formatters 12-hour with AM/PM. |
+| `frontend_shared/staff.js` | the shared auto-refresh timer (holds on a search result / a hidden tab / another list), `buildCompletenessMeter()`, `renderWorkspaceState()`, `showBmi()` (fetches from the server — the cut-offs live in ONE place), the per-field verify control. |
+| `frontend_medic/index.html` | live clock, triage explainer, refresh line, the rebuilt Intake & Vitals form, the glucose panel, and Queue / My referrals / Inbox tabs. |
+| `frontend_doctor/index.html` | live clock, the prescription inline at the bottom of the case, two-column Advice/Required Tests, the test token editor, the EHR (FHIR) button, the Follow-up & handover card, the widened assistant panel with its case-context opt-in. |
+| `frontend_shared/motion.css`, `shared.css` | the segmented meter, chips, the suggestion list, `.rx-two-col`, `.source-verified`, and the ≤700px header-wrap fix. |
 
 **NEW in S37 — the two STAFF portals audited as ROLES (ADR-0058 features/ownership, ADR-0059 UI):**
 

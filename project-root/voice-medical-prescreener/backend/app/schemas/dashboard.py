@@ -34,7 +34,13 @@ class DashboardItemOut(BaseModel):
     )
     fields_filled: int = Field(0, description="How many of the 10 summary fields carry text.")
     fields_total: int = Field(10, description="Size of the fixed summary-field contract.")
-    fields_verified: int = Field(0, description="How many of the 10 a human has edited.")
+    fields_verified: int = Field(0, description="How many of the 10 a human has confirmed.")
+    # S38: WHICH of the ten are empty, so the queue's completeness meter can say what is
+    # actually missing instead of only how many. Same ``empty_field_keys`` call the row
+    # already made for the count — the list was computed and then thrown away.
+    fields_empty: list[str] = Field(
+        default_factory=list, description="Canonical keys of the summary fields with no text."
+    )
     assigned_doctor_name: str | None = Field(
         None, description="Resolved name for the assigned doctor; null when unassigned."
     )
@@ -50,6 +56,18 @@ class FieldEditRequest(BaseModel):
     editor_id: int = Field(..., description="users.id of the staff editor (auth is stubbed).")
 
 
+class FieldVerifyRequest(BaseModel):
+    """S38 (C2) — a staff member confirming one AI-extracted field is correct.
+
+    Carries no value: verifying is not editing. The whole point is that a medic can
+    say "I read this and it is right" without retyping the model's words, which was
+    the only way to signal it before S38 and left a false edit in the record.
+    """
+
+    verified: bool = Field(True, description="False removes a verification (a mis-click).")
+    editor_id: int = Field(..., description="users.id of the staff verifier (auth is stubbed).")
+
+
 class VitalsEditRequest(BaseModel):
     """A staff edit of the patient's vitals (MEDIC-6: weight is medic-editable;
     BP rides along for the DOCTOR-3 details card). At least one field required.
@@ -59,6 +77,10 @@ class VitalsEditRequest(BaseModel):
 
     weight_kg: float | None = Field(None, gt=0, lt=500, description="Weight in kilograms.")
     bp: str | None = Field(None, max_length=32, description="Free-form reading, e.g. '120/80'.")
+    # S38: bounds mirror services/clinical_reference's plausible-human range, so a value
+    # the BMI calculator would refuse can never be stored either — otherwise a saved
+    # height of 17 would sit in the record forever showing a blank BMI with no reason.
+    height_cm: float | None = Field(None, ge=30, le=260, description="Height in centimetres.")
     display_name: str | None = Field(None, min_length=1, max_length=120,
                                      description="Patient name as recorded by staff.")
     sex: str | None = Field(None, pattern="^(male|female|other)$",

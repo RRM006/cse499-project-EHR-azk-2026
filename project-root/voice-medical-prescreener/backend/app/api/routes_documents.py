@@ -19,6 +19,9 @@ router = APIRouter(prefix="/api/documents", tags=["documents"])
 _MEDIA_TYPES = {
     "docx": "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
     "pdf": "application/pdf",
+    # S38 (B1): the FHIR-specific media type, not plain application/json — it is what
+    # tells a receiving health system what it is holding without opening it.
+    "json": "application/fhir+json",
 }
 
 

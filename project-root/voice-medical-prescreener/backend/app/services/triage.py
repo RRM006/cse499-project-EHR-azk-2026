@@ -103,16 +103,102 @@ def empty_field_keys(profile: CaseProfile | None) -> list[str]:
     return [key for key in SUMMARY_FIELD_KEYS if not field_has_text(fields.get(key))]
 
 
-def human_verified_count(profile: CaseProfile | None) -> int:
-    """How many of the 10 fields a human has actually edited.
+def field_is_verified(field: dict | None) -> bool:
+    """Has a human taken responsibility for this field?
 
-    ``source == 'human'`` is written by the staff field-edit route and is what M8's
-    merge then refuses to overwrite — so it already means "a person owns this
-    value". This does NOT claim the other fields are wrong, only that nothing but
-    the model has touched them.
+    Two ways, and they are genuinely different acts:
+
+      * ``source == 'human'`` — a person CHANGED the value. Written by the staff
+        field-edit route; M8's merge then refuses to overwrite it.
+      * ``verified_by`` — a person READ the model's value and confirmed it (S38/C2).
+
+    Before S38 only the first existed, which meant a medic could not record "I checked
+    this and it is correct" without editing it to say the same thing — the gap S37
+    recorded as deliberately deferred (ADR-0058, Rejected 2). Both now count, because
+    a field a person has vouched for is verified however they vouched for it.
+    """
+    field = field or {}
+    return field.get("source") == "human" or bool(field.get("verified_by"))
+
+
+def human_verified_count(profile: CaseProfile | None) -> int:
+    """How many of the 10 fields a human has edited OR explicitly confirmed.
+
+    This does NOT claim the remaining fields are wrong, only that nothing but the model
+    has touched them.
     """
     fields = summary_fields_of(profile)
-    return sum(1 for key in SUMMARY_FIELD_KEYS if (fields.get(key) or {}).get("source") == "human")
+    return sum(1 for key in SUMMARY_FIELD_KEYS if field_is_verified(fields.get(key)))
+
+
+def verified_field_keys(profile: CaseProfile | None) -> list[str]:
+    """WHICH of the 10 a human has vouched for — so the queue meter can shade the
+    right segments instead of shading a count from the left."""
+    fields = summary_fields_of(profile)
+    return [key for key in SUMMARY_FIELD_KEYS if field_is_verified(fields.get(key))]
+
+
+def completed_referrals(db: Session, *, medic_id: int, limit: int = 50) -> dict:
+    """S38 (C1) — the cases this medic forwarded, DERIVED from ``audit_log``.
+
+    S37 refused this feature outright, and correctly: nothing recorded which medic sent
+    a case, so any list would have shown every medic's work as one person's. S37 then
+    fixed the cause — ``POST /assign`` now writes the forwarding medic into
+    ``audit_log.actor_id`` — which makes the list derivable from rows that already
+    exist. No new table, no new column: the same principle as the rest of the staff
+    layer (ADR-0058), a different QUESTION asked of existing data.
+
+    ⚠ Honest by construction: referrals made before that change carry no actor and
+    appear in NOBODY's list. They are counted and reported as ``unattributed`` rather
+    than guessed at or silently dropped — a medic seeing "12 referrals" when they made
+    forty would reasonably conclude the feature is broken.
+    """
+    from backend.app.db.models import AuditLog, User
+
+    medic = db.get(User, medic_id)
+    rows = (
+        db.query(AuditLog)
+        .filter(AuditLog.action == "visit.assign", AuditLog.actor_id == medic_id)
+        .order_by(AuditLog.created_at.desc())
+        .limit(limit)
+        .all()
+    )
+
+    referrals = []
+    for entry in rows:
+        visit = db.query(Visit).filter(Visit.uuid == entry.entity_id).first()
+        if visit is None:      # the audit row outlives the visit it describes
+            continue
+        patient = db.get(Patient, visit.patient_id) if visit.patient_id else None
+        doctor_id = (entry.detail or {}).get("doctor_id")
+        doctor = db.get(User, doctor_id) if doctor_id else None
+        profile = db.query(CaseProfile).filter(CaseProfile.visit_id == visit.id).first()
+        assessment = latest_assessment(db, visit_id=visit.id)
+        main = (summary_fields_of(profile).get("main_problem") or {})
+        referrals.append({
+            "visit_uuid": visit.uuid,
+            "patient_name": patient.display_name if patient else None,
+            "patient_phone": patient.external_ref if patient else None,
+            "referred_at": entry.created_at,
+            "doctor_id": doctor_id,
+            "doctor_name": doctor.name if doctor else None,
+            "tier": assessment.tier if assessment else None,
+            "main_problem": str(main.get("value_en") or main.get("value")
+                                or main.get("value_bn") or "").strip() or None,
+            "visit_status": visit.status,
+        })
+
+    unattributed_query = db.query(AuditLog).filter(
+        AuditLog.action == "visit.assign", AuditLog.actor_id.is_(None)
+    )
+    if medic is not None and medic.clinic_id is not None:
+        unattributed_query = unattributed_query.filter(AuditLog.clinic_id == medic.clinic_id)
+
+    return {
+        "medic_id": medic_id,
+        "referrals": referrals,
+        "unattributed_total": unattributed_query.count(),
+    }
 
 
 def triage_sort_key(*, tier: str | None, waiting: int | None) -> tuple[int, int]:

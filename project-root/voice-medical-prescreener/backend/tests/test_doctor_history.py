@@ -23,6 +23,7 @@ from sqlalchemy.pool import StaticPool
 from backend.app.db.database import Base, get_db
 from backend.app.db.models import CaseProfile, Clinic, Patient, RiskAssessment, User, Visit
 from backend.app.main import app
+from backend.app.services.clinical_dates import dhaka_today_iso
 from backend.app.services.documents.storage import FilesystemStorage
 from backend.app.services.history import MAX_MEDICINE_PREVIEW, _medicine_names
 
@@ -96,7 +97,10 @@ def _visit(session, ids, *, days_ago=0, status="reviewed", doctor_id=None,
 def _rx_payload(**over):
     payload = {
         "language": "en",
-        "date": "2026-08-13",
+        # S38 (B5): a prescription must be dated today (Dhaka), enforced server-side.
+        # This was the literal "2026-08-13"; no assertion here reads it, so it is
+        # computed rather than left to rot into a 400 the day after it was written.
+        "date": dhaka_today_iso(),
         "clinic": {"name": "Demo Clinic"},
         "doctor": {"name": "Dr. Yasmin"},
         "patient": {"name": "Kamal Hossain"},

@@ -182,14 +182,19 @@ identity it does not own).
 
 ## 6. Considered and deliberately NOT implemented (with the reason)
 
+> ⚠ **Updated 2026-08-14 (S38).** Four rows below were struck through: they WERE built in S38,
+> each only after the reason S37 gave for deferring them had actually been removed. The reasons are
+> left visible rather than deleted — knowing why something was once refused is what stops it being
+> rebuilt badly. Everything not struck through still stands.
+
 | Idea | Why not |
 |---|---|
-| **Medic "my completed referrals" list** | Nothing records WHICH medic forwarded a case, so the list would show every medic's work as one person's, or need a new column to invent the attribution. `scope=recent&role=medic` returns **400 with the reason**. The useful half — attribution going forward — shipped as M-6 using an existing column. |
-| **Per-field "verified" checkbox for the medic** | A real gap (a medic cannot record "I read this and it is correct" without editing the value), but it needs new per-field state and new UI vocabulary. `source == 'human'` already gives the weaker `fields_verified` signal. Deferred rather than half-built. |
+| ~~Medic "my completed referrals" list~~ | **BUILT IN S38 (C1).** S37 was right at the time — nothing recorded which medic forwarded a case — and S37's own M-6 fix (the medic in `audit_log.actor_id`) is what made it derivable. `GET /api/medics/{id}/referrals`, no new storage. ⚠ Referrals made before that change belong to nobody and are reported as `unattributed_total` rather than given an invented owner. |
+| ~~Per-field "verified" checkbox for the medic~~ | **BUILT IN S38 (C2).** The "new per-field state" turned out to have a home already: `verified_by`/`verified_at` sit beside `source`/`edited_by` in the same `summary_fields` dict, so no table and no column. ⚠ It writes provenance ONLY — the value and `source` are untouched, because the model did write the value. An empty field cannot be verified. |
 | **Blocking the forward on the handover check** | Unsafe. A Critical patient must reach a doctor with incomplete paperwork rather than wait for it. |
 | **A numeric triage score** | Would be a number nobody could verify, and collides with decision C2 (no per-case percentages are generated or stored). |
-| **A medic messaging/notes channel back from the doctor** | The status flow is deliberately one-directional; a back-channel needs its own state, notification model and read/unread semantics. Not in scope, and no evidence yet that the clinic needs it. |
-| **Doctor-side follow-up scheduling / recall list** | The prescription already carries a follow-up date. A recall queue would need a new owner (who acts on it?) and a new table. Genuinely out of scope for S37. |
+| ~~A medic messaging/notes channel back from the doctor~~ | **BUILT IN S38 (C4)** — but only after removing the reasons S37 gave: it has no notification model and no read/unread semantics. A note is addressed to a **ROLE**, written once, and marked done. No thread, no reply. ⚠ Whether this clinic actually wants it is still an open human question (see `current_task.md`). |
+| ~~Doctor-side follow-up scheduling / recall list~~ | **BUILT IN S38 (C3).** S37's two objections are answered: the owner is the **triage desk** (the same role that already works the queue), and the "new table" is shared with C4 rather than being its own. The prescription's `followup_date` remains a line on a document; a recall is a thing someone works. |
 | **Duplicating vitals editing away from the doctor** | Both roles legitimately touch the same `patients` row at different moments. Removing one would break a real workflow; both use the same endpoint, so there is no second source of truth. |
 | **Copying patient identity into a medic-owned record** | Explicitly forbidden by ADR-0058 h. The queue resolves names per request. |
 | **Showing prior raw transcripts inside the timeline** | Rule #1 — a summarised history row would be a second rendering of the patient's words. The doctor opens the prior visit instead. |

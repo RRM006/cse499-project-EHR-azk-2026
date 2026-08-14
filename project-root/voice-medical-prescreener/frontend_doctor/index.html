@@ -38,6 +38,15 @@
       text-overflow: ellipsis; white-space: nowrap; }
     .assistant-input-row { padding: 12px 18px; border-top: 1px solid var(--border-color);
       display: flex; gap: 8px; background: var(--bg-white); }
+    /* S38 (B6): the patient-context opt-in and the suggested-test affordances. */
+    .assistant-context { display: flex; align-items: center; gap: 8px; cursor: pointer;
+      padding: 9px 18px 0; font-size: .76rem; font-weight: 600; color: var(--text-muted); }
+    .assistant-ctx-tag { font-size: .64rem; font-weight: 700; opacity: .85; margin-top: 3px; }
+    .assistant-tests { margin-top: 9px; padding-top: 8px; border-top: 1px dashed var(--border-color); }
+    .assistant-tests-head { font-size: .72rem; font-weight: 700; color: var(--primary-color); margin-bottom: 5px; }
+    .assistant-tests-note { font-size: .68rem; color: var(--text-muted); margin-top: 5px; }
+    .suggest-add { cursor: pointer; font-family: inherit; padding: 3px 10px; }
+    .suggest-add:disabled { cursor: default; opacity: .6; }
   </style>
 </head>
 <body class="portal-doctor">
@@ -48,6 +57,13 @@
       <div class="lang-toggle">
         <button class="lang-btn" data-lang="en" onclick="setLanguage('en')">English</button>
         <button class="lang-btn" data-lang="bn" onclick="setLanguage('bn')">বাংলা</button>
+      </div>
+      <!-- S38 (A7): the real Dhaka date + a running 12-hour clock, same helper as the
+           medic portal. The doctor needs it for a different reason: every date this
+           portal WRITES (prescription, follow-up, recall) is anchored to this day. -->
+      <div class="clock-box" id="live-clock" title="Bangladesh time (Asia/Dhaka)">
+        <div class="clock-time" id="clock-time">—</div>
+        <div class="clock-date" id="clock-date"></div>
       </div>
       <div style="font-size:.8rem; font-weight:600; color:var(--text-muted);" id="user-tag"></div>
       <!-- STRUCT-2: back to the Portal Directory at "/" -->
@@ -79,10 +95,12 @@
       <div style="display:flex; gap:8px; align-items:center;">
         <input class="input-field" id="phone-search" placeholder="Patient Mobile Lookup (+880...)" style="width:280px; padding:8px 12px; font-size:.85rem;"
                onkeydown="if(event.key==='Enter') searchPhone()">
-        <!-- P3-3: informational drug lookup only — never a prescribing decision (rule #2) -->
+        <!-- P3-3 / S38 B6: informational lookup only — medicines, diagnostic tests, and
+             (on explicit opt-in) which tests might suit this case. Never a prescribing
+             or diagnostic decision (rule #2). -->
         <button class="btn btn-secondary" onclick="toggleAssistant()" style="padding:8px 14px; font-size:.85rem;"
-                title="AI drug information (verify before prescribing)"
-                data-en="💊 AI Drug Info" data-bn="💊 ওষুধের তথ্য">💊 AI Drug Info</button>
+                title="AI information on medicines and diagnostic tests (verify before prescribing)"
+                data-en="💊 AI Drug &amp; Test Info" data-bn="💊 ওষুধ ও পরীক্ষার তথ্য">💊 AI Drug &amp; Test Info</button>
       </div>
     </div>
     <div class="staff-grid">
@@ -91,12 +109,18 @@
              only lists awaiting_doctor, so a doctor who accepted a case and then
              wanted to write its prescription had no route back except a phone
              search. "Completed" is that route. -->
-        <div class="queue-header" style="display:flex; justify-content:space-between; align-items:center; gap:8px; flex-wrap:wrap;">
-          <span><span id="queue-scope-label" data-en="Assigned" data-bn="নির্ধারিত">Assigned</span> (<span id="queue-count">0</span>)</span>
-          <span class="seg">
-            <button class="seg-btn active" id="seg-queue" onclick="switchScope('queue')" data-en="Queue" data-bn="তালিকা">Queue</button>
-            <button class="seg-btn" id="seg-recent" onclick="switchScope('recent')" data-en="Completed" data-bn="সম্পন্ন">Completed</button>
-          </span>
+        <div class="queue-header" style="display:flex; flex-direction:column; gap:6px; align-items:stretch;">
+          <div style="display:flex; justify-content:space-between; align-items:center; gap:8px; flex-wrap:wrap;">
+            <span><span id="queue-scope-label" data-en="Assigned" data-bn="নির্ধারিত">Assigned</span> (<span id="queue-count">0</span>)</span>
+            <span class="seg">
+              <button class="seg-btn active" id="seg-queue" onclick="switchScope('queue')" data-en="Queue" data-bn="তালিকা">Queue</button>
+              <button class="seg-btn" id="seg-recent" onclick="switchScope('recent')" data-en="Completed" data-bn="সম্পন্ন">Completed</button>
+            </span>
+          </div>
+          <!-- S38 (A2): the same visible, non-destructive refresh state as the medic. -->
+          <div class="refresh-line" id="refresh-line" style="display:none;">
+            <span class="refresh-dot"></span><span id="refresh-text"></span>
+          </div>
         </div>
         <div id="queue-list"></div>
       </div>
@@ -144,6 +168,12 @@
 
           <div id="field-cards" style="display:flex; flex-direction:column; gap:12px;"></div>
 
+          <!-- S38 (C3/C4): the two things the doctor could not do at all before —
+               schedule the patient back, and ask the desk for something. Both are
+               workflow notes on one table (ADR-0060); neither is a clinical finding,
+               and no AI writes either. -->
+          <div class="card" id="followup-card" style="display:none; flex-direction:column; gap:12px;"></div>
+
           <div class="card" id="review-bar" style="display:flex; justify-content:flex-end; gap:12px; align-items:center; flex-wrap:wrap;">
             <!-- S37: shown instead of the review controls once a case is 'reviewed'
                  or 'closed'. POST /review 409s on those, so offering the buttons was
@@ -151,15 +181,27 @@
                  stays available. -->
             <div id="review-done" style="display:none; flex:1; min-width:220px; font-size:.88rem; font-weight:600; color:var(--accent-color);"></div>
             <input class="input-field" id="review-notes" placeholder="Notes / annotation (optional)" style="flex:1; min-width:220px;">
+            <!-- S38 (B1): the EHR file stays downloadable AFTER the case is reviewed —
+                 that is when a doctor most often needs to hand it on, and before S38
+                 the accept action was the only moment it existed. -->
+            <button class="btn btn-secondary fx-lift" id="btn-ehr" onclick="downloadEhrBundle(this)"
+                    title="Structured clinical record — HL7 FHIR R4 document Bundle (.json)"
+                    data-en="⬇ EHR record (FHIR)" data-bn="⬇ EHR রেকর্ড (FHIR)">⬇ EHR record (FHIR)</button>
             <button class="btn btn-secondary fx-lift" onclick="openPrescription()" data-en="📝 Write Prescription" data-bn="📝 প্রেসক্রিপশন লিখুন">📝 Write Prescription</button>
             <button class="btn btn-danger-outline fx-lift" id="btn-override" onclick="review('low')" data-en="Override to Low-Risk" data-bn="স্বাভাবিক ঝুঁকিতে নামান">Override to Low-Risk</button>
             <button class="btn btn-primary fx-lift" id="btn-accept" onclick="review(null)" data-en="Accept &amp; Write to EHR" data-bn="গ্রহণ করে EHR-এ লিখুন">Accept &amp; Write to EHR</button>
           </div>
-        </div>
 
-        <!-- DOCTOR-4/5: prescription form — full-screen over the case view, opened from the
-             review bar. Diagnosis is doctor-authored (rule #2). Save + .docx = DOCTOR-6 (step 19). -->
-        <div id="prescription-screen" style="display:none; flex-direction:column; gap:18px;"></div>
+          <!-- DOCTOR-4/5: the prescription form. Diagnosis is doctor-authored (rule #2);
+               save + .docx = DOCTOR-6.
+               S38 (B2): this used to be a SEPARATE full-width screen that REPLACED the
+               case — so writing a prescription meant losing sight of the case you were
+               prescribing for, and coming back meant re-finding your place in it. It is
+               now the LAST SECTION OF THE CASE, inline at the bottom, which is where the
+               doctor already is by the time they have finished reading. There is still
+               exactly one form and one code path; only its position changed. -->
+          <div id="prescription-screen" style="display:none; flex-direction:column; gap:18px;"></div>
+        </div>
       </div>
     </div>
   </div>
@@ -168,14 +210,22 @@
        (LLM output is never innerHTML); the disclaimer bar is always visible. -->
   <div id="assistant-panel">
     <div class="assistant-header">
-      <span>💊 <span data-en="AI Drug Information" data-bn="এআই ওষুধের তথ্য">AI Drug Information</span></span>
+      <span>💊 <span data-en="AI Drug &amp; Test Information" data-bn="এআই ওষুধ ও পরীক্ষার তথ্য">AI Drug &amp; Test Information</span></span>
       <button class="btn btn-secondary" onclick="toggleAssistant()" style="padding:4px 12px; font-size:.8rem;">✕</button>
     </div>
-    <div class="assistant-disclaimer">⚠️ <span data-en="AI-generated information. Please verify before prescribing." data-bn="এআই-উৎপাদিত তথ্য। প্রেসক্রাইব করার আগে অনুগ্রহ করে যাচাই করুন।">AI-generated information. Please verify before prescribing.</span></div>
+    <div class="assistant-disclaimer">⚠️ <span data-en="AI-generated information — never a diagnosis or a prescribing decision. Verify before acting." data-bn="এআই-উৎপাদিত তথ্য — রোগনির্ণয় বা প্রেসক্রিপশনের সিদ্ধান্ত নয়। কাজে লাগানোর আগে যাচাই করুন।">AI-generated information — never a diagnosis or a prescribing decision. Verify before acting.</span></div>
     <div class="assistant-body" id="assistant-body"></div>
+    <!-- S38 (B6): the patient-context opt-in. OFF by default and stated plainly —
+         a doctor should always know when a question carried clinical data with it
+         (rule #4). Ticking it never sends the name, the phone number or the
+         transcript, and never sends anything to the web search. -->
+    <label class="assistant-context" title="Send this visit's de-identified clinical summary with your question">
+      <input type="checkbox" id="assistant-context">
+      <span data-en="Use this patient's case as context (de-identified)" data-bn="এই রোগীর কেস প্রেক্ষাপট হিসেবে ব্যবহার করুন (পরিচয়হীন)">Use this patient's case as context (de-identified)</span>
+    </label>
     <div class="assistant-input-row">
       <input class="input-field" id="assistant-input" style="padding:9px 12px; font-size:.88rem;"
-             placeholder="Ask about a medicine…" maxlength="500"
+             placeholder="Ask about a medicine or a test…" maxlength="500"
              onkeydown="if(event.key==='Enter') askAssistant()">
       <button class="btn btn-primary" id="assistant-ask-btn" onclick="askAssistant()"
               style="padding:9px 16px; font-size:.85rem;" data-en="Ask" data-bn="জিজ্ঞাসা">Ask</button>
@@ -185,8 +235,71 @@
   <script src="/shared/shared.js"></script>
   <script src="/shared/staff.js"></script>
   <script>
-    const PORTAL = { role: 'doctor', userId: null, canEdit: true, onCaseLoaded: onDoctorCaseLoaded };
+    const PORTAL = {
+      role: 'doctor', userId: null, canEdit: true, onCaseLoaded: onDoctorCaseLoaded,
+      /* S38 (B7) — the reported bug: selecting "Assigned (0)" left the right-hand
+         panel saying "Select Patient — click a patient to scan risk alerts" while
+         pointing at a list with no patients in it, and after a case had been opened
+         nothing ever restored the placeholder at all. Each scope now says what its
+         own emptiness means, because "no one is assigned to me" and "I have completed
+         nothing yet" are different facts with different next actions. */
+      /* The prescription form takes over the workspace; the placeholder must not
+         appear behind it if the queue happens to empty while it is open. */
+      workspaceBusy: () => {
+        const screen = document.getElementById('prescription-screen');
+        return !!screen && screen.style.display !== 'none';
+      },
+      emptyWorkspace: ({ scope, searching }) => {
+        if (searching) {
+          return { glyph: '🔍',
+                   title: t('No patient found', 'কোনো রোগী পাওয়া যায়নি'),
+                   detail: t('That mobile number has no visit on record. Clear the search to return to your list.',
+                             'ঐ মোবাইল নম্বরে কোনো ভিজিট নেই। আপনার তালিকায় ফিরতে অনুসন্ধান মুছুন।') };
+        }
+        if (scope === 'recent') {
+          return { glyph: '🗂',
+                   title: t('No completed consultations', 'কোনো সম্পন্ন পরামর্শ নেই'),
+                   detail: t('Cases you accept or override appear here, and stay reachable so you can still prescribe.',
+                             'আপনি যেসব কেস গ্রহণ বা পরিবর্তন করবেন সেগুলো এখানে থাকবে, এবং প্রেসক্রিপশন লেখার জন্য খোলা থাকবে।') };
+        }
+        return { glyph: '☕',
+                 title: t('No assigned cases', 'নির্ধারিত কোনো কেস নেই'),
+                 detail: t('Nothing is waiting for you. A case appears here as soon as a medic forwards it.',
+                           'আপনার জন্য কিছু অপেক্ষা করছে না। মেডিক কেস পাঠালেই তা এখানে আসবে।') };
+      },
+    };
     let currentRisk = null;   // kept so the safety panel re-renders on language toggle
+
+    /* ---- S38 (A7): the live Dhaka clock ---- */
+    function tickClock() {
+      const now = dhakaNowParts();
+      const timeBox = document.getElementById('clock-time');
+      const dateBox = document.getElementById('clock-date');
+      if (timeBox) timeBox.textContent = now.time;
+      if (dateBox) dateBox.textContent = now.date;
+    }
+    tickClock();
+    setInterval(tickClock, 1000);
+
+    /* ---- S38 (A2): say what the auto-refresh is doing ---- */
+    function onQueueRefreshState({ lastRefreshAt, paused, intervalMs, searching }) {
+      const line = document.getElementById('refresh-line');
+      const text = document.getElementById('refresh-text');
+      if (!line || !text) return;
+      line.style.display = 'inline-flex';
+      line.classList.toggle('paused', !!paused);
+      const seconds = localeNum(Math.round(intervalMs / 1000));
+      if (searching) {
+        text.textContent = t('Search result — auto-refresh held', 'অনুসন্ধানের ফল — স্বয়ংক্রিয় রিফ্রেশ থেমে আছে');
+      } else if (paused) {
+        text.textContent = t('Auto-refresh paused (tab in background)', 'স্বয়ংক্রিয় রিফ্রেশ থেমে আছে (ট্যাব পেছনে)');
+      } else {
+        text.textContent = lastRefreshAt
+          ? t(`Live · every ${seconds}s · updated `, `সরাসরি · প্রতি ${seconds} সেকেন্ডে · হালনাগাদ `)
+            + dhakaTime(lastRefreshAt)
+          : t(`Live · every ${seconds}s`, `সরাসরি · প্রতি ${seconds} সেকেন্ডে`);
+      }
+    }
 
     async function boot() {
       updatePlaceholders();
@@ -206,7 +319,9 @@
       document.getElementById('login-screen').style.display = 'none';
       document.getElementById('portal-main').style.display = 'flex';
       loadQueue();
-      setInterval(loadQueue, 15000);
+      // S38 (A2): shared timer — holds during a phone search and while the tab is
+      // hidden, refreshes once on return, and reports its state to the sidebar.
+      startQueueAutoRefresh();
     }
 
     /* DOCTOR-3: patient-details + risk load together when a case opens. detail is
@@ -217,6 +332,138 @@
       renderReviewBar();
       await loadRisk(c);
       await loadHistory(c);
+      await loadNotes(c);
+    }
+
+    /* ---- S38 (C3/C4): recall scheduling + the note back to the medic ----
+
+       Both are ``clinical_notes`` rows and both are plain human text. Nothing here
+       reads a note back into the pipeline, nothing parses one, and no model writes
+       one — which is what keeps a workflow note from becoming a clinical finding
+       (rule #2). */
+    let caseNotes = [];
+
+    const NOTE_KIND_LABELS = {
+      recall:        { en: 'Recall',        bn: 'পুনরায় ডাকা' },
+      handover_note: { en: 'Note to medic', bn: 'মেডিককে বার্তা' },
+    };
+    const NOTE_STATUS_LABELS = {
+      open:      { en: 'open',      bn: 'চলমান' },
+      done:      { en: 'done',      bn: 'সম্পন্ন' },
+      cancelled: { en: 'cancelled', bn: 'বাতিল' },
+    };
+    const labelOf = (map, code) => (map[code] ? t(map[code].en, map[code].bn) : (code || '—'));
+
+    async function loadNotes(c) {
+      caseNotes = [];
+      try { caseNotes = await api('GET', `/api/visits/${c.uuid}/notes`); }
+      catch (_) { /* the case must open even if this fails */ }
+      renderFollowupCard();
+    }
+
+    function renderFollowupCard() {
+      const card = document.getElementById('followup-card');
+      if (!card || !currentCase) return;
+      card.style.display = 'flex';
+      const today = dhakaTodayIso();
+      card.innerHTML =
+        `<div>
+           <h3 style="font-size:1.05rem; color:var(--primary-color);">📅 ${t('Follow-up & handover', 'ফলো-আপ ও হস্তান্তর')}</h3>
+           <p style="font-size:.78rem; color:var(--text-muted);">${t(
+             'Bring this patient back, or ask the triage desk to do something before you see them again. Neither is part of the prescription or the risk assessment.',
+             'রোগীকে আবার ডাকুন, অথবা পরের বার দেখার আগে ট্রায়াজ ডেস্ককে কিছু করতে বলুন। কোনোটিই প্রেসক্রিপশন বা ঝুঁকি নিরূপণের অংশ নয়।')}</p>
+         </div>
+         <div class="rx-two-col">
+           <div style="display:flex; flex-direction:column; gap:8px;">
+             <label style="font-size:.72rem; text-transform:uppercase; font-weight:700; color:var(--text-muted);">
+               🔁 ${t('Schedule a recall', 'পুনরায় ডাকার সময় নির্ধারণ')}</label>
+             <input class="input-field" type="date" id="recall-date" min="${today}" value=""
+                    style="padding:7px 10px;">
+             <span style="font-size:.7rem; color:var(--text-muted);">${t(
+               'Today or later — a recall cannot be scheduled in the past.',
+               'আজ বা তার পরে — অতীতে পুনরায় ডাকার সময় দেওয়া যায় না।')}</span>
+             <input class="input-field" id="recall-reason" maxlength="1000"
+                    placeholder="${t('Why — e.g. recheck blood pressure', 'কেন — যেমন রক্তচাপ পুনরায় দেখা')}"
+                    style="padding:7px 10px;">
+             <button class="btn btn-primary fx-lift" style="padding:7px 14px; font-size:.82rem; align-self:flex-start;"
+                     onclick="saveRecall(this)">${t('Schedule recall', 'রিকল নির্ধারণ')}</button>
+           </div>
+           <div style="display:flex; flex-direction:column; gap:8px;">
+             <label style="font-size:.72rem; text-transform:uppercase; font-weight:700; color:var(--text-muted);">
+               📨 ${t('Ask the triage desk', 'ট্রায়াজ ডেস্ককে বলুন')}</label>
+             <textarea class="input-field" id="medic-note" rows="3" maxlength="1000"
+                       placeholder="${t('e.g. Please repeat the blood pressure before the next visit.', 'যেমন পরের ভিজিটের আগে অনুগ্রহ করে রক্তচাপ আবার নিন।')}"
+                       style="padding:7px 10px; resize:vertical;"></textarea>
+             <span style="font-size:.7rem; color:var(--text-muted);">${t(
+               'Goes to whoever is on the triage desk — not to one person. They mark it done.',
+               'যিনি ট্রায়াজ ডেস্কে আছেন তার কাছে যাবে — কোনো নির্দিষ্ট ব্যক্তির কাছে নয়। তিনি সম্পন্ন চিহ্নিত করবেন।')}</span>
+             <button class="btn btn-secondary fx-lift" style="padding:7px 14px; font-size:.82rem; align-self:flex-start;"
+                     onclick="sendMedicNote(this)">${t('Send to medic', 'মেডিকের কাছে পাঠান')}</button>
+           </div>
+         </div>
+         <div id="notes-list" style="display:flex; flex-direction:column; gap:7px;"></div>`;
+      renderNotesList();
+    }
+
+    function renderNotesList() {
+      const box = document.getElementById('notes-list');
+      if (!box) return;
+      box.innerHTML = '';
+      if (!caseNotes.length) return;
+      const head = document.createElement('div');
+      head.style.cssText = 'font-size:.76rem; font-weight:700; color:var(--primary-color); margin-top:4px;';
+      head.textContent = t('On this case', 'এই কেসে');
+      box.appendChild(head);
+      caseNotes.forEach((note) => {
+        const row = document.createElement('div');
+        row.className = 'check-row';
+        const body = document.createElement('div');
+        const line = document.createElement('div');
+        line.style.cssText = 'font-weight:700; font-size:.78rem;';
+        line.textContent = `${labelOf(NOTE_KIND_LABELS, note.kind)}`
+          + (note.due_date ? ` · ${note.due_date}` : '')
+          + ` · ${labelOf(NOTE_STATUS_LABELS, note.status)}`;
+        const text = document.createElement('div');
+        text.textContent = note.body;            // human text — textContent only
+        const who = document.createElement('div');
+        who.className = 'check-detail';
+        who.textContent = `${note.author_name || ''} · ${dhakaDateTime(note.created_at)}`
+          + (note.resolved_by_name ? ` · ${t('closed by', 'সম্পন্ন করেছেন')} ${note.resolved_by_name}` : '');
+        body.appendChild(line);
+        body.appendChild(text);
+        body.appendChild(who);
+        row.appendChild(body);
+        box.appendChild(row);
+      });
+    }
+
+    async function saveRecall(btn) {
+      const due = document.getElementById('recall-date').value;
+      const reason = document.getElementById('recall-reason').value.trim();
+      if (!due) return showError(t('Choose a recall date.', 'পুনরায় ডাকার তারিখ নির্বাচন করুন।'));
+      if (!reason) return showError(t('Say why the patient should come back.', 'রোগী কেন ফিরে আসবেন তা লিখুন।'));
+      btn.disabled = true;
+      try {
+        await api('POST', `/api/visits/${currentCase.uuid}/notes`, {
+          kind: 'recall', body: reason, author_id: PORTAL.userId, due_date: due,
+          recipient_role: 'medic',
+        });
+        await loadNotes(currentCase);
+      } catch (e) { showError(e.message); }
+      btn.disabled = false;
+    }
+
+    async function sendMedicNote(btn) {
+      const body = document.getElementById('medic-note').value.trim();
+      if (!body) return showError(t('Write the message first.', 'আগে বার্তাটি লিখুন।'));
+      btn.disabled = true;
+      try {
+        await api('POST', `/api/visits/${currentCase.uuid}/notes`, {
+          kind: 'handover_note', body, author_id: PORTAL.userId, recipient_role: 'medic',
+        });
+        await loadNotes(currentCase);
+      } catch (e) { showError(e.message); }
+      btn.disabled = false;
     }
 
     /* ---- S37 (ADR-0058): queue scope ---- */
@@ -226,6 +473,10 @@
       document.getElementById('seg-recent').classList.toggle('active', scope === 'recent');
       document.getElementById('queue-scope-label').textContent =
         scope === 'recent' ? t('Completed', 'সম্পন্ন') : t('Assigned', 'নির্ধারিত');
+      // S38 (B7): switching scope asks a different question, so any case open from the
+      // previous answer is put away — otherwise "Completed (0)" showed a case from the
+      // working queue as though it were a completed one.
+      currentCase = null;
       setQueueScope(scope);   // staff.js owns the fetch + render
     }
 
@@ -289,10 +540,14 @@
         row(t('Phone', 'ফোন'), 'pd-phone') +
         row(t('Age', 'বয়স'), 'pd-age') +
         row(t('Gender', 'লিঙ্গ'), 'pd-gender') +
+        row(t('Height', 'উচ্চতা'), 'pd-height') +
         row(t('Weight', 'ওজন'), 'pd-weight') +
         row(t('Blood Pressure', 'রক্তচাপ'), 'pd-bp') +
         row(t('Submitted', 'জমার সময়'), 'pd-submitted') +
-        `<div id="vitals-editor" style="display:none; gap:8px; align-items:center; flex-wrap:wrap; border-top:1px dashed var(--border-color); padding-top:10px; margin-top:4px;">
+        // S38 (A5): derived from the two rows above it, never stored (ADR-0060).
+        `<div id="pd-bmi" style="font-size:.85rem; margin-top:2px;"></div>
+         <div id="vitals-editor" style="display:none; gap:8px; align-items:center; flex-wrap:wrap; border-top:1px dashed var(--border-color); padding-top:10px; margin-top:4px;">
+           <input class="input-field" id="vitals-height" type="number" min="30" max="260" step="0.5" style="width:130px; padding:6px 10px;" placeholder="${t('Height (cm)', 'উচ্চতা (সেমি)')}">
            <input class="input-field" id="vitals-weight" type="number" min="1" max="499" step="0.1" style="width:130px; padding:6px 10px;" placeholder="${t('Weight (kg)', 'ওজন (কেজি)')}">
            <input class="input-field" id="vitals-bp" type="text" style="width:150px; padding:6px 10px;" placeholder="${t('BP e.g. 120/80', 'রক্তচাপ যেমন ১২০/৮০')}">
            <button class="btn btn-primary" style="padding:6px 14px; font-size:.8rem;" onclick="saveVitals()">${t('Save', 'সংরক্ষণ')}</button>
@@ -304,8 +559,10 @@
       document.getElementById('pd-phone').textContent = p.external_ref || '—';
       document.getElementById('pd-age').textContent = age;
       document.getElementById('pd-gender').textContent = genderLabel(p.sex);
+      document.getElementById('pd-height').textContent = p.height_cm != null ? `${p.height_cm} cm` : '—';
       document.getElementById('pd-weight').textContent = p.weight_kg != null ? `${p.weight_kg} kg` : '—';
       document.getElementById('pd-bp').textContent = p.bp || '—';
+      showBmi('pd-bmi', p.weight_kg, p.height_cm);
       // P3-1: when the patient hit Confirm & Submit, rendered in Asia/Dhaka
       // (dhakaDateTime pins offset-less UTC strings — same P2-1 helper as the queue).
       const d = currentCase.detail || {};
@@ -313,6 +570,7 @@
         dhakaDateTime(d.submitted_at || d.started_at);
 
       document.getElementById('vitals-edit-btn').onclick = () => {
+        document.getElementById('vitals-height').value = p.height_cm != null ? p.height_cm : '';
         document.getElementById('vitals-weight').value = p.weight_kg != null ? p.weight_kg : '';
         document.getElementById('vitals-bp').value = p.bp || '';
         document.getElementById('vitals-editor').style.display = 'flex';
@@ -324,6 +582,7 @@
       const p = (currentCase.detail || {}).patient;
       if (!p) return;
       const rawW = document.getElementById('vitals-weight').value.trim();
+      const rawH = document.getElementById('vitals-height').value.trim();
       const rawBp = document.getElementById('vitals-bp').value.trim();
       const body = { editor_id: PORTAL.userId };
       if (rawW) {
@@ -333,9 +592,20 @@
         }
         body.weight_kg = w;
       }
+      // S38: same plausible-human bounds as the BMI calculator and the medic's form —
+      // a height that would produce no BMI must not be storable either.
+      if (rawH) {
+        const h = Number(rawH);
+        if (!isFinite(h) || h < 30 || h > 260) {
+          return showError(t('Enter a height in centimetres, between 30 and 260.',
+                             'সেন্টিমিটারে উচ্চতা লিখুন, ৩০ থেকে ২৬০ এর মধ্যে।'));
+        }
+        body.height_cm = h;
+      }
       if (rawBp) body.bp = rawBp;
-      if (body.weight_kg === undefined && body.bp === undefined) {
-        return showError(t('Enter a weight or blood pressure to save.', 'সংরক্ষণে ওজন বা রক্তচাপ লিখুন।'));
+      if (body.weight_kg === undefined && body.height_cm === undefined && body.bp === undefined) {
+        return showError(t('Enter a height, weight or blood pressure to save.',
+                           'সংরক্ষণে উচ্চতা, ওজন বা রক্তচাপ লিখুন।'));
       }
       try {
         currentCase.detail.patient = await api('PATCH', `/api/patients/${p.id}/vitals`, body);
@@ -596,12 +866,14 @@
       assistantBusy = true;
       document.getElementById('assistant-ask-btn').disabled = true;
       input.value = '';
-      const entry = { q, res: null, error: null, pending: true };
+      const useContext = document.getElementById('assistant-context').checked;
+      const entry = { q, res: null, error: null, pending: true, usedContext: useContext };
       assistantLog.push(entry);
       renderAssistantLog();
       try {
         entry.res = await api('POST',
-          `/api/visits/${currentCase.uuid}/assistant/drug-info`, { question: q });
+          `/api/visits/${currentCase.uuid}/assistant/drug-info`,
+          { question: q, use_case_context: useContext });
       } catch (e) {
         entry.error = e.message;
       }
@@ -618,8 +890,8 @@
         const hint = document.createElement('div');
         hint.style.cssText = 'font-size:.85rem; color:var(--text-muted); text-align:center; margin:auto;';
         hint.textContent = t(
-          'Ask about a medicine — uses, dosage ranges, interactions, side effects. Information only; the prescription is always yours.',
-          'কোনো ওষুধ সম্পর্কে জিজ্ঞাসা করুন — ব্যবহার, মাত্রা, মিথস্ক্রিয়া, পার্শ্বপ্রতিক্রিয়া। শুধুই তথ্য; প্রেসক্রিপশন সবসময় আপনার।');
+          'Ask about a MEDICINE (uses, dosing ranges, cautions, contraindications, side effects) or a TEST (what it is, why it is used, preparation). Tick the box below to ask which tests might suit this patient. Information only; every decision is yours.',
+          'কোনো ওষুধ সম্পর্কে জিজ্ঞাসা করুন (ব্যবহার, মাত্রা, সতর্কতা, নিষেধাজ্ঞা, পার্শ্বপ্রতিক্রিয়া) অথবা কোনো পরীক্ষা সম্পর্কে (এটি কী, কেন করা হয়, প্রস্তুতি)। এই রোগীর জন্য কোন পরীক্ষা উপযুক্ত জানতে নিচের ঘরে টিক দিন। শুধুই তথ্য; সব সিদ্ধান্ত আপনার।');
         box.appendChild(hint);
         return;
       }
@@ -627,6 +899,13 @@
         const qDiv = document.createElement('div');
         qDiv.className = 'assistant-q';
         qDiv.textContent = entry.q;          // doctor text — textContent only
+        if (entry.usedContext) {
+          // The doctor should be able to see, later, which questions carried case data.
+          const tag = document.createElement('div');
+          tag.className = 'assistant-ctx-tag';
+          tag.textContent = '🔒 ' + t('sent with case context', 'কেস প্রেক্ষাপটসহ পাঠানো');
+          qDiv.appendChild(tag);
+        }
         box.appendChild(qDiv);
         const aDiv = document.createElement('div');
         aDiv.className = 'assistant-a';
@@ -643,6 +922,47 @@
           text.textContent = (currentLanguage === 'bn' && r.answer_bn)
             ? r.answer_bn : (r.answer_en || r.answer_bn || '—');
           aDiv.appendChild(text);
+
+          /* S38 (B6): suggested tests, as things the doctor may CLICK to insert into
+             the Required Tests field. Nothing is ordered by their appearing here —
+             the insert is a human action, and the order itself only exists once the
+             doctor generates a prescription (rule #2). */
+          if (r.suggested_tests && r.suggested_tests.length) {
+            const wrap = document.createElement('div');
+            wrap.className = 'assistant-tests';
+            const head = document.createElement('div');
+            head.className = 'assistant-tests-head';
+            head.textContent = '🔬 ' + t('Tests you could consider — tap to add to the prescription',
+                                         '🔬 বিবেচনার জন্য পরীক্ষা — প্রেসক্রিপশনে যোগ করতে চাপুন');
+            wrap.appendChild(head);
+            const row = document.createElement('div');
+            row.className = 'chip-box';
+            r.suggested_tests.forEach((name) => {
+              const add = document.createElement('button');
+              add.type = 'button';
+              add.className = 'chip suggest-add';
+              add.textContent = '＋ ' + name;    // model text — textContent only
+              add.title = t('Add to Required Tests', 'প্রয়োজনীয় পরীক্ষায় যোগ করুন');
+              add.onclick = () => {
+                if (!rxDraft) {
+                  return showError(t('Open the prescription form first, then add tests.',
+                                     'আগে প্রেসক্রিপশন ফর্ম খুলুন, তারপর পরীক্ষা যোগ করুন।'));
+                }
+                addTest(name);
+                add.disabled = true;
+                add.textContent = '✓ ' + name;
+              };
+              row.appendChild(add);
+            });
+            wrap.appendChild(row);
+            const note = document.createElement('div');
+            note.className = 'assistant-tests-note';
+            note.textContent = t('Suggestions only — nothing is ordered until you write and generate the prescription.',
+                                 'শুধুই পরামর্শ — আপনি প্রেসক্রিপশন লিখে তৈরি না করা পর্যন্ত কিছুই আদেশ হয় না।');
+            wrap.appendChild(note);
+            aDiv.appendChild(wrap);
+          }
+
           if (r.sources && r.sources.length) {
             const src = document.createElement('div');
             src.className = 'assistant-sources';
@@ -665,9 +985,15 @@
             aDiv.appendChild(none);
           }
           // Rule #2: the per-answer disclaimer from the server, under every reply.
+          // S38: when the server's output guard fired it swaps in a STRONGER text —
+          // shown here in the danger colour so a flagged answer cannot read like a
+          // routine one.
           const disc = document.createElement('div');
-          disc.style.cssText = 'font-size:.74rem; font-weight:600; color:var(--warning-color); margin-top:6px;';
-          disc.textContent = '⚠️ ' + (currentLanguage === 'bn'
+          const flagged = !!r.flagged_reason;
+          disc.style.cssText = 'font-size:.74rem; font-weight:700; margin-top:6px; color:'
+            + (flagged ? 'var(--danger-color)' : 'var(--warning-color)')
+            + (flagged ? '; background:#FEF2F2; border:1px solid #FECACA; border-radius:6px; padding:6px 8px;' : ';');
+          disc.textContent = (flagged ? '' : '⚠️ ') + (currentLanguage === 'bn'
             ? (r.disclaimer_bn || r.disclaimer) : r.disclaimer);
           aDiv.appendChild(disc);
         }
@@ -685,7 +1011,11 @@
       updatePlaceholders();
       renderAssistantLog();   // P3-3: answers/labels follow the toggle
       // S37: the timeline and the review-bar state re-render from state too.
-      if (currentCase) { renderHistory(); renderReviewBar(); }
+      if (currentCase) { renderHistory(); renderReviewBar(); renderFollowupCard(); }
+      // S38: clock, refresh line and the empty-workspace copy follow the toggle too.
+      tickClock();
+      renderQueueRefreshState();
+      renderWorkspaceState();
       document.getElementById('queue-scope-label').textContent =
         document.getElementById('seg-recent').classList.contains('active')
           ? t('Completed', 'সম্পন্ন') : t('Assigned', 'নির্ধারিত');
@@ -709,7 +1039,40 @@
         // became unreachable. Writing the prescription after accepting is the
         // normal order, so the case stays open and simply changes state.
         await openCase(uuid);
+        // S38 (B1): "Accept & Write to EHR" now actually produces the EHR record —
+        // a structured, portable file rather than only a status change. Generated
+        // AFTER the review so the document carries the review that was just made.
+        await downloadEhrBundle(document.getElementById('btn-ehr'), { silent: true });
       } catch (e) { showError(e.message); }
+    }
+
+    /* ---- S38 (B1): the encounter as an HL7 FHIR R4 document Bundle ----
+
+       The server assembles it fresh from rows that already exist (services/ehr_export)
+       and records it in the SAME `documents` table as every other export, so it
+       downloads through the same route and is retrievable later.
+
+       ⚠ Called with { silent: true } from the accept path: a failure there must not
+       make a SUCCESSFUL review look like it failed. The review is committed either
+       way; the file can be re-downloaded from the button that stays on the bar. */
+    async function downloadEhrBundle(btn, opts) {
+      if (!currentCase) return showError(t('Select a case first.', 'আগে একটি কেস নির্বাচন করুন।'));
+      if (btn) btn.disabled = true;
+      try {
+        const doc = await api('POST',
+          `/api/visits/${currentCase.uuid}/documents/ehr_bundle`);
+        const a = document.createElement('a');
+        a.href = doc.download_url;
+        a.download = doc.filename || '';
+        document.body.appendChild(a);
+        a.click();
+        a.remove();
+      } catch (e) {
+        if (!(opts && opts.silent)) showError(e.message);
+        else showError(t('The case was accepted, but the EHR file could not be generated: ',
+                         'কেসটি গ্রহণ করা হয়েছে, তবে EHR ফাইল তৈরি করা যায়নি: ') + e.message);
+      }
+      if (btn) btn.disabled = false;
     }
 
     /* ---- DOCTOR-4/5: prescription form. Letterhead comes from the server; patient +
@@ -750,18 +1113,25 @@
         doctorName: rxContext.doctor.name || '', qualification: rxContext.doctor.qualification || '',
         registration: rxContext.doctor.registration_no || '',
         specialization: rxContext.doctor.specialization || '',
-        date: new Date().toISOString().slice(0, 10),
+        // S38 (B5): the Dhaka date, not the UTC one. `toISOString()` returns the UTC
+        // calendar date, which is YESTERDAY between 00:00 and 06:00 Dhaka — so a
+        // prescription written early in the morning was dated the previous day on the
+        // document the patient carries to a pharmacy.
+        date: dhakaTodayIso(),
         patientName: p.display_name || '', patientPhone: p.external_ref || '', patientAge: age,
         patientSex: p.sex || '', patientWeight: p.weight_kg != null ? String(p.weight_kg) : '',
-        patientBp: p.bp || '',
+        patientBp: p.bp || '', patientHeight: p.height_cm != null ? String(p.height_cm) : '',
         symptoms: buildSymptomText(),
         diagnosis: '',              // rule #2 — always empty on load, doctor authors it
         medicines: [emptyMedicine()],
         advice: '', tests: '', followup: '',
       };
-      document.getElementById('case-detail').style.display = 'none';
+      // S38 (B2): the case STAYS on screen — the form is its last section, not a
+      // replacement for it. The doctor scrolls on rather than losing their place.
       document.getElementById('prescription-screen').style.display = 'flex';
       renderPrescriptionForm();
+      document.getElementById('prescription-screen')
+        .scrollIntoView({ behavior: 'smooth', block: 'start' });
     }
 
     function collectDraftFromForm() {
@@ -813,9 +1183,12 @@
       };
     }
 
+    /* S38 (B2): the prescription is a SECTION of the case now, so closing it hides
+       that section and returns the doctor to the review bar directly above it —
+       there is no separate screen to come back from. */
     function backToCase() {
       document.getElementById('prescription-screen').style.display = 'none';
-      document.getElementById('case-detail').style.display = 'flex';
+      document.getElementById('review-bar').scrollIntoView({ behavior: 'smooth', block: 'center' });
     }
 
     async function submitPrescription(btn) {
@@ -855,9 +1228,10 @@
         `<input class="input-field" id="${id}" value="${escAttr(value)}" placeholder="${escAttr(ph)}" style="padding:8px 10px; width:100%;">`;
       const area = (id, value, ph, rows) =>
         `<textarea class="input-field" id="${id}" rows="${rows || 3}" placeholder="${escAttr(ph)}" style="padding:8px 10px; width:100%; resize:vertical;">${escAttr(value)}</textarea>`;
-      const labeled = (label, control) =>
+      const labeled = (label, control, hint) =>
         `<div style="display:flex; flex-direction:column; gap:4px;">
            <label style="font-size:.72rem; text-transform:uppercase; font-weight:600; color:var(--text-muted);">${label}</label>${control}
+           ${hint ? `<span style="font-size:.7rem; color:var(--text-muted);">${hint}</span>` : ''}
          </div>`;
 
       const medRows = d.medicines.map((m, i) =>
@@ -888,7 +1262,16 @@
            <h3 style="font-size:1rem; color:var(--primary-color);">🏥 ${lbl('Letterhead', 'লেটারহেড')}</h3>
            <div style="display:grid; grid-template-columns:2fr 1fr; gap:12px;">
              ${labeled(lbl('Clinic / Hospital', 'ক্লিনিক / হাসপাতাল'), field('rx-clinic-name', d.clinicName, ''))}
-             ${labeled(lbl('Date', 'তারিখ'), `<input class="input-field" type="date" id="rx-date" value="${escAttr(d.date)}" style="padding:8px 10px; width:100%;">`)}
+             <!-- S38 (B5): a prescription is dated by the act of writing it, so the
+                  field is pinned to today (Dhaka) at both ends. Backdating would
+                  misdate a legal document; post-dating would make one visit look like
+                  two. The server enforces the same rule — see routes_prescription. -->
+             ${labeled(lbl('Date', 'তারিখ'),
+               `<input class="input-field" type="date" id="rx-date" value="${escAttr(d.date)}"
+                       min="${escAttr(dhakaTodayIso())}" max="${escAttr(dhakaTodayIso())}"
+                       style="padding:8px 10px; width:100%;">`,
+               lbl('Today. A prescription is dated when it is written.',
+                   'আজ। প্রেসক্রিপশনের তারিখ লেখার দিনই হয়।'))}
            </div>
            ${labeled(lbl('Clinic Address', 'ক্লিনিকের ঠিকানা'), field('rx-clinic-address', d.clinicAddress, ''))}
            <div style="display:grid; grid-template-columns:1fr 1fr; gap:12px;">
@@ -927,10 +1310,48 @@
            </div>
          </div>
 
+         <!-- S38 (B3): Advice and Required Tests were stacked horizontally in one card,
+              so two unrelated free-text boxes shared a column and neither had room. They
+              are two SEPARATE vertical cards now, side by side on a wide screen and
+              stacking on a narrow one (auto-fit, so no breakpoint to maintain). -->
+         <div class="rx-two-col">
+           <div class="card" style="display:flex; flex-direction:column; gap:10px;">
+             <h3 style="font-size:1rem; color:var(--primary-color);">💬 ${lbl('Advice / Lifestyle', 'পরামর্শ / জীবনযাপন')}</h3>
+             <p style="font-size:.74rem; color:var(--text-muted);">${lbl(
+               'What the patient should do at home — rest, fluids, diet, warning signs to return for.',
+               'রোগী বাড়িতে কী করবেন — বিশ্রাম, পানি, খাদ্য, কোন লক্ষণে ফিরে আসবেন।')}</p>
+             ${area('rx-advice', d.advice, lbl('e.g. Plenty of fluids, rest for 3 days…', 'যেমন প্রচুর পানি, ৩ দিন বিশ্রাম…'), 7)}
+           </div>
+
+           <!-- S38 (B4): the tests field is a token editor with server-backed
+                suggestions. Selecting a suggestion ORDERS NOTHING — it inserts text
+                into a field the doctor is writing, and anything not on the list can
+                still simply be typed. -->
+           <div class="card" style="display:flex; flex-direction:column; gap:10px;">
+             <h3 style="font-size:1rem; color:var(--primary-color);">🔬 ${lbl('Required Tests', 'প্রয়োজনীয় পরীক্ষা')}</h3>
+             <p style="font-size:.74rem; color:var(--text-muted);">${lbl(
+               'Type to search, or write in any test that is not listed. Suggestions are a typing aid — nothing is ordered until you print this prescription.',
+               'খুঁজতে টাইপ করুন, অথবা তালিকায় না থাকা যেকোনো পরীক্ষা নিজে লিখুন। পরামর্শগুলো শুধু লেখার সহায়তা — প্রেসক্রিপশন না দেওয়া পর্যন্ত কিছুই আদেশ হয় না।')}</p>
+             <div class="chip-box" id="rx-test-chips"></div>
+             <div style="position:relative;">
+               <input class="input-field" id="rx-test-input" autocomplete="off"
+                      style="padding:8px 10px; width:100%;"
+                      placeholder="${escAttr(lbl('Search a test, or type your own…', 'পরীক্ষা খুঁজুন, বা নিজে লিখুন…'))}">
+               <div class="suggest-list" id="rx-test-suggest" style="display:none;"></div>
+             </div>
+             <!-- The authoritative value the payload is built from. Kept as the same
+                  newline-joined string the .docx writer already renders, so nothing
+                  downstream changed. -->
+             <textarea id="rx-tests" style="display:none;">${escAttr(d.tests)}</textarea>
+           </div>
+         </div>
+
          <div class="card" style="display:flex; flex-direction:column; gap:12px;">
-           ${labeled('💬 ' + lbl('Advice / Lifestyle', 'পরামর্শ / জীবনযাপন'), area('rx-advice', d.advice, '', 2))}
-           ${labeled('🔬 ' + lbl('Required Tests', 'প্রয়োজনীয় পরীক্ষা'), area('rx-tests', d.tests, '', 2))}
-           ${labeled('📅 ' + lbl('Follow-up Date', 'ফলো-আপ তারিখ'), `<input class="input-field" type="date" id="rx-followup" value="${escAttr(d.followup)}" style="padding:8px 10px; max-width:220px;">`)}
+           ${labeled('📅 ' + lbl('Follow-up Date', 'ফলো-আপ তারিখ'),
+             `<input class="input-field" type="date" id="rx-followup" value="${escAttr(d.followup)}"
+                     min="${escAttr(dhakaTodayIso())}" style="padding:8px 10px; max-width:220px;">`,
+             lbl('Today or later — a follow-up cannot be scheduled in the past.',
+                 'আজ বা তার পরে — ফলো-আপ অতীতে দেওয়া যায় না।'))}
            <div style="margin-top:16px; text-align:right;">
              <div id="rx-signature" style="display:inline-block; border-top:1px solid var(--text-main); padding-top:6px; min-width:220px; text-align:center; font-size:.85rem;"></div>
            </div>
@@ -953,6 +1374,152 @@
       sub.style.color = 'var(--text-muted)';
       sub.textContent = lbl('Signature & Stamp', 'স্বাক্ষর ও সিল');
       sig.appendChild(sub);
+
+      wireTestField();
+    }
+
+    /* ---- S38 (B4): Required Tests — search, select, or type your own ----
+
+       The field stores exactly what it always stored: one newline-joined string in
+       `payload.tests`, which is what the .docx writer already renders. The editor on
+       top of it is a typing aid, and every part of it is deliberately non-committal:
+
+         * suggestions come from GET /api/reference/tests, a static vocabulary with no
+           table behind it (the brief: do not create a table for a static list);
+         * a test NOT in the vocabulary is added exactly as typed — the list must never
+           become the set of tests a doctor is allowed to order;
+         * every selected test is removable;
+         * nothing is ordered by selecting. The tests reach a laboratory only when the
+           doctor generates the prescription, which is a separate, deliberate act
+           (rule #2 / the brief's "suggestions are assistance, not automatic orders").
+    */
+
+    function testList() {
+      const raw = (document.getElementById('rx-tests') || {}).value || '';
+      return raw.split('\n').map((s) => s.trim()).filter(Boolean);
+    }
+
+    function setTestList(items) {
+      // De-duplicated case-insensitively, order preserved: a doctor who picks "CBC"
+      // from the list after typing "cbc" meant to add one test, not two.
+      const seen = new Set();
+      const unique = items.filter((s) => {
+        const key = s.toLowerCase();
+        if (seen.has(key)) return false;
+        seen.add(key);
+        return true;
+      });
+      const box = document.getElementById('rx-tests');
+      if (box) box.value = unique.join('\n');
+      if (rxDraft) rxDraft.tests = unique.join('\n');
+      renderTestChips();
+    }
+
+    function addTest(name) {
+      const value = String(name || '').trim();
+      if (!value) return;
+      setTestList(testList().concat([value]));
+      const input = document.getElementById('rx-test-input');
+      if (input) { input.value = ''; input.focus(); }
+      hideTestSuggestions();
+    }
+
+    function removeTest(index) {
+      const items = testList();
+      items.splice(index, 1);
+      setTestList(items);
+    }
+
+    function renderTestChips() {
+      const box = document.getElementById('rx-test-chips');
+      if (!box) return;
+      box.innerHTML = '';
+      const items = testList();
+      if (!items.length) {
+        const none = document.createElement('span');
+        none.style.cssText = 'font-size:.76rem; color:var(--text-muted);';
+        none.textContent = t('No tests added yet.', 'এখনো কোনো পরীক্ষা যোগ করা হয়নি।');
+        box.appendChild(none);
+        return;
+      }
+      items.forEach((name, i) => {
+        const chip = document.createElement('span');
+        chip.className = 'chip';
+        const label = document.createElement('span');
+        label.textContent = name;           // doctor-typed text — textContent only
+        const x = document.createElement('button');
+        x.type = 'button';
+        x.className = 'chip-x';
+        x.textContent = '✕';
+        x.title = t('Remove', 'মুছুন');
+        x.setAttribute('aria-label', `${t('Remove', 'মুছুন')}: ${name}`);
+        x.onclick = () => removeTest(i);
+        chip.appendChild(label);
+        chip.appendChild(x);
+        box.appendChild(chip);
+      });
+    }
+
+    let testSuggestTimer = null;
+    function wireTestField() {
+      const input = document.getElementById('rx-test-input');
+      if (!input) return;
+      renderTestChips();
+      input.oninput = () => {
+        clearTimeout(testSuggestTimer);
+        testSuggestTimer = setTimeout(() => loadTestSuggestions(input.value), 180);
+      };
+      input.onfocus = () => loadTestSuggestions(input.value);
+      input.onkeydown = (e) => {
+        // Enter always commits what is TYPED, never the highlighted suggestion — the
+        // doctor's own words win over the list, every time.
+        if (e.key === 'Enter') { e.preventDefault(); addTest(input.value); }
+        if (e.key === 'Escape') hideTestSuggestions();
+      };
+      // A click elsewhere closes the list; a click INSIDE it must not (mousedown on
+      // the list would blur the input before the click handler could run).
+      input.onblur = () => setTimeout(hideTestSuggestions, 150);
+    }
+
+    function hideTestSuggestions() {
+      const list = document.getElementById('rx-test-suggest');
+      if (list) list.style.display = 'none';
+    }
+
+    async function loadTestSuggestions(query) {
+      const list = document.getElementById('rx-test-suggest');
+      if (!list) return;
+      let items;
+      try {
+        items = await api('GET', `/api/reference/tests?q=${encodeURIComponent(query || '')}`);
+      } catch (_) { hideTestSuggestions(); return; }   // typing must never depend on this
+      const chosen = new Set(testList().map((s) => s.toLowerCase()));
+      const fresh = items.filter((e) => !chosen.has(e.name_en.toLowerCase()));
+      list.innerHTML = '';
+      if (!fresh.length) {
+        // Not an error: it means "type it yourself", which is a supported path.
+        const none = document.createElement('div');
+        none.className = 'suggest-empty';
+        none.textContent = t('No match — press Enter to add what you typed.',
+                             'মিল নেই — যা লিখেছেন তা যোগ করতে Enter চাপুন।');
+        list.appendChild(none);
+      }
+      fresh.forEach((entry) => {
+        const row = document.createElement('button');
+        row.type = 'button';
+        row.className = 'suggest-row';
+        const en = document.createElement('span');
+        en.textContent = entry.name_en;
+        const bn = document.createElement('span');
+        bn.className = 'suggest-bn';
+        bn.textContent = entry.name_bn;
+        row.appendChild(en);
+        row.appendChild(bn);
+        // mousedown, not click: the input's blur fires first and would close the list.
+        row.onmousedown = (e) => { e.preventDefault(); addTest(entry.name_en); };
+        list.appendChild(row);
+      });
+      list.style.display = 'block';
     }
 
   </script>
