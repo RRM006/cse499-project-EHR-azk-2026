@@ -128,7 +128,14 @@ def test_the_listening_hint_stops_telling_an_auto_mode_patient_to_tap():
     """In auto mode the tap still works but is no longer required — asking an elderly
     patient for a needless action is exactly what this cycle is removing."""
     js = kiosk_js()
-    assert "just stop speaking when you are finished" in js
+    # S41 rewrote the wording to LEAD with what the patient should do
+    # ("🎤 You can speak now"), because "Listening..." describes the machine.
+    # The property this test exists for is unchanged and asserted below: the
+    # auto-mode sentence must not ask for a tap.
+    assert "stop when you are finished" in js
+    assert "You can speak now" in js
+    auto_line = [l for l in js.splitlines() if "stop when you are finished" in l][0]
+    assert "tap" not in auto_line.lower(), "auto mode must not ask for a tap"
     assert "বলা শেষ হলে থেমে যান" in js
     assert "tap again when done" in js               # manual mode keeps the old wording
     assert "listeningHint().en" in js

@@ -71,7 +71,16 @@ class Settings(BaseSettings):
     gemini_flash_model: str = "gemini-flash-latest"
     gemini_flash_lite_model: str = "gemini-flash-lite-latest"
     groq_model: str = "llama-3.3-70b-versatile"
-    openrouter_model: str = "meta-llama/llama-3.3-70b-instruct:free"
+    # S41: was "meta-llama/llama-3.3-70b-instruct:free", which OpenRouter has RETIRED.
+    # The key still authenticated, so nothing looked wrong until a call was made and the
+    # provider answered 404 model-not-found — and this is the UNIVERSAL FALLBACK
+    # (ADR-0026), the bucket every module drops to when its own quota is spent. It was
+    # therefore a safety net that would only be discovered missing at the moment it was
+    # needed. Verified live against the OpenRouter model list and by a real completion,
+    # which also came back correctly in Bengali ("জ্বর"), the thing this fallback has to
+    # be able to do. ⚠ `:free` model ids are retired regularly upstream — if this 404s
+    # again, re-run backend/scripts/check_api_keys.py and pick a current `:free` id.
+    openrouter_model: str = "google/gemma-4-31b-it:free"
 
     # --- follow-up loop (M7–M9) ---
     # Loop guardrails from the capstone brief: stop on completeness OR max turns

@@ -46,11 +46,17 @@ def kiosk_html() -> str:
     return resp.text
 
 
-def fn_body(name: str) -> str:
+def shared_js() -> str:
+    resp = client.get("/shared/shared.js")
+    assert resp.status_code == 200
+    return resp.text
+
+
+def fn_body(name: str, source: str | None = None) -> str:
     """One function's body straight out of the served file."""
-    js = kiosk_js()
+    js = kiosk_js() if source is None else source
     marker = f"function {name}("
-    assert marker in js, f"{name}() is gone from the shipped kiosk"
+    assert marker in js, f"{name}() is gone from the shipped source"
     return js.split(marker)[1].split("\n}")[0]
 
 
@@ -262,7 +268,9 @@ def test_the_panel_is_brought_above_the_fold_after_layout_is_current():
     and that helper forces layout BEFORE it scrolls."""
     show = fn_body("showAnswerConfirm")
     assert "bringIntoView(panel)" in show
-    helper = fn_body("bringIntoView")
+    # S41 moved the helper again, from kiosk.js into shared.js, because the medic
+    # intake form needed the identical behaviour. Same property, new home.
+    helper = fn_body("bringIntoView", shared_js())
     assert "void el.offsetHeight;" in helper
     assert helper.index("void el.offsetHeight;") < helper.index("el.scrollIntoView({")
 

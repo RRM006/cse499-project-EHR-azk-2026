@@ -16,6 +16,110 @@
 
 ---
 
+## Session 41 — 2026-08-15 — **The first real-microphone run's findings, fixed: the patient's words stay in their box, the microphone says it is open in words, and "Edit does nothing" turned out to be a scroll** — 1031 → 1056 tests
+- Did: fixed the four defects the human's **real-microphone** run surfaced, deleted the synthetic
+  test visit, and did the half of the API-key rotation a tool can safely do. **One new ADR: 0066.**
+  **No schema, migration, route, service, FHIR, PDF, OTP or auth change** — the only backend edit is
+  one configuration default. **Alembic stays 0014, 18 tables, no new dependency.** **No module
+  changed status; M15 stays 🟨.** ⚠ **No voice/STT/TTS logic changed.**
+- **THE PATIENT'S SPEECH ESCAPED ITS BOX — two causes, both fixed on the base rule.** Bangla and
+  Banglish arrive from the recogniser as long runs with almost no break opportunities (a spoken phone
+  number has none), so `overflow-wrap: anywhere` now applies to **all four docks** at once. The
+  second cause was less obvious: the box is a **flex item**, and a flex item defaults to
+  `min-width: auto`, which refuses to shrink below its content. It is also bounded now
+  (`max-height: 30vh; overflow-y: auto`) and carries `flex: none`, because the default
+  `flex-shrink: 1` was squeezing it back to its minimum the moment an answer got long — the patient
+  saw two lines of their own sentence while the box had room for six.
+- ⚠ **The box must NOT be flex-centred, and that is a rule #1 concern rather than a style one.** A
+  flex container with `align-items: center` and overflowing content pushes the TOP of that content
+  above the scroll origin, **where it cannot be scrolled back to** — the patient would silently lose
+  the beginning of their own answer, invisible and unreachable. `display: block`, and the box scrolls
+  its own newest line into view as they talk. That last scroll is the one thing that legitimately
+  runs on every recognition result, and it is safe only because it moves nothing outside the element;
+  a test pins that no PAGE scroll ever happens there.
+- **ASSISTANT MESSAGES WERE BEING CUT.** `.chat-turn` had no wrapping rule and no `min-width: 0`, so
+  in the narrower S40 left column a long Bangla question spilled out of its card. It now wraps, sizes
+  to its content (`height: auto`), and a test forbids any `max-height`, `overflow: hidden` or
+  `text-overflow: ellipsis` on a bubble — a capped bubble is exactly what hides the end of a
+  question, and the THREAD is the thing that scrolls, not the bubble.
+- **"THE MICROPHONE IS OPEN" IS NOW SAID IN WORDS.** "Listening..." describes the machine; a patient
+  who has never used a computer needs to be told what THEY should do, in the first two words. The
+  wording is now **"🎤 You can speak now — …" / "🎤 এখন কথা বলুন — …"**, changed in the ONE
+  `LISTENING_HINT` constant every dock reads — one edit, four docks, no second implementation. It is
+  a filled banner rather than merely larger red text (colour is never the only carrier), and SPEAKING
+  and PROCESSING get a quieter, deliberately different treatment: "wait" must not look like "talk"
+  across a room. ⚠ The claim is **retracted** the instant it stops being true — `stopListening()`
+  rewrites the hint in the same call that clears the listening class, now pinned by a test, because
+  the UI must communicate state and never fake it.
+- **"CLICKING EDIT DOES NOT WORK" — the button always worked; the form opened where the medic could
+  not see it.** MEASURED at 1280x720: the editor opened at y=461 and its **Save button landed at
+  y=727**, below a 720px fold, inside a case workspace that scrolls independently and was sitting at
+  `scrollTop: 0`. Nothing visible changed and there was no visible way to save — indistinguishable
+  from a dead button. Also verified in the same pass, and all fine: the click is not intercepted,
+  the save round-trips, a reading without its measurement context is still refused, and switching
+  patients does **not** leak the previous patient's values.
+- ⚠ **Smooth scrolling silently did nothing, so the helper now VERIFIES its own result.** Measured:
+  `scrollIntoView({behavior:'smooth'})` left `scrollTop` at 0 even after 1.5 s on that container,
+  while `behavior:'auto'` moved it by exactly the 55px needed. The workspace carries
+  `perspective: 1400px` from the S37 depth layer and Chromium declines to smooth-scroll a scroller in
+  a 3D rendering context. Removing the perspective would trade a real visual regression for an
+  animation, so the animation gives way: attempt smooth, check `isFullyInView()`, finish instantly if
+  it did not land. **`bringIntoView()` also MOVED from kiosk.js into shared.js** — the medic form
+  needed identical behaviour, and a test now pins that exactly ONE definition exists front-end-wide.
+- **THE SYNTHETIC VISIT IS GONE, after being proved deletable rather than assumed to be.** All 8
+  referencing tables were enumerated (21 rows), the repo was searched for the phone number (it
+  appeared only in `agent_docs/` prose), and every test was confirmed to build its own in-memory
+  SQLite so none depends on the dev DB. Backup written first, identity guards re-asserted inside the
+  transaction, `documents` and `prescriptions` counts verified unchanged after. ⚠ **The human's own
+  real-microphone visit was explicitly checked still present** and untouched.
+- **API KEYS — the rotation itself is still the human's**, but `backend/scripts/check_api_keys.py`
+  (NEW) now proves each key authenticates and **never prints, logs or writes a key value**. It
+  immediately found a real problem: `OPENROUTER_MODEL` was `meta-llama/llama-3.3-70b-instruct:free`,
+  which OpenRouter has **RETIRED**. The key authenticated fine, so nothing looked wrong until a call
+  returned 404 — and this is ADR-0026's **universal fallback**, the bucket every module drops to when
+  its own quota is spent, i.e. a safety net that would only be found missing when it was needed. The
+  Gemini bucket was sitting at its daily 429 that same day. Replaced with `google/gemma-4-31b-it:free`,
+  picked from the live model list and verified by a real completion that came back correctly in
+  Bengali ("জ্বর"). All three keys now authenticate.
+- Decided: **ADR-0066** (a)–(m), with three rejections — no private copy of `bringIntoView` in the
+  medic portal; not removing the S37 perspective to make smooth scrolling work; and not fabricating
+  or auto-rotating API keys.
+- Broke / problem: ⚠ **two `.gitignore` rules had NEVER worked.** An inline `#` is not a comment in
+  `.gitignore` — it is part of the pattern — so `*.db.*.bak` and `!*.env.example` each matched
+  nothing, and **six pre-migration database backups are tracked in git** as a result. The patterns
+  are fixed and the new backup is correctly ignored, but `.gitignore` cannot untrack what is already
+  tracked: removing those six from the index is a repo-content decision left to the human. **No
+  secret is exposed** — `backend/.env` has never been committed and no provider key prefix appears in
+  any tracked file or any commit in history, both verified. Also: one transient run showed 10
+  `FileNotFoundError` errors in the documents tests; they did not reproduce in three subsequent full
+  runs and pass in isolation — recorded, not explained.
+- ⚠ **Four pinned test literals were UPDATED, not weakened** (the auto-mode hint wording, the
+  listening banner's size/weight, and two references to the helper that moved). Every intent is
+  preserved and re-stated in place, and the auto-mode test now asserts the PROPERTY directly — "the
+  auto-mode sentence must not ask for a tap" — instead of matching one exact sentence, which is
+  stronger than what it replaced.
+- Verified: **1056 passed, 2 skipped, 0 failures** (was 1031/2). New files:
+  `test_kiosk_containment_s41.py` (15) and `test_medic_intake_editor_s41.py` (8); the S40 file gained
+  2. All new assertions were **proved non-vacuous against the pre-fix HEAD blobs**. Browser: the
+  transcript tested with short/long-Bangla/long-English/Banglish/unbroken-Bangla/unbroken-Latin at
+  1280, 768 and 375 px — **nothing escapes at any width and there is no horizontal page scroll**;
+  assistant bubbles expand rather than clip; the medic Save button now lands in view; the synthetic
+  phone now finds no patient; the doctor portal still shows both EHR buttons and the S39 name
+  provenance. Clean consoles on fresh tabs for all three portals.
+- ⚠ **Real-microphone status — the distinction matters and is kept:** the successful real-mic run is
+  the **HUMAN's**, reported by them and **corroborated** by the dev DB, which holds mic-sourced
+  Bengali utterances ("আমি ব্যথা পেয়েছি") timestamped 2026-08-14 18:08–18:11 on visit 23, a visit
+  that reached `reviewed`. **This session did NOT and could not perform a real-mic verification** —
+  the browser here reports `microphone: denied` with no audio input labels. Nothing above is claimed
+  as agent-verified microphone testing.
+- Deferred: rotating the 3 keys (human-only, and the checker is ready for it); untracking the six
+  committed `.bak` files; **Step S5**; the mid-turn word-loss rule #1 decision; formal **WER**; the
+  Edge run. Appearance remains unclaimed — still no screenshot, since the Browser pane composites no
+  frames here.
+- Next: **a human pass over the kiosk with a real microphone**, checking the one thing only a person
+  can judge — whether the open-microphone banner, the bounded speech box and the three-step strip
+  make the screen read as *simple* to someone who has never used a computer.
+
 ## Session 40 — 2026-08-14 — **A backtick in a comment had killed the whole Medic portal; the patient kiosk becomes TWO COLUMNS with one thing emphasised at a time** — 1005 → 1031 tests
 - Did: root-caused and fixed the reported Medic-portal outage, gave the kiosk the clarity redesign
   (1A–1F), and closed the test gap that let the outage ship. **One new ADR: 0065.** **No backend file

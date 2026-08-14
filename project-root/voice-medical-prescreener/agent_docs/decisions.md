@@ -2295,3 +2295,115 @@ children, elderly patients, people with little schooling, and people who have ne
   genuinely changed: two `grid-template-columns` values on the review grid, and the assertion that
   the forced reflow precedes `scrollIntoView` — now asserted inside the shared helper the reflow
   moved into. Every test's stated intent is preserved and re-stated in place.
+
+---
+
+## ADR-0066 — 2026-08-15 — S41: the patient's words are bounded, the microphone says it is open, and "Edit does nothing" was a scroll
+
+**Context.** The human ran the kiosk with a **real microphone** and reported it worked, together with
+four defects found in the process: the patient's speech escaped its box, assistant messages were
+visually cut, "clicking Edit" on the medic's Intake & Vitals card did nothing, and nothing on screen
+said plainly that the microphone was open. Plus two standing items: a synthetic test visit left in
+the dev DB, and the three API keys pending rotation since S25.
+
+### The patient's own words (a)–(d)
+
+- **(a) Wrapping is not optional for this language mix.** Bangla and Banglish arrive from the
+  recogniser as long runs with few break opportunities, and a spoken phone number has none at all.
+  `overflow-wrap: anywhere` + `word-break: break-word` go on the BASE `.dock-transcript`, so all four
+  docks (phone, OTP, conversation, resume) are covered by one rule. `min-width: 0` is the other half:
+  the box is a flex item, and a flex item defaults to `min-width: auto`, which refuses to shrink
+  below its content — that is the second, less obvious way the text was leaving the card.
+- **(b) The box GROWS, then STOPS and scrolls itself** (`max-height: 30vh; overflow-y: auto`). An
+  unbounded box pushed the microphone and the buttons under it off a short screen, which is the S34
+  defect in a new place. `flex: none` because the default `flex-shrink: 1` squeezed it back to its
+  minimum the moment an answer got long — the patient saw two lines of their own sentence while the
+  box had room for six.
+- **(c) ⚠ It must NOT be a flex-centred box, and this is a rule #1 concern rather than a style one.**
+  A flex container with `align-items: center` and overflowing content pushes the TOP of that content
+  above the scroll origin, where it cannot be scrolled back to. The patient would silently lose the
+  beginning of their own answer — invisible and unreachable. `display: block` also happens to be
+  right for a line that grows downward as someone talks.
+- **(d) The box scrolls its own newest line into view on every recognition result.** This is the one
+  thing that legitimately runs at that rate, and it is safe precisely because it moves nothing
+  outside the element. A PAGE scroll per interim chunk is what makes a kiosk unusable mid-sentence,
+  and a test pins that `bringIntoView`/`scrollIntoView` never appear in the `onresult` handler.
+
+### The microphone says it is open, in words (e)–(f)
+
+- **(e) "Listening..." describes the machine; the patient needs to be told what THEY should do.**
+  The wording became **"🎤 You can speak now — …" / "🎤 এখন কথা বলুন — …"**, changed in the ONE
+  `LISTENING_HINT` constant every dock reads through `listeningHint()`. One edit, four docks, no
+  second implementation and no four copies of the wording to drift apart. Visually it is now a filled
+  banner, not merely larger red text — colour is never the only carrier of a state a patient must not
+  get wrong.
+- **(f) The claim is retracted the moment it stops being true.** `stopListening()` already rewrote
+  the hint back to the tap-to-start wording in the same call that clears the listening class, so the
+  banner cannot outlive the open microphone. That property is now pinned by a test, because the UI
+  must communicate state, never fake it. SPEAKING and PROCESSING get a deliberately different,
+  quieter treatment: "wait" must not look like "talk" across a room.
+
+### "Clicking Edit does not work" (g)–(i)
+
+- **(g) The button always worked; the form opened where the medic could not see it.** MEASURED at
+  1280x720: the editor opened at y=461 and its **Save button landed at y=727**, below a 720px fold,
+  inside a case workspace that scrolls independently and was sitting at `scrollTop: 0`. Nothing the
+  medic could see changed and there was no visible way to save — indistinguishable from a dead
+  button. The fix is a scroll, not a rewire.
+- **(h) ⚠ Smooth scrolling silently did nothing, so the helper now VERIFIES its own result.** Also
+  measured: `scrollIntoView({behavior: 'smooth'})` left `scrollTop` at 0 even after 1.5 s on that
+  container, while the identical call with `behavior: 'auto'` moved it by exactly the 55px required.
+  The workspace carries `perspective: 1400px` from the S37 depth layer, and Chromium declines to
+  smooth-scroll a scroller inside a 3D rendering context. Removing the perspective would trade a real
+  visual regression for an animation, so **the animation gives way**: the helper attempts smooth,
+  then checks `isFullyInView()` and finishes instantly if it did not land. Landing in view is the
+  requirement; smooth is the nicety.
+- **(i) `bringIntoView()` MOVED from kiosk.js into shared.js.** The medic form needed the identical
+  behaviour, and two copies of "scroll this into view" is how two answers to one question start
+  disagreeing. shared.js is loaded by all three portals, and a test pins that exactly **one**
+  definition exists across the entire front end. REJECTED: a private copy in the medic portal.
+
+### Data and configuration (j)–(m)
+
+- **(j) The synthetic visit was deleted only after it was proved deletable**, not because it looked
+  like test data. Every referencing table was enumerated first (21 rows across 8 tables), the repo
+  was searched for the phone number (it appeared only in prose in `agent_docs/`), and every test was
+  confirmed to build its own in-memory SQLite so none depends on the dev DB. A timestamped backup was
+  written first, guards re-asserted the identity of the row inside the transaction, and `documents`
+  and `prescriptions` counts were checked unchanged afterwards. **The human's own real-microphone
+  visit was explicitly verified still present.**
+- **(k) The three API keys cannot be rotated by an agent and were not faked.** Rotation needs a
+  provider login, which is a credential action belonging to the human. What was done instead is the
+  half a tool can do safely: `backend/scripts/check_api_keys.py` proves each configured key
+  authenticates and **never prints, logs or writes a key value** — only its presence, length and the
+  provider's verdict, with error text deliberately not echoed because a rejecting provider sometimes
+  quotes the key back.
+- **(l) That checker immediately found a dead universal fallback.** `OPENROUTER_MODEL` was
+  `meta-llama/llama-3.3-70b-instruct:free`, which OpenRouter has **retired**. The key authenticated
+  fine, so nothing looked wrong until a call returned 404 model-not-found — and this is ADR-0026's
+  universal fallback, the bucket every module drops to when its own quota is spent. It was a safety
+  net that would only be discovered missing at the moment it was needed, and the Gemini bucket was
+  observed sitting at its daily 429 on the same day. Replaced with `google/gemma-4-31b-it:free`,
+  chosen from the live model list and verified by a real completion that came back correctly in
+  Bengali ("জ্বর") — the thing this fallback must actually be able to do. ⚠ `:free` ids are retired
+  upstream regularly; re-run the checker when a 404 appears.
+- **(m) ⚠ Two `.gitignore` rules had never worked.** An inline `#` is NOT a comment in `.gitignore` —
+  it is part of the pattern. `*.db.*.bak` and `!*.env.example` both carried trailing comments, so
+  each matched nothing, and **six pre-migration database backups are consequently tracked in git**.
+  The patterns are fixed (comments moved onto their own lines) and the new backup is correctly
+  ignored, but `.gitignore` cannot untrack what is already tracked: removing those six from the index
+  is a repo-content decision left to the human. No secret is exposed — `backend/.env` has never been
+  committed and no provider key prefix appears in any tracked file or any commit in history, both
+  verified this session.
+
+### What was NOT done
+
+- **No voice/STT/TTS logic changed.** The recogniser, the endpointer, the echo guard, `finalBuffer`,
+  the raw-transcript path and the submit flow are untouched. `kiosk.js` gained one scroll helper and
+  one changed constant; the only edit inside `onresult` scrolls the transcript box.
+- **No schema, migration, route, service, FHIR, PDF, OTP or auth change.** The only backend edit is
+  one configuration default (l).
+- **Four pinned test literals were UPDATED, not weakened** — the auto-mode hint wording, the listening
+  banner's size/weight, and two references to the helper that moved. Each test's stated intent is
+  preserved and re-stated in place, and the auto-mode test now asserts the property directly ("the
+  auto-mode sentence must not ask for a tap") instead of matching one exact sentence.

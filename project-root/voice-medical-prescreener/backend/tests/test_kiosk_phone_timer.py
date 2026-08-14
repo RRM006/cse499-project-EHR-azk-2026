@@ -201,7 +201,12 @@ def test_the_instruction_gets_loud_at_the_moment_it_matters():
     css = kiosk_html()
     block = css.split('body[data-kiosk-state="listening"] #listening-hint,')[1].split("}")[0]
     assert "#resume-hint" in block and "#phone-hint" in block and "#otp-hint" in block
-    assert "font-size: 1.05rem !important" in block
+    # S41 made it a filled banner rather than only larger red text, so a patient who
+    # does not know what a microphone icon means can read the STATE. Still the
+    # loudest thing near the mic, and colour is still not the only carrier.
+    assert "font-size: 1.08rem !important" in block
+    assert "font-weight: 800 !important" in block
+    assert "background: var(--danger-color)" in block
 
 
 def test_the_listening_cue_survives_reduced_motion():

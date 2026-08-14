@@ -6,6 +6,75 @@
 
 **Status keys:** ⬜ Not started · 🟨 In progress · 🟦 Blocked · ✅ Done · ⛔ Retired
 
+**Last updated:** 2026-08-15 (**Session 41 — the four defects the human's REAL-MICROPHONE run
+surfaced are fixed, the synthetic test visit is deleted, and the API keys are now checkable.
+1031 → 1056 tests pass, 2 skipped, 0 failures.** New ADR **0066**.
+⚠ **No schema, migration, route, service, FHIR, PDF, OTP or auth change** — the only backend edit is
+ONE configuration default. **Alembic stays 0014. 18 tables. No new dependency.**
+⚠ **NO MODULE CHANGED STATUS.** **M15 stays 🟨.**
+⚠ **No voice/STT/TTS logic changed** — kiosk.js gained one scroll helper and one changed constant.
+
+**THE PATIENT'S OWN WORDS STAY IN THEIR BOX.** Bangla and Banglish arrive from the recogniser as long
+runs with almost no break opportunities (a spoken phone number has none at all), and the transcript
+card had no wrapping rule — so the patient's speech ran straight out of it. Fixed on the BASE rule so
+all four docks are covered at once, plus `min-width: 0`, which is the less obvious half: the box is a
+flex item and a flex item defaults to `min-width: auto`, refusing to shrink below its content. The
+box is now bounded (`max-height: 30vh`) and scrolls itself, with `flex: none` so it stops being
+squeezed back to its minimum the moment an answer gets long.
+⚠ **And it must NOT be flex-centred** — that is a rule #1 concern, not a style one: a flex container
+with `align-items: center` and overflowing content pushes the TOP of that content above the scroll
+origin, **where it cannot be scrolled back to**, so a patient would silently lose the beginning of
+their own answer. It is `display: block`, and it scrolls its newest line into view as they talk —
+inside the box only, never the page.
+
+**"THE MICROPHONE IS OPEN" IS NOW SAID IN WORDS.** "Listening..." describes the machine; a patient who
+has never used a computer needs to be told what THEY should do, in the first two words. The wording is
+now **"🎤 You can speak now" / "🎤 এখন কথা বলুন"**, changed in the ONE `LISTENING_HINT` constant every
+dock reads through `listeningHint()` — one edit, four docks, no second implementation. It is a filled
+banner rather than merely larger red text, because colour is never the only carrier of a state a
+patient must not get wrong, and SPEAKING/PROCESSING get a deliberately quieter, different treatment:
+"wait" must not look like "talk" across a room.
+⚠ The claim is **retracted the instant it stops being true** — `stopListening()` rewrites the hint in
+the same call that clears the listening class. Now pinned by a test: the UI communicates state, it
+never fakes it.
+
+**"CLICKING EDIT DOES NOT WORK" (MEDIC) WAS A SCROLL, NOT A REWIRE.** The button always worked.
+Measured at 1280x720: the form opened at y=461 and its **Save button landed at y=727**, below a 720px
+fold, inside a case workspace that scrolls independently and was sitting at `scrollTop: 0` — nothing
+the medic could see changed and there was no visible way to save. Everything else in that flow was
+verified healthy in the same pass: the click is not intercepted, the save round-trips, a reading
+without its measurement context is still refused, and switching patients does not leak the previous
+patient's values.
+⚠ **The first fix silently did nothing, and the reason is recorded because it will recur:** smooth
+`scrollIntoView` left `scrollTop` at 0 even after 1.5 s on that container, while `behavior: 'auto'`
+moved it by exactly the 55px needed — the workspace carries `perspective: 1400px` from the S37 depth
+layer, and Chromium declines to smooth-scroll a scroller inside a 3D rendering context. Removing the
+perspective would trade a real visual regression for an animation, so the animation gives way:
+`bringIntoView()` now attempts smooth, checks `isFullyInView()`, and finishes instantly if it did not
+land. It also **moved from kiosk.js into shared.js** — one definition, front-end-wide, pinned.
+
+**THE SYNTHETIC TEST VISIT IS GONE, after being proved deletable rather than assumed to be.** All 8
+referencing tables enumerated first (21 rows), the repo searched for the phone number, every test
+confirmed to build its own in-memory SQLite, a timestamped backup written, identity guards
+re-asserted inside the transaction, and `documents`/`prescriptions` counts verified unchanged
+afterwards. ⚠ The human's own real-microphone visit was explicitly checked still present.
+
+**API KEYS — checked, not rotated.** Rotation needs provider logins and stays the human's. What is new
+is `backend/scripts/check_api_keys.py`, which proves each key authenticates and **never prints, logs
+or writes a key value**. It immediately found a dead safety net: `OPENROUTER_MODEL` pointed at a model
+OpenRouter has **RETIRED**, so ADR-0026's **universal fallback** — the bucket every module drops to
+when its own quota is spent — was returning 404, on a day when the Gemini bucket was already sitting
+at its daily 429. Replaced and verified by a real completion that came back correctly in Bengali.
+
+⚠ **REAL-MICROPHONE STATUS — the distinction is kept deliberately.** The successful real-mic run is
+the **HUMAN's**, reported by them and **corroborated** by the dev DB, which holds `source='mic'`
+Bengali utterances on visit 23 (2026-08-14 18:08–18:11) for a visit that reached `reviewed`. **This
+session did not and could not perform one** — the browser here reports `microphone: denied` with no
+readable audio-input labels. Nothing is claimed as agent-performed microphone testing.
+⚠ **What was NOT verified: APPEARANCE.** Still no screenshot (the Browser pane composites no frames
+here). Everything is measured DOM geometry and computed style across 1280/768/375 px, plus clean
+consoles on fresh tabs for all three portals.
+
 **Last updated:** 2026-08-14 (**Session 40 — the reported Medic-portal outage root-caused and fixed,
 the patient kiosk given its clarity redesign, and the test gap that let the outage ship closed.
 1005 → 1031 tests pass, 2 skipped, 0 failures.** New ADR **0065**.

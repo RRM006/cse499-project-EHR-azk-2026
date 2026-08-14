@@ -113,10 +113,15 @@
     .voice-dock .dock-row .btn { width: 100%; }
     .voice-dock .mic-btn { width: 92px; height: 92px; font-size: 2.1rem; order: -1; }
     .chat-thread { flex: 1; overflow-y: auto; min-height: 0; display: flex; flex-direction: column; gap: 14px; padding: 4px 2px; }
-    .chat-turn { max-width: 84%; border-radius: 14px; padding: 14px 18px; line-height: 1.6; box-shadow: var(--shadow-sm); font-size: 1.12rem; position: relative; }
+    /* S41 — a bubble sizes to its content and never clips it. `min-width: 0` lets it
+       shrink inside the narrower S40 left column; `overflow-wrap: anywhere` breaks the
+       long unbroken Bangla/Banglish runs that were spilling out of the card; and there
+       is deliberately NO height here — a fixed or capped height is what hides the end
+       of an assistant's question, and the thread is already the thing that scrolls. */
+    .chat-turn { max-width: 84%; min-width: 0; height: auto; border-radius: 14px; padding: 14px 18px; line-height: 1.6; box-shadow: var(--shadow-sm); font-size: 1.12rem; position: relative; overflow-wrap: anywhere; }
     .chat-turn.ai { align-self: flex-start; background: var(--bg-white); border: 1px solid var(--border-color); border-top-left-radius: 4px; }
     .chat-turn.patient { align-self: flex-end; background: var(--primary-color); color: #fff; border-top-right-radius: 4px; }
-    .chat-meta { font-size: .66rem; font-weight: 700; text-transform: uppercase; letter-spacing: .04em; margin-bottom: 5px; display: flex; align-items: center; justify-content: space-between; gap: 10px; }
+    .chat-meta { font-size: .66rem; font-weight: 700; text-transform: uppercase; letter-spacing: .04em; margin-bottom: 5px; display: flex; align-items: center; justify-content: space-between; gap: 10px; min-width: 0; }
     .chat-turn.ai .chat-meta { color: var(--secondary-color); }
     .chat-turn.patient .chat-meta { color: rgba(255,255,255,.8); }
     /* KIOSK-3: per-message speaker icon */
@@ -160,7 +165,13 @@
       width: 100%; font-size: .82rem; font-weight: 700; letter-spacing: .04em;
       text-transform: uppercase; color: var(--text-muted);
     }
-    .dock-transcript { width: 100%; min-height: 46px; background: #F4FAF8; border: 1px dashed var(--border-color); border-radius: var(--radius); padding: 11px 16px; font-style: italic; color: var(--text-muted); text-align: center; font-size: 1.05rem; }
+    /* S41 — `overflow-wrap: anywhere` is the load-bearing half and applies to EVERY
+       dock. Bangla and Banglish arrive from the recogniser as long unbroken runs with
+       few break opportunities, and a phone number or a URL has none at all; without
+       this the patient's own words ran straight out of the box. `min-width: 0` matters
+       because this box is a flex item — a flex item defaults to `min-width: auto` and
+       refuses to shrink below its content, which is the other half of the same escape. */
+    .dock-transcript { width: 100%; min-width: 0; min-height: 46px; background: #F4FAF8; border: 1px dashed var(--border-color); border-radius: var(--radius); padding: 11px 16px; font-style: italic; color: var(--text-muted); text-align: center; font-size: 1.05rem; overflow-wrap: anywhere; word-break: break-word; }
     .dock-row { display: flex; align-items: center; gap: 18px; width: 100%; justify-content: space-between; }
 
     /* ============================================================
@@ -174,10 +185,26 @@
        this is the one thing on screen that IS real — it is what the machine believes
        the patient just said, and getting it wrong ends up in a medical record. */
     .voice-dock .dock-transcript {
-      min-height: 118px; display: flex; align-items: center;
-      font-size: 1.3rem; font-style: normal; font-weight: 600; line-height: 1.55;
-      color: var(--text-color); background: #F7FCFB; text-align: left;
+      min-height: 118px; font-size: 1.3rem; font-style: normal; font-weight: 600;
+      line-height: 1.55; color: var(--text-color); background: #F7FCFB; text-align: left;
       border: 2px dashed #B8E5DC; padding: 14px 16px;
+      /* S41 — the box GROWS to fit, then STOPS and scrolls its own content.
+         ⚠ `display: block`, NOT the flex centring this rule shipped with in S40: a
+         flex container with `align-items: center` and overflowing content pushes the
+         top of that content ABOVE the scroll origin, where it cannot be scrolled back
+         to. A patient would have lost the beginning of their own answer — invisible and
+         unreachable — which is a rule #1 display defect, not a style preference.
+         Top-aligned is also simply right for a line that grows downward as they talk.
+         `max-height` in `vh` so the mic and the buttons under it can never be pushed
+         off a short screen by a long answer. */
+      display: block; max-height: 30vh; overflow-y: auto; overflow-x: hidden;
+      /* `flex: none` because this box is a flex item in the dock column, and the
+         default `flex-shrink: 1` was squeezing it back to its min-height the moment the
+         answer got long — the patient saw two lines of their own sentence while the box
+         had room for six. It keeps its natural height up to max-height; if that leaves
+         the dock short, the DOCK scrolls (it already does), which costs the patient
+         nothing because the mic sits above the fold either way. */
+      flex: none;
     }
     /* Listening: the box the patient is filling turns red-edged and lit, in step with
        the microphone and the robot's face. No new state — this is the same
@@ -263,11 +290,39 @@
     }
     /* The hint under the dock is the sentence that tells the patient what to do NOW, so
        it grows and takes the accent colour at the exact moment it matters. */
+    /* S41 — "THE MICROPHONE IS OPEN" must be readable as a STATE, not as a sentence.
+       A patient who does not know what a microphone icon means gets a filled banner in
+       the one place the instruction lives, and the wording itself now leads with
+       "🎤 You can speak now" (LISTENING_HINT in kiosk.js — one constant, all four
+       docks). Colour is never the only carrier: the banner has a border, a filled
+       background, larger bold type, and the text says it outright.
+       ⚠ These four ids are the SAME elements the mode/arming hints write to, so the
+       kiosk can never be showing "you can speak now" while the mic is shut — when
+       stopListening() runs it rewrites the text to the tap-to-start hint and the
+       listening attribute is gone in the same frame. */
     body[data-kiosk-state="listening"] #listening-hint,
     body[data-kiosk-state="listening"] #resume-hint,
     body[data-kiosk-state="listening"] #phone-hint,
     body[data-kiosk-state="listening"] #otp-hint {
-      font-size: 1.05rem !important; color: var(--danger-color) !important; font-weight: 700 !important;
+      display: block !important; font-size: 1.08rem !important; font-weight: 800 !important;
+      color: #fff !important; background: var(--danger-color); border: 2px solid #B91C1C;
+      border-radius: 999px; padding: 9px 18px; text-align: center;
+      box-shadow: 0 0 0 4px rgba(220,38,38,.16);
+    }
+    /* SPEAKING and PROCESSING must not be mistakable for LISTENING. Quiet, unfilled,
+       and a different colour family — the patient should be able to tell "wait" from
+       "talk" across a room, which is the distinction that actually matters. */
+    body[data-kiosk-state="speaking"] #listening-hint,
+    body[data-kiosk-state="speaking"] #resume-hint,
+    body[data-kiosk-state="speaking"] #phone-hint,
+    body[data-kiosk-state="speaking"] #otp-hint,
+    body[data-kiosk-state="processing"] #listening-hint,
+    body[data-kiosk-state="processing"] #resume-hint,
+    body[data-kiosk-state="processing"] #phone-hint,
+    body[data-kiosk-state="processing"] #otp-hint {
+      display: block !important; font-size: .92rem !important; font-weight: 700 !important;
+      color: var(--primary-color) !important; background: #ECF5F3;
+      border: 1px solid #B8E5DC; border-radius: 999px; padding: 7px 16px; text-align: center;
     }
     /* ⚠ The reduced-motion opt-out for this pulse lives in the ONE
        @media (prefers-reduced-motion: reduce) block further down, with the avatar's.

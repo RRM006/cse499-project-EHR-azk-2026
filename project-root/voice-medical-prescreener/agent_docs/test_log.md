@@ -72,6 +72,125 @@ transcribed by hand (the "ground truth"). Record the model + machine each time.
 
 ## Test entries (newest first)
 
+## 2026-08-15 — Session 41 — real-mic findings fixed, synthetic visit removed, API keys checked — suite **1031 → 1056**
+
+- **Setup:** Windows 11, Python 3.14 venv, `pytest backend/tests/` with `PYTHONIOENCODING=utf-8`.
+  Browser verification in the in-app Chromium against a real uvicorn on **port 8001**; the human's own
+  server on 8000 was neither stopped nor touched (the app is port-agnostic — all front-end paths are
+  relative).
+- **Result: 1056 passed, 2 skipped, 0 failed** (was 1031 passed / 2 skipped). **+25 tests, all new.**
+  Targeted runs: the two new files 15/15 and 8/8; S40 layout 24/24 after being re-pointed at the
+  moved helper; documents suites 5/5 in isolation.
+
+### Real-microphone status — the two things kept apart
+
+- **HUMAN-VERIFIED (theirs, not this session's):** the human reports a successful real-microphone run
+  of the kiosk. The dev DB **corroborates** it independently: visit 23 carries `source='mic'` Bengali
+  utterances — e.g. "আমি ব্যথা পেয়েছি" — timestamped 2026-08-14 18:08–18:11, and that visit reached
+  `reviewed`, i.e. it travelled kiosk → submit → medic → doctor. 151 mic-sourced patient turns exist
+  across the whole DB.
+- **NOT verified here, and not claimed:** this environment **cannot** do a real-mic run. Measured in
+  the browser: `navigator.permissions.query({name:'microphone'})` → **`denied`**, and
+  `enumerateDevices()` returns 1 audio input with **0 readable labels**. No statement in this log or
+  the changelog claims agent-performed microphone testing.
+- What was strengthened instead: automated pins on the mic STATE TRANSITIONS — that the open-mic
+  wording exists in both languages, that it lives in one constant all four docks read, that listening
+  is a filled banner and not colour alone, that speaking/processing look different, and that
+  `stopListening()` retracts the claim in the same call that clears the listening class.
+
+### The four defects, and how each was measured
+
+1. **Patient speech escaped its box.** Tested in the browser with six inputs — short Bangla, long
+   Bangla, long English, Banglish, a 46-char unbroken Bangla run and an 88-char unbroken Latin run —
+   at **1280, 768 and 375 px**. Before: no wrapping rule at all. After: `escapesRight: false` and
+   `overflowsDock: false` for **every** case at **every** width, no page horizontal scroll anywhere.
+   The box grows to its 216px allowance (was being flex-shrunk to 121px), scrolls internally, and
+   `scrollTranscriptToEnd()` puts the newest line in view (`newestLineVisible: true`).
+2. **Assistant messages were cut.** After: three bubbles including a 96-char unbroken string and a
+   long Bangla clinical question — `clippedV: false`, `clippedH: false` on all, thread does not
+   scroll horizontally, and the thread's right edge (822px) stays clear of the dock (832px).
+3. **"Clicking Edit does not work" (medic).** Measured the actual cause: editor at y=461–772 with its
+   **Save button at y=727 in a 720px viewport**, workspace `scrollTop: 0`. Also measured, and all
+   healthy: `document.elementFromPoint()` returns the button itself (nothing intercepts the click),
+   `pointerEvents: auto`, the handler fires, the editor opens with fields pre-filled, a context-less
+   reading is refused with the correct Bangla message, a valid save round-trips
+   ("6.5 mmol/L (117 mg/dL) · খালি পেটে"), and switching patients shows **blank** glucose/height for
+   the next patient (`leaked: false`). After the fix: workspace scrolls exactly **55px**, Save button
+   at y=674, `editorFullyInView: true`.
+4. **⚠ The fix did not work on the first attempt, and the reason is recorded because it will recur.**
+   `scrollIntoView({behavior:'smooth'})` left `scrollTop` at **0 even after 1500 ms**; the identical
+   call with `behavior:'auto'` moved it to **55** immediately. Cause: the case workspace carries
+   `perspective: 1400px` (S37 depth layer) and Chromium declines to smooth-scroll a scroller inside a
+   3D rendering context. `bringIntoView()` now verifies with `isFullyInView()` and falls back.
+
+### New coverage
+
+- `backend/tests/test_kiosk_containment_s41.py` — **15 tests**: wrapping on the base rule (all four
+  docks), `min-width: 0`, the bounded self-scrolling box, **that it is not flex-centred** (the
+  unreachable-top trap), `flex: none`, the internal auto-scroll, that nothing page-level scrolls per
+  recognition result, bubble wrapping, that no rule caps a bubble's height, the open-mic wording in
+  both languages, one-constant-four-docks, the filled banner, speaking/processing being distinct, and
+  the retraction on stop.
+- `backend/tests/test_medic_intake_editor_s41.py` — **8 tests**: the editor is brought into view,
+  only after it is shown, the portal loads the shared helper and carries no private copy, every field
+  is re-seeded on each open, absent values are written as empty rather than skipped, the re-open
+  pairing, and **two backend scoping tests** — a reading recorded for one patient must not appear on
+  another, and correcting one must not change the other.
+- **Every new assertion was proved NON-VACUOUS** against the pre-fix HEAD blobs: `.dock-transcript`
+  and `.chat-turn` had no `overflow-wrap`, kiosk.js had no "You can speak now" and no
+  `scrollTranscriptToEnd`, and `openIntakeEditor` had no `bringIntoView`.
+
+### Synthetic test visit — removed, after being proved removable
+
+- Target: patient 13 / visit 22, phone `+8801999000111`, `in_progress`, never submitted.
+- Enumerated every referencing table first: utterances 9, module_events 5, case_profiles 1,
+  followup_questions 1, otp_codes 1, audit_log 3, visits 1, patients 1 — **21 rows, 8 tables**.
+- Confirmed no test depends on the dev DB (every fixture builds its own in-memory SQLite) and the
+  phone appears nowhere in code or fixtures — only in `agent_docs/` prose.
+- Backup `backend/prescreener.db.pre-s41-synthetic-cleanup.bak` written first; identity guards
+  re-asserted inside the transaction.
+- After: exactly those 21 rows gone; **`documents` (24) and `prescriptions` (5) unchanged**; the
+  human's real-mic visit 24 and patient 14 verified still present; the medic portal now answers
+  "ঐ নম্বরে কোনো রোগী পাওয়া যায়নি" for that phone.
+
+### API keys — checked, not rotated
+
+- `backend/scripts/check_api_keys.py` (NEW) probes each configured provider with one tiny completion
+  and reports **only** presence, length and verdict. **No key value is ever printed, logged or
+  written**, and provider error text is deliberately not echoed (a rejecting provider sometimes
+  quotes the key back).
+- First run: `GEMINI_API_KEY` PASS (valid, free daily quota exhausted — 429), `GROQ_API_KEY` PASS,
+  **`OPENROUTER_API_KEY` FAIL — "key accepted but the configured MODEL was not found"**.
+- Diagnosis: `meta-llama/llama-3.3-70b-instruct:free` has been **retired** by OpenRouter (checked
+  against the live model list: 411 models, 15 `:free`, that id absent). This is ADR-0026's universal
+  fallback, so it was a dead safety net. Replaced with `google/gemma-4-31b-it:free`, verified by a
+  real completion returning correct Bengali ("জ্বর").
+- Second run: **all 3 configured credentials authenticate**, exit code 0.
+- **Rotation itself remains manual and human-only** (it needs provider logins). No key was created,
+  changed or fabricated.
+
+### Secret-exposure audit
+
+- `backend/.env` is untracked and **has never been committed** (`git log --all -- '*.env'` → nothing
+  outside the example).
+- No provider key prefix (`AIzaSy`, `gsk_`, `sk-or-v1-`, `csk-`, `sk-ant-`) appears in any tracked
+  file or in any commit in history — 0 hits for all five, both `--cached` and `-S` over all history.
+- The tracked `backend/.env.example` contains key NAMES only, no real values.
+- ⚠ **Found:** two `.gitignore` rules never worked (an inline `#` is part of the pattern, not a
+  comment), so **six pre-migration `.bak` databases are tracked in git**. Patterns fixed; the six
+  already-tracked files remain tracked because `.gitignore` cannot untrack — left as a decision.
+
+### Browser verification (what was and was NOT proven)
+
+- Kiosk, medic and doctor each loaded in a **fresh tab with no console messages at all**.
+- Medic: login → dashboard, live clock (`১:০২:০৪ AM`), Edit's Save button in view, deleted phone
+  finds nothing. Doctor: both `⬇ EHR রেকর্ড (FHIR)` and `(PDF)` present, S39 name provenance intact.
+- ⚠ **NOT proven: appearance.** No screenshot was possible — the Browser pane is not displayed, so it
+  composites no frames. Everything above is DOM geometry and computed style.
+- ⚠ **NOT proven: the microphone** — see the top of this entry.
+
+
+
 ## 2026-08-14 — Session 40 — the Medic-portal outage, the kiosk two-column redesign — suite **1005 → 1031**
 
 - **Setup:** Windows 11, Python 3.14 venv, `pytest backend/tests/` with `PYTHONIOENCODING=utf-8`.

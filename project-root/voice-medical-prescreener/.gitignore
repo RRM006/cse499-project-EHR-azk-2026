@@ -1,7 +1,8 @@
 # --- Secrets (NEVER commit) ---
 .env
 *.env
-!*.env.example          # the example template IS committed (key names only)
+# the example template IS committed (key names only)
+!*.env.example
 
 # --- Python ---
 .venv/
@@ -13,7 +14,10 @@ __pycache__/
 
 # --- Local data / DB (synthetic or consented samples only; not committed) ---
 *.db
-*.db.*.bak            # pre-migration DB backups (e.g. prescreener.db.pre-0003.bak)
+# pre-migration DB backups (e.g. prescreener.db.pre-0003.bak)
+# NOTE: an inline `#` is NOT a comment in .gitignore - it is part of the pattern.
+# Both of these rules were silently matching nothing until S41 found it.
+*.db.*.bak
 *.sqlite
 *.sqlite3
 data/

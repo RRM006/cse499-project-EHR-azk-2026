@@ -4,6 +4,30 @@
 > re-exploring the whole project each session. Update it whenever you add or move
 > a folder/file. Keep each note to one line.
 
+**Last updated:** 2026-08-15 (**Session 41 — TWO new test files, ONE new script, and a new
+`backend/scripts/` directory. No new production module; the only backend edit is one configuration
+default. Alembic stays 0014, 18 tables, no new dependency.**)
+
+**NEW in S41 — the real-mic findings, the medic scroll fix, the key checker (ADR-0066):**
+
+| File | What it is |
+|---|---|
+| `backend/scripts/check_api_keys.py` + `__init__.py` | **NEW directory + script.** Proves every configured LLM key authenticates, for the rotation that has been pending since S25. ⚠ **A key value is never printed, logged or written** — only presence, length and verdict, and provider error text is deliberately not echoed because a rejecting provider sometimes quotes the key back. Reads the SAME registry the app uses (`core/llm_providers`), so it cannot drift from what the pipeline calls. Run: `.venv\Scripts\python.exe -m backend.scripts.check_api_keys`. It immediately found that OpenRouter had retired the configured fallback model. |
+| `backend/tests/test_kiosk_containment_s41.py` | **NEW (15).** Nothing the patient says may escape its box, and the microphone must say it is open in words. Pins the wrapping on the BASE dock rule (all four docks), `min-width: 0`, the bounded self-scrolling transcript, **that it is not flex-centred** (a flex-centred overflowing box puts the top of the patient's own answer above the scroll origin, unreachable), that no page-level scroll happens per recognition result, that no rule caps a chat bubble's height, and that `stopListening()` retracts the open-mic claim. |
+| `backend/tests/test_medic_intake_editor_s41.py` | **NEW (8).** "Clicking Edit does not work" — it always worked; the form opened below the fold with its Save button off-screen. Pins that the editor is brought into view AFTER being shown, that the portal uses the shared helper and carries no private copy, that every field is re-seeded on each open (a field left out would keep the previous patient's value in a form about to be saved onto someone else), plus two BACKEND scoping tests: one patient's reading must not appear on another, and correcting one must not change the other. |
+
+**Changed in S41:** `frontend_shared/shared.js` — gained `bringIntoView()` (**moved** here from
+kiosk.js so all three portals share one definition) and `isFullyInView()`; the helper now **verifies**
+its smooth scroll landed, because Chromium silently declines to smooth-scroll a scroller inside a 3D
+rendering context and the medic workspace carries `perspective: 1400px`. `frontend/kiosk.html` —
+transcript wrapping/bounding/self-scrolling, chat-bubble wrapping, and the filled open-microphone
+banner. `frontend/kiosk.js` — `scrollTranscriptToEnd()`, the local helper removed, and the
+`LISTENING_HINT` wording. `frontend_medic/index.html` — `openIntakeEditor()` brings the form into
+view. `backend/app/core/config.py` — the retired OpenRouter fallback model replaced.
+`.gitignore` — ⚠ two rules that had **never worked** (an inline `#` is part of the pattern, not a
+comment) repaired; six already-tracked `.bak` databases remain tracked because .gitignore cannot
+untrack.
+
 **Last updated:** 2026-08-14 (**Session 40 — TWO new test files, no new production file, and NO
 backend file touched at all. Alembic stays 0014, 18 tables, no new dependency.**)
 

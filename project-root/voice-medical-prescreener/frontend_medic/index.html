@@ -713,12 +713,24 @@
       document.getElementById('in-glucose').value =
         p.blood_glucose_mmol_l != null ? p.blood_glucose_mmol_l : '';
       document.getElementById('in-glucose-context').value = p.blood_glucose_context || '';
-      document.getElementById('intake-editor').style.display = 'flex';
+      const editor = document.getElementById('intake-editor');
+      editor.style.display = 'flex';
       intakeOpen = true;
       ['in-height', 'in-weight'].forEach((id) => {
         document.getElementById(id).oninput = liveBmi;
       });
       liveBmi();
+      /* S41 — the reported "clicking Edit does not work".
+         It always worked. MEASURED in a browser at 1280x720: the form opened at y=461
+         and its SAVE BUTTON landed at y=727, below a 720px fold, inside a case
+         workspace that scrolls independently and was sitting at scrollTop 0. The medic
+         clicked Edit, nothing they could see changed, and there was no visible way to
+         save — which is indistinguishable from a dead button.
+         Same defect and the same proven fix as the kiosk read-back panel (S34): the
+         layout is stale in this tick, so bringIntoView() forces it current before
+         scrolling. `block: 'nearest'` means a form that was already fully visible does
+         not move at all — a medic on a tall screen sees no jump. */
+      bringIntoView(editor);
     }
 
     function closeIntakeEditor() {

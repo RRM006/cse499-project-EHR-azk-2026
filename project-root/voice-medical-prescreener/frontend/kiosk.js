@@ -358,35 +358,34 @@ function scrollThreadToEnd(thread) {
   thread.scrollTop = thread.scrollHeight;
 }
 
-/* S40 (1C) — bring the thing the patient must act on into view, and NOTHING else.
+/* S41 — the transcript box follows the patient's own words down.
 
-   The requirement is "the patient should not need to search the page"; the failure mode
-   is a kiosk that yanks itself around while an elderly patient is mid-sentence. Both are
-   handled by ONE choice: `block: 'nearest'`. An element already on screen does not move
-   at all — the browser scrolls only far enough to reveal something that is genuinely
-   out of view — so this is silent during normal use on a wide screen (where the S40 two
-   columns already put the assistant and the patient's panel on screen together) and only
-   does anything on a stacked/short screen, which is exactly where it was needed.
+   The box is bounded (`max-height: 30vh`) and scrolls internally, so on a long answer
+   the newest words would otherwise sit below its bottom edge while the patient is still
+   talking — they would be watching a box that had stopped updating.
 
-   ⚠ Deliberately NOT called per recognition result. Scrolling on every interim chunk is
-   how a page becomes unusable while someone is talking, and the dock is already in view
-   from the moment the microphone opened.
-
-   `void offsetHeight` first: in the same tick that a panel is un-hidden the layout is
-   still stale and scrollIntoView() is a silent no-op — the measured reason
-   showAnswerConfirm() has carried that line since S34. */
-function bringIntoView(target, { block = 'nearest' } = {}) {
-  const el = typeof target === 'string' ? document.getElementById(target) : target;
-  if (!el || !el.scrollIntoView) return;
-  void el.offsetHeight;
-  const reduced = window.matchMedia
-    && window.matchMedia('(prefers-reduced-motion: reduce)').matches;
-  try {
-    el.scrollIntoView({ block, inline: 'nearest', behavior: reduced ? 'auto' : 'smooth' });
-  } catch (_) {
-    el.scrollIntoView();   // older engine: no options object, still lands in view
-  }
+   ⚠ Scrolls the BOX, never the page. This is the one thing that legitimately runs on
+   every recognition result, and it is safe precisely because it moves nothing outside
+   this element. `scrollTop` rather than smooth scrolling: this fires several times a
+   second, and an animation queue at that rate lags behind the text it is chasing. */
+function scrollTranscriptToEnd(el) {
+  if (!el) return;
+  if (el.scrollHeight > el.clientHeight) el.scrollTop = el.scrollHeight;
 }
+
+/* S40 (1C) — automatic movement is `bringIntoView()`, which lives in shared.js since
+   S41 (the medic intake form needed the identical behaviour, and two copies of "scroll
+   this into view" is how two answers to one question start disagreeing). shared.js is
+   loaded by kiosk.html before this file.
+
+   Why `block: 'nearest'` matters here specifically: an element already on screen does
+   not move at all, so on the S40 two-column layout — where the assistant and the
+   patient panel are both visible — this is silent, and it only acts on a stacked or
+   short screen, which is where it was needed.
+
+   ⚠ Deliberately NOT called per recognition result. Scrolling the PAGE on every interim
+   chunk is how a page becomes unusable while someone is talking. The transcript BOX
+   scrolls its own newest line into view instead — see scrollTranscriptToEnd(). */
 
 /* P1-2: JS-written UI text must survive the EN/BN toggle — writing through here keeps
    the element's data-en/data-bn in sync so applyLanguage() re-renders it correctly. */
@@ -1191,10 +1190,19 @@ const ARMING_HINT = {
 /* S4: in auto mode the patient is not asked to tap to FINISH either — the turn ends on
    silence. The tap still works (it submits immediately), it is just no longer required,
    so telling an elderly patient to "tap again" would be asking for a needless action. */
+/* S41 — the sentence now LEADS with the fact, not with the machine's status.
+   "Listening..." describes what the kiosk is doing; a patient who has never used a
+   computer needs to be told what THEY should do, and told it in the first two words.
+   The instruction that follows is unchanged, because it is still true and still the
+   only thing they need after that.
+   ⚠ Written HERE, in the one constant every dock reads through listeningHint(), so the
+   phone screen, the OTP screen, the conversation and the resume dock all say the same
+   thing without a second implementation and without four copies of the wording. */
 const LISTENING_HINT = {
-  auto: { en: 'Listening... just stop speaking when you are finished',
-          bn: 'শুনছি... বলা শেষ হলে থেমে যান' },
-  manual: { en: 'Listening... tap again when done', bn: 'শুনছি... বলা শেষে আবার চাপুন' },
+  auto: { en: '🎤 You can speak now — stop when you are finished',
+          bn: '🎤 এখন কথা বলুন — বলা শেষ হলে থেমে যান' },
+  manual: { en: '🎤 You can speak now — tap again when done',
+            bn: '🎤 এখন কথা বলুন — বলা শেষে আবার চাপুন' },
 };
 
 function modeHint(dock) {
@@ -1421,6 +1429,7 @@ function initRecognition() {
     el.dataset.en = live;
     el.dataset.bn = live;
     el.textContent = live;
+    scrollTranscriptToEnd(el);   // S41: the newest words stay visible inside the box
     // S34: on the identification docks, show the DIGITS this utterance means so far.
     renderDigitPreview(live);
     /* S36 (ADR-0057), Finding 4: eleven valid digits ARE the end of this turn. Checked

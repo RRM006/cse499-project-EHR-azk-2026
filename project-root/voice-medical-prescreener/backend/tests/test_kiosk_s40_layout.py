@@ -52,8 +52,14 @@ def top_level_css() -> str:
     return re.sub(r"@media[^{]*\{(?:[^{}]*\{[^{}]*\})*[^{}]*\}", "", css)
 
 
-def fn_body(name: str) -> str:
-    js = kiosk_js()
+def shared_js() -> str:
+    resp = client.get("/shared/shared.js")
+    assert resp.status_code == 200
+    return resp.text
+
+
+def fn_body(name: str, source: str | None = None) -> str:
+    js = kiosk_js() if source is None else source
     return js.split(f"function {name}(")[1].split("\n}\n")[0]
 
 
@@ -226,15 +232,53 @@ def test_the_rail_stays_on_screen_while_the_answers_scroll():
 def test_the_page_moves_only_when_something_is_actually_out_of_view():
     """`block: 'nearest'` is the whole restraint: an element already on screen does not
     move at all. Anything else ('start'/'center') would yank the page on every turn."""
-    body = fn_body("bringIntoView")
+    body = fn_body("bringIntoView", shared_js())
     assert "block = 'nearest'" in body
     assert "'start'" not in body and "'center'" not in body
 
 
 def test_automatic_movement_respects_a_patient_who_asked_for_less_motion():
-    body = fn_body("bringIntoView")
+    body = fn_body("bringIntoView", shared_js())
     assert "prefers-reduced-motion: reduce" in body
-    assert "reduced ? 'auto' : 'smooth'" in body
+    # S41: the ternary became an early return, because a patient who asked for less
+    # motion must also skip the smooth attempt AND the verification timer that chases
+    # it — not merely be handed a different `behavior` string.
+    assert "if (reduced) { scroll('auto'); return; }" in body
+
+
+def test_smooth_scrolling_is_verified_rather_than_assumed():
+    """MEASURED, not theoretical: on the medic case workspace a smooth `scrollIntoView`
+    left `scrollTop` at 0 even after 1.5s, while the same call with `behavior: 'auto'`
+    moved it by exactly the 55px needed. That container carries `perspective: 1400px`
+    from the S37 depth layer, and Chromium silently declines to smooth-scroll a scroller
+    inside a 3D rendering context.
+
+    Landing in view is the requirement; smooth is the nicety. So the helper checks
+    whether the smooth attempt actually worked and finishes the job instantly if not."""
+    body = fn_body("bringIntoView", shared_js())
+    assert "isFullyInView(el)" in body, "the smooth attempt is not verified"
+    assert "scroll('auto')" in body
+    check = fn_body("isFullyInView", shared_js())
+    # The window alone is not enough: an element scrolled out of a short scroller that
+    # itself sits mid-page still reports a rect inside the window.
+    assert "getBoundingClientRect()" in check
+    assert "overflowY" in check, "scrollable ancestors are not checked"
+
+
+def test_there_is_exactly_one_bring_into_view_in_the_whole_frontend():
+    """S41 moved it out of kiosk.js into shared.js because the medic intake form needed
+    the identical behaviour. Two copies of "scroll this into view" is how two answers to
+    one question start disagreeing, so the COUNT is pinned, not just the presence."""
+    sources = {
+        "/shared/shared.js": shared_js(),
+        "/shared/staff.js": client.get("/shared/staff.js").text,
+        "/kiosk.js": kiosk_js(),
+        "/medic/": client.get("/medic/").text,
+        "/doctor/": client.get("/doctor/").text,
+    }
+    definitions = {n: src.count("function bringIntoView(") for n, src in sources.items()}
+    assert sum(definitions.values()) == 1, f"expected one definition, got {definitions}"
+    assert definitions["/shared/shared.js"] == 1, "it belongs in the file all three load"
 
 
 def test_the_microphone_opening_brings_its_own_dock_into_view():

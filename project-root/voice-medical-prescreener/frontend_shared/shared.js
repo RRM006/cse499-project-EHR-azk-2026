@@ -187,6 +187,63 @@ async function api(method, path, body) {
   return res.json();
 }
 
+/* S41 — bring the thing the user must act on into view, and NOTHING else.
+
+   Introduced in S40 inside kiosk.js; MOVED here in S41 because the medic portal needed
+   exactly the same behaviour and a second copy is how two answers to one question start
+   disagreeing. shared.js is loaded by all three portals, so there is one implementation.
+
+   `block: 'nearest'` is the whole restraint: an element already fully on screen does not
+   move at all, and one that is partly below the fold is scrolled just far enough to
+   reveal it. That is what makes this safe to call on every state change — it is silent
+   unless it is needed.
+
+   `void offsetHeight` first: in the same tick an element is un-hidden the layout is
+   still stale and scrollIntoView() is a silent no-op. That is a MEASURED defect, twice
+   over — the kiosk read-back panel (S34) and the medic intake form (S41). */
+function bringIntoView(target, { block = 'nearest' } = {}) {
+  const el = typeof target === 'string' ? document.getElementById(target) : target;
+  if (!el || !el.scrollIntoView) return;
+  void el.offsetHeight;
+  const reduced = window.matchMedia
+    && window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+  const scroll = (behavior) => {
+    try { el.scrollIntoView({ block, inline: 'nearest', behavior }); }
+    catch (_) { el.scrollIntoView(); }   // older engine: no options object
+  };
+  if (reduced) { scroll('auto'); return; }
+  scroll('smooth');
+  /* ⚠ Smooth scrolling is a NICETY; landing in view is the REQUIREMENT, so the result
+     is verified rather than assumed. MEASURED on the medic case workspace: a smooth
+     `scrollIntoView` left `scrollTop` at 0 even after 1.5 s, while the identical call
+     with `behavior: 'auto'` moved it by exactly the 55px needed. That container carries
+     `perspective: 1400px` from the S37 depth layer, and Chromium silently declines to
+     smooth-scroll a scroller in a 3D rendering context. Removing the perspective would
+     trade a real visual regression for an animation, so the animation is what gives way.
+     If the smooth attempt has not landed, finish the job instantly. */
+  setTimeout(() => { if (!isFullyInView(el)) scroll('auto'); }, 320);
+}
+
+/* Is every edge of `el` inside the window AND inside each scrollable ancestor?
+
+   The window test alone is not enough: an element scrolled out of a short scroller that
+   itself sits mid-page still reports a rect inside the window, so it would look visible
+   while being clipped. Each scrollable ancestor is therefore checked too. */
+function isFullyInView(el) {
+  const rect = el.getBoundingClientRect();
+  const viewH = window.innerHeight || document.documentElement.clientHeight;
+  const viewW = window.innerWidth || document.documentElement.clientWidth;
+  if (rect.top < 0 || rect.bottom > viewH || rect.left < 0 || rect.right > viewW) return false;
+  for (let p = el.parentElement; p && p !== document.body; p = p.parentElement) {
+    const style = window.getComputedStyle(p);
+    const scrolls = /(auto|scroll|overlay)/.test(style.overflowY + style.overflowX);
+    if (!scrolls) continue;
+    const box = p.getBoundingClientRect();
+    if (rect.top < box.top || rect.bottom > box.bottom) return false;
+  }
+  return true;
+}
+
 function showError(msg) {
   const banner = document.getElementById('error-banner');
   if (!banner) { alert(msg); return; }
