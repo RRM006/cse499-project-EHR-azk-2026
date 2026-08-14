@@ -22,11 +22,13 @@ from backend.app.db.database import get_db
 from backend.app.db.models import CaseProfile, Patient, Visit
 from backend.app.schemas.profile import CaseProfileOut
 from backend.app.services.audit import audit
+from backend.app.services.identity import name_provenance
 from backend.app.services.intake import run_intake
 from backend.app.services.llm_client import LLMCallError
 from backend.app.services.otp import OtpSendError, issue_otp, verify_otp_code
 from backend.app.services.requirements import missing_requirements
 from backend.app.schemas.patient import (
+    NameProvenanceOut,
     OtpVerifyOut,
     OtpVerifyRequest,
     PatientLookupOut,
@@ -67,7 +69,7 @@ def lookup_patient(payload: PatientLookupRequest, db: Session = Depends(get_db))
     clinic = repo.get_default_clinic(db)
     try:
         patient, created = repo.get_or_create_patient_by_phone(
-            db, clinic_id=clinic.id, phone=payload.phone, display_name=payload.display_name
+            db, clinic_id=clinic.id, phone=payload.phone
         )
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=str(exc))
@@ -154,6 +156,9 @@ def get_visit(visit_uuid: str, db: Session = Depends(get_db)) -> VisitDetailWith
     if visit.patient_id:
         patient = db.get(Patient, visit.patient_id)
         detail.patient = PatientOut.model_validate(patient) if patient else None
+        # S39 (ADR-0064): the name and the answer to "where did it come from?" leave
+        # the server together. Derived from audit_log — nothing new is stored.
+        detail.name_provenance = NameProvenanceOut(**name_provenance(db, patient, visit))
     return detail
 
 

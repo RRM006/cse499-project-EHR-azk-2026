@@ -258,6 +258,14 @@ _GLUCOSE_CONTEXTS: tuple[dict, ...] = (
 )
 
 
+#: S39 (ADR-0064) — the contexts a medic may RECORD a reading against. A subset of
+#: the chart on purpose: HbA1c is a percentage, not mmol/L, and is a laboratory
+#: result rather than the bedside reading taken at intake, so it stays a reference row
+#: with no input beside it. Kept here, next to the chart itself, so the storable set
+#: can never drift from the published set it is a subset of.
+RECORDABLE_GLUCOSE_CONTEXTS: tuple[str, ...] = ("fasting", "ogtt_2h", "random")
+
+
 def glucose_reference() -> dict:
     """The full glucose reference chart. Takes NO patient value, by design.
 
@@ -267,6 +275,7 @@ def glucose_reference() -> dict:
     """
     return {
         "contexts": [dict(c, bands=list(c["bands"])) for c in _GLUCOSE_CONTEXTS],
+        "recordable": list(RECORDABLE_GLUCOSE_CONTEXTS),
         "disclaimer": REFERENCE_DISCLAIMER,
         "disclaimer_bn": REFERENCE_DISCLAIMER_BN,
     }

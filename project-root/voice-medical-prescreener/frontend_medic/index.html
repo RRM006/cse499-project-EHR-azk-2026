@@ -313,7 +313,7 @@
         meta[0].textContent = dhakaDateTime(note.created_at);
         meta[1].textContent = note.author_name || '';
         row.querySelector('.queue-item-name').textContent =
-          note.patient_name || t('(no name)', '(নাম নেই)');
+          patientNameLabel(note.patient_name);   // S39: one wording for an absent name
         row.querySelector('.note-body').textContent = note.body;   // human text — textContent
         const actions = row.querySelector('div:last-child');
         const openBtn = document.createElement('button');
@@ -587,9 +587,13 @@
       if (p.weight_kg === null || p.weight_kg === undefined) missing.push(t('weight', 'ওজন'));
       if (p.height_cm === null || p.height_cm === undefined) missing.push(t('height', 'উচ্চতা'));
       if (!p.bp) missing.push(t('blood pressure', 'রক্তচাপ'));
+      if (p.blood_glucose_mmol_l === null || p.blood_glucose_mmol_l === undefined) {
+        missing.push(t('blood sugar', 'রক্তে সুগার'));
+      }
 
       const anyRecorded = !!(p.display_name || age || p.weight_kg != null
-                             || p.height_cm != null || p.bp);
+                             || p.height_cm != null || p.bp
+                             || p.blood_glucose_mmol_l != null);
       const field = (label, control, hint) =>
         `<label style="display:flex; flex-direction:column; gap:3px;">
            <span style="font-size:.68rem; font-weight:700; text-transform:uppercase; color:var(--text-muted);">${label}</span>
@@ -616,6 +620,9 @@
            </div>
          </div>
          <div id="intake-line" style="font-size:.92rem;"></div>
+         <!-- S39 (ADR-0064): the name is never shown without where it came from. -->
+         <div id="intake-name-origin" style="font-size:.76rem; font-weight:600;"></div>
+         <div id="intake-sugar" style="font-size:.88rem;"></div>
          <div id="bmi-readout" style="font-size:.84rem;"></div>
          <div id="intake-missing" style="font-size:.78rem; font-weight:600; color:var(--warning-color);"></div>
          <div class="explainer" id="glucose-panel" style="display:none;"></div>
@@ -640,6 +647,23 @@
                `<input class="input-field" id="in-bp" style="padding:7px 10px; width:100%;" placeholder="120/80">`,
                      t('systolic / diastolic, mmHg', 'সিস্টোলিক / ডায়াস্টোলিক, mmHg'))}
            </div>
+           <!-- S39 (ADR-0064): the blood-sugar reading. The two controls sit together
+                and are sent together — the server refuses one without the other,
+                because a number with no measurement context cannot be read safely
+                later. No band is computed here or anywhere: the published chart is one
+                click away under 🩸 Sugar reference and the medic reads one against the
+                other (rule #2). -->
+           <div style="display:grid; grid-template-columns:repeat(auto-fit, minmax(150px, 1fr)); gap:10px;">
+             ${field(t('Blood sugar', 'রক্তে সুগার'), num('in-glucose', 0.1, 59.9, 0.1, t('e.g. 5.6', 'যেমন ৫.৬')),
+                     t('mmol/L', 'mmol/L'))}
+             ${field(t('Measured as', 'কীভাবে মাপা'),
+               `<select class="input-field" id="in-glucose-context" style="padding:7px 10px; width:100%;">
+                  <option value="">${t('Select…', 'নির্বাচন করুন…')}</option>
+                  ${Object.keys(GLUCOSE_CONTEXTS).map((code) =>
+                    `<option value="${code}">${glucoseContextLabel(code)}</option>`).join('')}
+                </select>`,
+                     t('required with a reading', 'রিডিং দিলে এটি আবশ্যক'))}
+           </div>
            <!-- A5: recomputed as the medic types, from the SERVER's one definition of
                 the bands — so the portal cannot drift from the reference module. -->
            <div id="bmi-live" style="font-size:.82rem; min-height:1.2em;"></div>
@@ -654,7 +678,7 @@
 
       // Patient/staff text — textContent only, never innerHTML.
       const parts = [];
-      parts.push(p.display_name || t('(no name)', '(নাম নেই)'));
+      parts.push(patientNameLabel(p.display_name));   // S39: one "not provided" label
       if (p.external_ref) parts.push(p.external_ref);
       parts.push(age ? `${t('Age', 'বয়স')} ${age}` : `${t('Age', 'বয়স')} —`);
       if (p.sex) parts.push(genderLabel(p.sex));
@@ -662,12 +686,20 @@
       parts.push(p.weight_kg != null ? `${p.weight_kg} kg` : `${t('Weight', 'ওজন')} —`);
       parts.push(p.bp ? `BP ${p.bp}` : 'BP —');
       document.getElementById('intake-line').textContent = parts.join('  ·  ');
+      // S39: on its own line, because it is the one intake value that is meaningless
+      // without the sentence beside it saying HOW it was measured.
+      const sugarLine = document.getElementById('intake-sugar');
+      const sugarText = glucoseText(p.blood_glucose_mmol_l, p.blood_glucose_context);
+      sugarLine.textContent = sugarText
+        ? `🩸 ${t('Blood sugar', 'রক্তে সুগার')}: ${sugarText}`
+        : `🩸 ${t('Blood sugar', 'রক্তে সুগার')}: ${t('not recorded', 'রেকর্ড করা হয়নি')}`;
       document.getElementById('intake-missing').textContent =
         missing.length ? `⚠ ${t('Still to record', 'এখনো রেকর্ড করা বাকি')}: ${missing.join(', ')}` : '';
 
+      renderNameProvenance('intake-name-origin', (currentCase.detail || {}).name_provenance);
       showBmi('bmi-readout', p.weight_kg, p.height_cm);
       document.getElementById('intake-toggle').onclick = () => openIntakeEditor(p, age);
-      document.getElementById('glucose-toggle').onclick = toggleGlucosePanel;
+      document.getElementById('glucose-toggle').onclick = () => toggleGlucosePanel('glucose-panel');
       if (intakeOpen) openIntakeEditor(p, age);
     }
 
@@ -678,6 +710,9 @@
       document.getElementById('in-height').value = p.height_cm != null ? p.height_cm : '';
       document.getElementById('in-weight').value = p.weight_kg != null ? p.weight_kg : '';
       document.getElementById('in-bp').value = p.bp || '';
+      document.getElementById('in-glucose').value =
+        p.blood_glucose_mmol_l != null ? p.blood_glucose_mmol_l : '';
+      document.getElementById('in-glucose-context').value = p.blood_glucose_context || '';
       document.getElementById('intake-editor').style.display = 'flex';
       intakeOpen = true;
       ['in-height', 'in-weight'].forEach((id) => {
@@ -708,92 +743,16 @@
       }, 250);
     }
 
-    /* A6 — the glucose reference. The human asked for "a diabetic limit"; there is no
-       such single number, so this shows the published chart WITH the measurement
-       context each row depends on, and says in both languages that it is a reference,
-       not a diagnosis. Nothing here reads a patient value (rule #2). */
-    let glucoseRef = null;
-    async function toggleGlucosePanel() {
-      const panel = document.getElementById('glucose-panel');
-      const open = panel.style.display === 'none';
-      panel.style.display = open ? 'block' : 'none';
-      if (!open) return;
-      if (!glucoseRef) {
-        panel.textContent = t('Loading reference…', 'রেফারেন্স আসছে…');
-        try { glucoseRef = await api('GET', '/api/reference/glucose'); }
-        catch (e) { panel.textContent = e.message; return; }
-      }
-      renderGlucosePanel();
-    }
+    /* S39 (ADR-0064): the glucose reference panel MOVED to frontend_shared/staff.js.
 
-    function renderGlucosePanel() {
-      const panel = document.getElementById('glucose-panel');
-      if (!panel || !glucoseRef || panel.style.display === 'none') return;
-      panel.innerHTML = '';
-      const head = document.createElement('div');
-      head.style.cssText = 'font-weight:800; color:var(--primary-color); margin-bottom:4px;';
-      head.textContent = '🩸 ' + t('Blood glucose — reference values',
-                                   'রক্তে গ্লুকোজ — রেফারেন্স মান');
-      panel.appendChild(head);
+       It was medic-only, and S39 gave the doctor a blood-sugar VALUE on their case
+       screen — a number with no chart beside it, on the screen where it is actually
+       interpreted. Copying ~70 lines of published clinical thresholds into a second
+       portal is precisely the drift this codebase keeps removing, so the panel became
+       shared (like showBmi) and both portals mount the SAME one.
 
-      const lead = document.createElement('div');
-      lead.style.cssText = 'margin-bottom:8px;';
-      lead.textContent = t(
-        'There is no single "diabetic limit". Which numbers apply depends entirely on how the sample was taken.',
-        'একটিমাত্র "ডায়াবেটিসের সীমা" বলে কিছু নেই। কোন মান প্রযোজ্য তা পুরোপুরি নির্ভর করে নমুনা কীভাবে নেওয়া হয়েছে তার উপর।');
-      panel.appendChild(lead);
-
-      glucoseRef.contexts.forEach((ctx) => {
-        const block = document.createElement('div');
-        block.style.cssText = 'margin-bottom:9px; padding-left:9px; border-left:2px solid var(--border-color);';
-        const name = document.createElement('div');
-        name.style.cssText = 'font-weight:700;';
-        name.textContent = t(ctx.name_en, ctx.name_bn);
-        block.appendChild(name);
-        const req = document.createElement('div');
-        req.style.cssText = 'font-size:.7rem; color:var(--text-muted); margin-bottom:3px;';
-        req.textContent = t(ctx.requires_context_en, ctx.requires_context_bn);
-        block.appendChild(req);
-        ctx.bands.forEach((band) => {
-          const row = document.createElement('div');
-          row.style.fontSize = '.72rem';
-          row.textContent = `• ${t(band.label_en, band.label_bn)}: ${bandRange(band)}`;
-          block.appendChild(row);
-        });
-        const note = t(ctx.note_en, ctx.note_bn);
-        if (note) {
-          const n = document.createElement('div');
-          n.style.cssText = 'font-size:.7rem; color:var(--text-muted); margin-top:3px; font-style:italic;';
-          n.textContent = note;
-          block.appendChild(n);
-        }
-        const src = document.createElement('div');
-        src.style.cssText = 'font-size:.64rem; color:var(--text-muted); margin-top:2px;';
-        src.textContent = ctx.source;
-        block.appendChild(src);
-        panel.appendChild(block);
-      });
-
-      const disc = document.createElement('div');
-      disc.style.cssText = 'font-size:.72rem; font-weight:700; color:var(--warning-color);';
-      disc.textContent = '⚠️ ' + (currentLanguage === 'bn'
-        ? glucoseRef.disclaimer_bn : glucoseRef.disclaimer);
-      panel.appendChild(disc);
-    }
-
-    /* One band -> "< 6.0 mmol/L (108 mg/dL)" etc. Both unit systems, because both are
-       in daily use in Bangladeshi labs and converting at the bedside invites errors. */
-    function bandRange(band) {
-      if (band.low_percent != null || band.high_percent != null) {
-        if (band.low_percent == null) return `< ${band.high_percent + 0.1}%`;
-        if (band.high_percent == null) return `≥ ${band.low_percent}%`;
-        return `${band.low_percent}–${band.high_percent}%`;
-      }
-      const pair = (mmol, mg) => `${mmol} mmol/L (${mg} mg/dL)`;
-      if (band.low_mmol_l == null) return `≤ ${pair(band.high_mmol_l, band.high_mg_dl)}`;
-      if (band.high_mmol_l == null) return `≥ ${pair(band.low_mmol_l, band.low_mg_dl)}`;
-      return `${band.low_mmol_l}–${pair(band.high_mmol_l, band.high_mg_dl)}`;
-    }
+       Still exactly as A6 built it: `glucose_reference()` takes no patient value, and
+       nothing here reads one (rule #2). */
 
     async function saveIntake(btn) {
       const p = (currentCase.detail || {}).patient;
@@ -827,6 +786,25 @@
         body.height_cm = h;
       }
       if (val('in-bp')) body.bp = val('in-bp');
+      /* S39 (ADR-0064): reading and context, together or not at all. Checked here so
+         the medic is told which box to fill in rather than being handed the server's
+         400 — but the server enforces it regardless, because this check is a
+         courtesy and the record's integrity cannot depend on a courtesy. */
+      const sugar = val('in-glucose');
+      const sugarContext = val('in-glucose-context');
+      if (sugar || sugarContext) {
+        const g = Number(sugar);
+        if (!sugar || !isFinite(g) || g <= 0 || g >= 60) {
+          return showError(t('Enter a blood sugar reading in mmol/L.',
+                             'mmol/L এককে রক্তে সুগারের মান লিখুন।'));
+        }
+        if (!sugarContext) {
+          return showError(t('Choose how the blood sugar was measured — the reading cannot be stored without it.',
+                             'রক্তে সুগার কীভাবে মাপা হয়েছে তা নির্বাচন করুন — এটি ছাড়া মান সংরক্ষণ করা যাবে না।'));
+        }
+        body.blood_glucose_mmol_l = g;
+        body.blood_glucose_context = sugarContext;
+      }
       if (Object.keys(body).length === 1) {
         return showError(t('Nothing to update.', 'পরিবর্তনের কিছু নেই।'));
       }
@@ -926,7 +904,7 @@
       tickClock();
       renderTriageInfo();
       renderQueueRefreshState();
-      renderGlucosePanel();
+      renderGlucosePanel('glucose-panel');
     }
 
     async function submitForward() {
@@ -996,49 +974,11 @@
       return map[key] ? t(map[key].en, map[key].bn) : (sex || '—');
     }
 
-    /* P2-2: medic edits Name/Age/Gender (auto-filled from the conversation when
-       the patient stated them; a staff edit here is final — AI never overwrites). */
-    async function saveIdentity() {
-      const p = (postrefSnap.case.detail || {}).patient;
-      if (!p) return;
-      const name = document.getElementById('ident-name').value.trim();
-      const ageRaw = document.getElementById('ident-age').value.trim();
-      const gender = document.getElementById('ident-gender').value;
-      const body = { editor_id: PORTAL.userId };
-      if (name) body.display_name = name;
-      if (ageRaw) {
-        const age = parseInt(ageRaw, 10);
-        if (!isFinite(age) || age <= 0 || age >= 130) {
-          return showError(t('Enter a valid age in years.', 'বছরে সঠিক বয়স লিখুন।'));
-        }
-        body.age_years = age;
-      }
-      if (gender) body.sex = gender;
-      if (!body.display_name && !body.age_years && !body.sex) {
-        return showError(t('Nothing to update.', 'পরিবর্তনের কিছু নেই।'));
-      }
-      try {
-        postrefSnap.case.detail.patient =
-          await api('PATCH', `/api/patients/${p.id}/vitals`, body);
-        renderPostReferral();
-      } catch (e) { showError(e.message); }
-    }
-
-    async function saveWeight() {
-      const p = (postrefSnap.case.detail || {}).patient;
-      if (!p) return;
-      const raw = document.getElementById('weight-input').value.trim();
-      const weight = Number(raw);
-      if (!raw || !isFinite(weight) || weight <= 0 || weight >= 500) {
-        return showError(t('Enter a valid weight in kg.', 'কেজিতে সঠিক ওজন লিখুন।'));
-      }
-      try {
-        postrefSnap.case.detail.patient =
-          await api('PATCH', `/api/patients/${p.id}/vitals`,
-                    { weight_kg: weight, editor_id: PORTAL.userId });
-        renderPostReferral();
-      } catch (e) { showError(e.message); }
-    }
+    /* S39 (ADR-0064): saveIdentity() and saveWeight() lived here and went with the
+       duplicate editors above. Identity and vitals are now edited in exactly ONE
+       place - the Intake & Vitals form in the case workspace, before the referral
+       (saveIntake) - which is the only form that covers every field. There is no
+       longer a screen from which a medic can change half of them. */
 
     function renderPostReferral() {
       if (!postrefSnap) return;
@@ -1069,36 +1009,34 @@
          <div class="card" style="display:flex; flex-direction:column; gap:8px;">
            <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:4px;">
              <h3 style="font-size:1rem; color:var(--primary-color);">👤 ${t('Patient Details', 'রোগীর তথ্য')}</h3>
-             <button class="btn btn-secondary" id="identity-edit-btn" style="padding:5px 12px; font-size:.78rem;">✏️ ${t('Edit Details', 'তথ্য সম্পাদনা')}</button>
+             <!-- S39 (ADR-0064) - the two editors that used to sit here are GONE, and
+                  this line is what replaced them.
+
+                  They were a leftover from before S37, when the vitals editor existed
+                  ONLY on this screen and a case therefore reached the doctor with no
+                  weight and no BP. S37 moved the editing into the case workspace,
+                  BEFORE the referral, where it belongs - but left these behind, so the
+                  portal ended up with two forms writing the same `patients` row through
+                  the same PATCH, and this was the weaker of the two: it could edit
+                  name/age/gender/weight and NOT height, BP or blood sugar. A medic
+                  correcting a weight here and a height there is how two screens start
+                  disagreeing about one patient.
+
+                  This screen is now a read-only snapshot of what was forwarded. -->
+             <span style="font-size:.76rem; color:var(--text-muted);">${t(
+               'Recorded before the referral - reopen the case from the queue to change anything.',
+               'রেফারালের আগে রেকর্ড করা - পরিবর্তন করতে তালিকা থেকে কেসটি আবার খুলুন।')}</span>
            </div>` +
            row(t('Name', 'নাম'), 'pr-name') +
            row(t('Phone', 'ফোন'), 'pr-phone') +
-           row(t('Age', 'বয়স'), 'pr-age') +
+           row(t('Age', 'বয়স'), 'pr-age') +
            row(t('Gender', 'লিঙ্গ'), 'pr-gender') +
-          `<div id="identity-editor" style="display:none; gap:6px; align-items:center; flex-wrap:wrap; padding:8px; background:#F4FAF8; border-radius:8px;">
-             <input class="input-field" id="ident-name" style="width:190px; padding:6px 10px;" placeholder="${t('Name', 'নাম')}">
-             <input class="input-field" id="ident-age" type="number" min="1" max="129" style="width:95px; padding:6px 10px;" placeholder="${t('Age', 'বয়স')}">
-             <select class="input-field" id="ident-gender" style="width:140px; padding:6px 10px;">
-               <option value="">${t('Gender…', 'লিঙ্গ…')}</option>
-               <option value="male">${t('Male', 'পুরুষ')}</option>
-               <option value="female">${t('Female', 'মহিলা')}</option>
-               <option value="other">${t('Other', 'অন্যান্য')}</option>
-             </select>
-             <button class="btn btn-primary" style="padding:5px 12px; font-size:.78rem;" onclick="saveIdentity()">${t('Save', 'সংরক্ষণ')}</button>
-             <button class="btn btn-secondary" style="padding:5px 12px; font-size:.78rem;" onclick="document.getElementById('identity-editor').style.display='none'">${t('Cancel', 'বাতিল')}</button>
-           </div>` +
-          `<div style="display:flex; gap:10px; font-size:.9rem; align-items:center;">
-             <span style="min-width:140px; font-weight:600; color:var(--text-muted);">${t('Weight', 'ওজন')}</span>
-             <span id="pr-weight"></span>
-             <span id="weight-editor" style="display:none; gap:6px; align-items:center;">
-               <input class="input-field" id="weight-input" type="number" min="1" max="499" step="0.1" style="width:110px; padding:6px 10px;" placeholder="kg">
-               <button class="btn btn-primary" style="padding:5px 12px; font-size:.78rem;" onclick="saveWeight()">${t('Save', 'সংরক্ষণ')}</button>
-               <button class="btn btn-secondary" style="padding:5px 12px; font-size:.78rem;" onclick="document.getElementById('weight-editor').style.display='none'">${t('Cancel', 'বাতিল')}</button>
-             </span>
-             <button class="btn btn-secondary" id="weight-edit-btn" style="padding:5px 12px; font-size:.78rem;">✏️ ${t('Edit', 'সম্পাদনা')}</button>
-           </div>` +
+           row(t('Weight', 'ওজন'), 'pr-weight') +
            row(t('Height', 'উচ্চতা'), 'pr-height') +
            row(t('Blood Pressure', 'রক্তচাপ'), 'pr-bp') +
+           // S39: the doctor is about to receive this, so the reading travels with the
+           // measurement context that is what makes it mean anything.
+           row(t('Blood sugar', 'রক্তে সুগার'), 'pr-sugar') +
           // S38: the doctor is about to receive this summary, so it carries the BMI
           // the medic saw — derived here as everywhere else, never a stored copy.
           `<div id="pr-bmi" style="font-size:.85rem;"></div>
@@ -1122,7 +1060,7 @@
       // Dynamic values via textContent (never innerHTML — LLM/staff text).
       document.getElementById('postref-doctor').textContent =
         `${t('Case forwarded to', 'কেস প্রেরণ করা হয়েছে')}: ${postrefSnap.doctorName}`;
-      document.getElementById('pr-name').textContent = p.display_name || '—';
+      document.getElementById('pr-name').textContent = patientNameLabel(p.display_name);
       document.getElementById('pr-phone').textContent = p.external_ref || '—';
       document.getElementById('pr-age').textContent = age;
       document.getElementById('pr-gender').textContent = genderLabel(p.sex);
@@ -1131,19 +1069,10 @@
       document.getElementById('pr-height').textContent =
         p.height_cm != null ? `${p.height_cm} cm` : '—';
       document.getElementById('pr-bp').textContent = p.bp || '—';
+      document.getElementById('pr-sugar').textContent =
+        glucoseText(p.blood_glucose_mmol_l, p.blood_glucose_context)
+        || t('not recorded', 'রেকর্ড করা হয়নি');
       showBmi('pr-bmi', p.weight_kg, p.height_cm);
-      document.getElementById('weight-edit-btn').onclick = () => {
-        document.getElementById('weight-input').value = p.weight_kg != null ? p.weight_kg : '';
-        document.getElementById('weight-editor').style.display = 'inline-flex';
-      };
-      // P2-2: identity editor prefills with the current values.
-      document.getElementById('identity-edit-btn').onclick = () => {
-        document.getElementById('ident-name').value = p.display_name || '';
-        document.getElementById('ident-age').value =
-          p.birth_year ? String(new Date().getFullYear() - p.birth_year) : '';
-        document.getElementById('ident-gender').value = (p.sex || '').toLowerCase();
-        document.getElementById('identity-editor').style.display = 'inline-flex';
-      };
 
       const riskBox = document.getElementById('pr-risk');
       if (risk) {

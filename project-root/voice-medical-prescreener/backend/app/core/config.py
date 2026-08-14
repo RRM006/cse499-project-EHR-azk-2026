@@ -16,6 +16,12 @@ BACKEND_DIR = Path(__file__).resolve().parents[2]
 ENV_FILE = BACKEND_DIR / ".env"
 DEFAULT_SQLITE_PATH = BACKEND_DIR / "prescreener.db"
 DEFAULT_DOCUMENTS_DIR = BACKEND_DIR / "data" / "documents"
+# S39 (ADR-0064): the font the EHR PDF embeds. Shipped WITH the repo rather than
+# resolved from the operating system, because the same record must render identically
+# on Windows and Arch — and because a box with no Bengali font installed would
+# otherwise produce a medical document with the patient's own words mangled.
+# Noto Sans Bengali covers Bengali AND Latin, so one file serves the whole document.
+DEFAULT_PDF_FONT = BACKEND_DIR.parent / "assets" / "fonts" / "NotoSansBengali-Regular.ttf"
 
 # Kiosk turn-taking modes (ADR-0047/0048). "auto" = voice-first hands-free loop;
 # "manual" = the original tap-to-talk path, never deleted.
@@ -204,6 +210,12 @@ class Settings(BaseSettings):
         "", validation_alias=AliasChoices("document_output_path", "documents_dir")
     )
 
+    # S39: override the TTF the EHR PDF embeds. Leave empty for the shipped Noto Sans
+    # Bengali. Any replacement must cover BOTH Bengali and Latin and carry the OpenType
+    # tables Bengali shaping needs — services/ehr_pdf refuses to render rather than
+    # emit a document whose Bangla is wrong.
+    pdf_font_path: str = ""
+
     @property
     def resolved_voice_loop(self) -> str:
         """The validated kiosk turn-taking mode. Case-insensitive; anything
@@ -230,6 +242,10 @@ class Settings(BaseSettings):
     @property
     def resolved_documents_dir(self) -> Path:
         return Path(self.documents_dir) if self.documents_dir else DEFAULT_DOCUMENTS_DIR
+
+    @property
+    def resolved_pdf_font(self) -> Path:
+        return Path(self.pdf_font_path) if self.pdf_font_path else DEFAULT_PDF_FONT
 
 
 @lru_cache

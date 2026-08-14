@@ -377,10 +377,17 @@ def test_both_portals_can_record_a_height():
     assert "height_cm" in MEDIC and "height_cm" in DOCTOR
 
 
+# ⚠ S39 (ADR-0064) moved the glucose panel from the medic portal into the SHARED
+# staff.js so the doctor — who is the one interpreting the reading S39 added — sees
+# the same chart rather than a second copy of published thresholds. These three tests
+# are unchanged in what they assert; only the file they read moved. See
+# test_staff_portal_s39.test_the_glucose_chart_lives_in_exactly_one_place.
+
+
 def test_the_glucose_panel_refuses_to_be_a_single_number():
     """A6: the human asked for 'a diabetic limit'. Shipping one would be the most
     dangerous thing in this session — the panel shows the chart and says why."""
-    body = _fn_body(MEDIC, "function renderGlucosePanel")
+    body = _fn_body(STAFF_JS, "function renderGlucosePanel")
     assert 'There is no single "diabetic limit"' in body
     assert "requires_context_en" in body, "the bands are shown without their preconditions"
     assert "ctx.source" in body, "no source is quoted for a clinical threshold"
@@ -390,7 +397,7 @@ def test_the_glucose_panel_refuses_to_be_a_single_number():
 def test_the_glucose_panel_never_reads_a_patient_value():
     """Rule #2: it is a wall chart, not an interpreter. Nothing about the open case
     may reach it."""
-    body = _fn_body(MEDIC, "function renderGlucosePanel")
+    body = _fn_body(STAFF_JS, "function renderGlucosePanel")
     for forbidden in ("currentCase", "patient", "weight_kg", "profile"):
         assert forbidden not in body, f"the glucose chart reads {forbidden}"
 
@@ -398,7 +405,7 @@ def test_the_glucose_panel_never_reads_a_patient_value():
 def test_glucose_bands_carry_both_unit_systems():
     """Both mmol/L and mg/dL are in daily use in Bangladeshi labs; converting at the
     bedside invites exactly the error this is meant to prevent."""
-    body = _fn_body(MEDIC, "function bandRange")
+    body = _fn_body(STAFF_JS, "function bandRange")
     assert "mmol/L" in body and "mg/dL" in body
 
 

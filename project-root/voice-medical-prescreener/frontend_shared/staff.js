@@ -724,6 +724,46 @@ function bmiBandLabel(code) {
   return entry ? t(entry.en, entry.bn) : (code || '—');
 }
 
+/* --- S39 (ADR-0064): the medic's blood-sugar reading ------------------------------
+
+   Codes on the wire, labels here — the same split TIER_LABELS and BMI_BANDS follow
+   (ADR-0030 item e). What is NOT here is any threshold: the numbers that decide what
+   a reading means live in ONE place, `services/clinical_reference`, and are shown as
+   the published chart beside the value. This map is only how to say "fasting" twice.
+
+   ⚠ The context is never optional in the UI, because it is never optional in the
+   record: the server refuses a value without one. A fasting 6.5 and a random 6.5 are
+   different facts, and a number stored without saying which it was cannot be read
+   safely by anyone afterwards. */
+const GLUCOSE_CONTEXTS = {
+  fasting: { en: 'Fasting (8h+ no food)', bn: 'খালি পেটে (৮ ঘণ্টা+)' },
+  ogtt_2h: { en: '2 hours after 75g OGTT', bn: '৭৫ গ্রাম OGTT-এর ২ ঘণ্টা পর' },
+  random:  { en: 'Random / any time', bn: 'যেকোনো সময়' },
+};
+
+function glucoseContextLabel(code) {
+  const entry = GLUCOSE_CONTEXTS[code];
+  return entry ? t(entry.en, entry.bn) : (code || '—');
+}
+
+/* mg/dL per mmol/L, for DISPLAY only. Both unit systems are in daily use in
+   Bangladeshi labs and converting at the bedside invites errors — the same reason the
+   reference chart prints both. Only the stored mmol/L value is ever sent anywhere.
+
+   ⚠ This MUST equal `clinical_reference.MMOL_TO_MGDL`. It is the one number in this
+   file that also exists on the server, so a drift would print a reading in mg/dL that
+   disagreed with the chart directly beneath it. A test asserts the two agree. */
+const MMOL_TO_MGDL = 18.0;
+
+/** "6.5 mmol/L (117 mg/dL) · Fasting (8h+ no food)" — value and context, never a band. */
+function glucoseText(value, context) {
+  if (value === null || value === undefined || value === '') return '';
+  const num = Number(value);
+  if (!isFinite(num)) return '';
+  const mgdl = Math.round(num * MMOL_TO_MGDL);
+  return `${num} mmol/L (${mgdl} mg/dL) · ${glucoseContextLabel(context)}`;
+}
+
 async function showBmi(targetId, weight, height) {
   const box = document.getElementById(targetId);
   if (!box) return;
@@ -762,6 +802,162 @@ async function showBmi(targetId, weight, height) {
   box.appendChild(bands);
   box.appendChild(note);
 }
+
+/* --- S39 (ADR-0064): where the patient's NAME came from -------------------------
+
+   The reported defect: a medic opened a case for a patient who had said nothing
+   about a name, and the portal showed one. It was not invented — the patients row is
+   keyed by phone number, so a name typed by a colleague during an EARLIER visit is
+   attached to the person, not to the visit, and every later case inherits it.
+
+   That inheritance is correct (a returning patient is the same person). Presenting it
+   as though it had been established in the case on screen is not. So the name is now
+   always rendered WITH its origin, from the server's derived `name_provenance` —
+   never re-derived here, and never guessed: `unknown` is displayed as unknown.
+
+   Renders into `targetId` and returns nothing. An absent block is not an error: a
+   record with no name says so through patientNameLabel() and needs no second line. */
+function renderNameProvenance(targetId, prov) {
+  const box = document.getElementById(targetId);
+  if (!box) return;
+  box.textContent = '';
+  box.style.color = '';
+  if (!prov || !prov.has_name) return;
+
+  const when = prov.recorded_at ? dhakaDateTime(prov.recorded_at) : null;
+  let text;
+  if (prov.source === 'staff') {
+    text = prov.actor_name
+      ? t(`Name entered by ${prov.actor_name}`, `নাম লিখেছেন ${prov.actor_name}`)
+      : t('Name entered by clinic staff', 'নাম লিখেছেন ক্লিনিক কর্মী');
+  } else if (prov.source === 'ai') {
+    text = t('Name taken by the AI from what the patient said',
+             'রোগীর কথা থেকে এআই নামটি নিয়েছে');
+  } else {
+    // Written before S39, or through the kiosk lookup, which was never audited.
+    // Saying "we do not know" is the honest answer and the whole reason this exists.
+    box.style.color = 'var(--warning-color)';
+    box.textContent = 'ⓘ ' + t('Origin of this name is not recorded — please confirm it with the patient.',
+                               'এই নামটি কোথা থেকে এসেছে তা লেখা নেই — রোগীর সঙ্গে মিলিয়ে নিন।');
+    return;
+  }
+  if (when) text += t(` on ${when}`, ` — ${when}`);
+  /* The line the bug was really about. `from_this_visit` is null when the origin
+     visit is unknown, and a null must NOT print "an earlier visit" — that would be
+     the same kind of confident guess this whole change removes. */
+  if (prov.from_this_visit === false) {
+    box.style.color = 'var(--warning-color)';
+    text = '⚠ ' + text + t(' — during an EARLIER visit, not this one.',
+                           ' — এটি আগের একটি ভিজিটে, এই ভিজিটে নয়।');
+  } else {
+    box.style.color = 'var(--text-muted)';
+    text = 'ⓘ ' + text;
+  }
+  box.textContent = text;
+}
+
+
+/* --- S39 (ADR-0064): the glucose reference chart, shared by BOTH staff portals ----
+
+   Moved here from frontend_medic/index.html. The medic records the reading; the
+   DOCTOR is the one who interprets it, and before S39 the chart existed only on the
+   medic's screen. Rather than a second copy of published clinical thresholds in a
+   second portal — the exact drift this codebase keeps removing — there is one panel
+   and each portal mounts it.
+
+   A6's rules are unchanged, and they are why this is a CHART and not an answer:
+   `glucose_reference()` takes no patient value, this function never reads one, and
+   the panel says out loud that there is no single "diabetic limit" because which
+   numbers apply depends entirely on how the sample was taken (rule #2).
+
+   `mountId` names the element to render into; the call toggles it open and closed.
+   The chart is fetched once per portal session and cached. */
+
+let glucoseRef = null;
+
+async function toggleGlucosePanel(mountId) {
+  const panel = document.getElementById(mountId);
+  if (!panel) return;
+  const opening = panel.style.display === 'none' || !panel.style.display;
+  panel.style.display = opening ? 'block' : 'none';
+  if (!opening) return;
+  if (!glucoseRef) {
+    panel.textContent = t('Loading reference…', 'রেফারেন্স আসছে…');
+    try { glucoseRef = await api('GET', '/api/reference/glucose'); }
+    catch (e) { panel.textContent = e.message; return; }
+  }
+  renderGlucosePanel(mountId);
+}
+
+/* One band -> "< 6.0 mmol/L (108 mg/dL)" etc. BOTH unit systems, because both are in
+   daily use in Bangladeshi labs and converting at the bedside invites errors. */
+function bandRange(band) {
+  if (band.low_percent != null || band.high_percent != null) {
+    if (band.low_percent == null) return `< ${band.high_percent + 0.1}%`;
+    if (band.high_percent == null) return `≥ ${band.low_percent}%`;
+    return `${band.low_percent}–${band.high_percent}%`;
+  }
+  const pair = (mmol, mg) => `${mmol} mmol/L (${mg} mg/dL)`;
+  if (band.low_mmol_l == null) return `≤ ${pair(band.high_mmol_l, band.high_mg_dl)}`;
+  if (band.high_mmol_l == null) return `≥ ${pair(band.low_mmol_l, band.low_mg_dl)}`;
+  return `${band.low_mmol_l}–${pair(band.high_mmol_l, band.high_mg_dl)}`;
+}
+
+function renderGlucosePanel(mountId) {
+  const panel = document.getElementById(mountId);
+  if (!panel || !glucoseRef || panel.style.display === 'none') return;
+  panel.innerHTML = '';
+  const head = document.createElement('div');
+  head.style.cssText = 'font-weight:800; color:var(--primary-color); margin-bottom:4px;';
+  head.textContent = '🩸 ' + t('Blood glucose — reference values',
+                               'রক্তে গ্লুকোজ — রেফারেন্স মান');
+  panel.appendChild(head);
+
+  const lead = document.createElement('div');
+  lead.style.cssText = 'margin-bottom:8px;';
+  lead.textContent = t(
+    'There is no single "diabetic limit". Which numbers apply depends entirely on how the sample was taken.',
+    'একটিমাত্র "ডায়াবেটিসের সীমা" বলে কিছু নেই। কোন মান প্রযোজ্য তা পুরোপুরি নির্ভর করে নমুনা কীভাবে নেওয়া হয়েছে তার উপর।');
+  panel.appendChild(lead);
+
+  glucoseRef.contexts.forEach((ctx) => {
+    const block = document.createElement('div');
+    block.style.cssText = 'margin-bottom:9px; padding-left:9px; border-left:2px solid var(--border-color);';
+    const name = document.createElement('div');
+    name.style.cssText = 'font-weight:700;';
+    name.textContent = t(ctx.name_en, ctx.name_bn);
+    block.appendChild(name);
+    const req = document.createElement('div');
+    req.style.cssText = 'font-size:.7rem; color:var(--text-muted); margin-bottom:3px;';
+    req.textContent = t(ctx.requires_context_en, ctx.requires_context_bn);
+    block.appendChild(req);
+    ctx.bands.forEach((band) => {
+      const row = document.createElement('div');
+      row.style.fontSize = '.72rem';
+      row.textContent = `• ${t(band.label_en, band.label_bn)}: ${bandRange(band)}`;
+      block.appendChild(row);
+    });
+    const note = t(ctx.note_en, ctx.note_bn);
+    if (note) {
+      const n = document.createElement('div');
+      n.style.cssText = 'font-size:.7rem; color:var(--warning-color); margin-top:2px;';
+      n.textContent = '⚠ ' + note;
+      block.appendChild(n);
+    }
+    const src = document.createElement('div');
+    src.style.cssText = 'font-size:.66rem; color:var(--text-muted); margin-top:2px;';
+    src.textContent = ctx.source;
+    block.appendChild(src);
+    panel.appendChild(block);
+  });
+
+  const disc = document.createElement('div');
+  disc.style.cssText = 'font-size:.72rem; font-weight:600; color:var(--warning-color); border-top:1px dashed var(--border-color); padding-top:6px;';
+  disc.textContent = '⚠️ ' + (currentLanguage === 'bn'
+    ? glucoseRef.disclaimer_bn : glucoseRef.disclaimer);
+  panel.appendChild(disc);
+}
+
 
 /* MEDIC-1/DOCTOR-2: rebuild everything staff.js rendered in the new language.
    Portals call this from their onLanguageChange(). Raw text is re-rendered but

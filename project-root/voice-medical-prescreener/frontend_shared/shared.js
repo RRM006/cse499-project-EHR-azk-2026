@@ -88,6 +88,24 @@ function localeNum(n) {
   return Number(n).toLocaleString(currentLanguage === 'bn' ? 'bn-BD' : 'en-GB');
 }
 
+/* S39 (ADR-0064) — the ONE representation of "this record carries no name".
+
+   Before this there were four: the medic's intake line said "(no name)", the
+   post-referral summary and the doctor's details card both said "—", and the .docx
+   said "—" as well. A dash is what this project prints for a value that was not
+   recorded, which is right — but it is also what it prints for a dozen other empty
+   things, so the one field a patient is identified by said nothing about itself.
+   Naming the absence is the point: a medic must be able to tell "nobody asked" from
+   "the screen is still loading".
+
+   ⚠ It is a LABEL, never a value: it is not stored, not sent, and never appears in an
+   export. `services/ehr_export` still omits the FHIR `name` element entirely when
+   there is no name, which is the correct machine-readable way to say "absent". */
+function patientNameLabel(name) {
+  const text = (name === undefined || name === null) ? '' : String(name).trim();
+  return text || t('Name not provided', 'নাম দেওয়া হয়নি');
+}
+
 /* STRUCT-2: every portal header offers Logout back to the Portal Directory at "/".
    Auth is stubbed (no server session to clear), so logout = leave the page; each
    portal's in-memory state is discarded by the navigation itself. */

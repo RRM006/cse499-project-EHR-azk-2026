@@ -38,7 +38,10 @@ __all__ = [
 
 _WRITERS: dict[str, type[DocumentWriter]] = {
     "docx": DocxWriter,
-    # "pdf": PdfWriter,  # future — same interface, drops in here
+    # ⚠ S39 note: the EHR PDF does NOT live here. This registry is the UTTERANCE-grain
+    # seam (one Utterance -> one file); the PDF is visit-grain and is produced by
+    # generate_visit_document below, exactly as the FHIR bundle is. A "pdf": PdfWriter
+    # entry would promise a per-utterance PDF that nothing wants and nothing builds.
 }
 
 
@@ -118,6 +121,7 @@ def generate_visit_document(
     # Local imports: keep the module import-light and avoid a services cycle.
     from backend.app.db.repository_visits import list_visit_utterances
     from backend.app.services.ehr_export import render_fhir_bundle
+    from backend.app.services.ehr_pdf import render_ehr_pdf
     from backend.app.services.report import generate_report
 
     patient = db.get(Patient, visit.patient_id) if visit.patient_id else None
@@ -128,6 +132,11 @@ def generate_visit_document(
         # S38 (B1): NOT a .docx — a FHIR R4 document Bundle as JSON. It is assembled
         # from rows that already exist and writes nothing (services/ehr_export).
         data = render_fhir_bundle(db, visit)
+    elif kind == "ehr_pdf":
+        # S39 (ADR-0064): the SAME bundle, typeset. ehr_pdf renders the bundle rather
+        # than re-reading the database, so the two exports cannot describe the visit
+        # differently — there is only one place the facts come from.
+        data = render_ehr_pdf(db, visit)
     else:  # summary_report
         # Always assemble FRESH (local + free): the download must reflect staff
         # field edits and risk overrides made after any earlier report (MEDIC-7).
@@ -151,7 +160,8 @@ def generate_visit_document(
     # downloads folder, an email subject and a file listing (rule #4).
     # S38: "ehr_bundle" says nothing about what is inside to someone holding the file,
     # so the download is named for the standard it implements.
-    _LABELS = {"transcript": "raw-transcript", "ehr_bundle": "ehr-fhir-r4"}
+    _LABELS = {"transcript": "raw-transcript", "ehr_bundle": "ehr-fhir-r4",
+               "ehr_pdf": "ehr-record"}
     label = _LABELS.get(kind, kind)
     return repo.create_document(
         db,

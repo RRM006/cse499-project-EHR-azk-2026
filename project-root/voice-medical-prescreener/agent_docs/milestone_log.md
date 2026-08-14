@@ -6,6 +6,78 @@
 
 **Status keys:** ⬜ Not started · 🟨 In progress · 🟦 Blocked · ✅ Done · ⛔ Retired
 
+**Last updated:** 2026-08-14 (**Session 39 — one reported BUG root-caused and fixed, two requested
+features built, one duplicate form removed. 931 → 1005 tests pass, 2 skipped, 0 failures.** New ADR
+**0064** (a–o, ten rejections). **Alembic 0013 → 0014** — TWO columns on `patients`, no new table,
+still **18 tables**. ⚠ **Two new Python dependencies (fpdf2, uharfbuzz) and one new binary asset**
+(an OFL Bengali+Latin font), the first deps since S30 — the reason is recorded below and it is
+Bangla, not PDF features.
+⚠ **NO MODULE CHANGED STATUS.** The work lands inside **M13 (EHR Database)** and **M14 (Doctor
+Dashboard)** plus the medic side of the same staff layer, all already ✅. **M15 stays 🟨.**
+⚠ **S39 touched NO voice code and no kiosk file**, so the real-mic status is unchanged.
+
+**THE REPORTED BUG — a patient name appeared for a visit in which none was given.** The root cause
+was **not invention**, and that changed the whole shape of the fix: `patients` is keyed by **phone
+number**, so `display_name` is patient-scoped and **permanent**, and a name recorded during one visit
+is inherited by every later visit on that number. Reproduced from the dev DB read-only: a **staff**
+edit on 2026-08-13 wrote the name; the visit the next day, in which the patient said nothing about a
+name, displayed it. Keeping the name is right — a returning patient is the same person. Presenting it
+as though it had been established *in the case on screen* is not.
+So the name now carries its **origin**, derived from `audit_log` with **no new column**
+(`services/identity`), and the AI auto-fill — which previously wrote a name into a permanent medical
+record and **left no trace at all** — now writes its own audit row with `actor_id = NULL`.
+⚠ A staff edit records no visit, but it records **when**, and a name written **before this visit
+began provably did not come from it**; that case is reported rather than left silent. One made
+*during* the visit stays "we cannot tell", because it could have come from the patient in the room.
+A name written before S39 has no audit row and reports **`unknown`**, never a guess.
+`display_name` was also **removed from `POST /api/patients/lookup`** — the third writer of the field,
+the only unaudited one, and no client ever sent it.
+
+**BLOOD SUGAR — what was missing was the FIELD, not a permission.** S38 shipped the glucose reference
+*chart* and nowhere to write a *reading*, so "the medic cannot edit sugar" was literally true.
+Editing before referral already worked (S37 moved vitals into the case workspace), so the requirement
+was met by adding the value — and tests now pin that a medic edits pre-referral, that the referral
+still works afterwards, and that an unauthorised actor still gets a 403.
+⚠ **The reading and its measurement context are ONE fact and are refused apart**, server-side and
+before the write: a fasting 6.5 and a random 6.5 are different findings. The context is constrained
+in the **database** as well as the schema.
+⚠ **No band, class or interpretation is stored or computed anywhere** — the value is reported, the
+published chart is shown beside it, and a clinician reads one against the other. This is ADR-0060's
+`glucose_reference()`-takes-no-argument rule, now that a value exists to be tempted with.
+⚠ **HbA1c is deliberately not recordable**: a percentage, not mmol/L, and a laboratory result rather
+than a bedside reading, so one column never holds two quantities.
+
+**THE EHR PDF — a second RENDERING, not a second record.** `services/ehr_pdf` **does not read the
+database**: it is a pure function of the dict `ehr_export.build_fhir_bundle()` already returns, and
+it typesets that bundle's own section narratives — which is what a FHIR document Bundle *is*. The PDF
+therefore cannot hold a fact the JSON lacks or omit a section it has; a test forbids `db.query` and
+`db.get` anywhere in the module.
+⚠ **The dependency choice was made by BANGLA.** Bengali needs conjunct formation and vowel-sign
+reordering; a library that lays out one glyph per codepoint prints the patient's own words wrongly,
+which is a **rule #1 defect in the one export a human actually reads**. ReportLab cannot shape
+Bengali; fpdf2 delegates to HarfBuzz. The font ships **in the repo** (OFL-1.1) because Windows'
+Nirmala is not redistributable and a clean Arch box may have no Bengali font at all. The renderer
+**REFUSES** rather than emitting a document whose Bangla would be wrong.
+⚠ And the trap that cost a real defect: **a missing glyph does not raise — it VANISHES.** `kg/m²`
+printed as `kg/m`, a different unit. A test now walks every character the renderer will draw against
+the font's cmap.
+
+**SHARED, NOT COPIED.** S39 put a blood-sugar value on the doctor's screen and the reference chart
+existed only in the medic portal — a number with no chart where it is interpreted. The chart **moved**
+to `frontend_shared/staff.js`; both portals mount the same one, nothing was duplicated. ⚠ The
+doctor's row is **read-only**: intake is the medic's to own (`portal_roles` §5).
+
+**REDUNDANCY AUDIT — one real duplicate removed.** The medic's post-referral screen had its own
+identity editor AND weight editor, writing the same `patients` row through the same PATCH as the
+Intake & Vitals form but covering **fewer fields** — a leftover from before S37 moved editing ahead
+of the referral. Both are gone; the screen is a read-only snapshot that says where editing happens.
+
+⚠ **What was NOT verified this session:** no browser rendered the new portal DOM (the Browser pane
+restricts localhost to the `launch.json` port, which was occupied by a server this session did not
+start and did not stop). The portal changes are covered by static-source assertions and by a 34-check
+HTTP walkthrough against a real server on a throwaway seeded DB; **how they look is unclaimed.** The
+PDF itself *was* inspected visually in Chrome and its Bengali shaping is correct.
+
 **Last updated:** 2026-08-14 (**Session 38 — the staff-portal UX + clinical-workflow brief is
 COMPLETE: all nineteen requested items (A1-A7, B1-B7, C1-C4). 767 → 931 tests pass, 2 skipped, 0
 failures.** New ADRs **0060** (the derived/stored boundary + the four workflow features), **0061**
@@ -709,8 +781,8 @@ DOCTOR-1..7 targets are now all built (final `context_fixed_problem` flips happe
 | 10 | Risk Assessment Engine | ✅ | Each case is classified Low/Medium/High/Critical from rules + model; **a rule-based red-flag check forces Critical for clearly life-threatening symptoms (chest pain, stroke signs, severe breathing difficulty, loss of consciousness) and surfaces them prominently**; accuracy + red-flag recall recorded on a labeled test set. **Built** (`services/risk.py` + `red_flags.py`; rule survives total LLM outage; red-flag recall enforced per-phrase in tests; S11: MEDIC-3 staff override appends a human row, audit-logged, red-flag-Critical downgrade blocked — ADR-0035). Accuracy on labeled real data pending. |
 | 11 | Explainable AI (XAI) | ✅ | Every risk output has a plain-language reason listing the contributing factors. **Built** (`services/risk.py`, M11; deterministic fallback so no risk row is ever reason-less). |
 | 12 | Structured Clinical Report | ✅ | A full report (all sections) is generated and exportable as PDF + dashboard view; contains **no diagnosis**; includes a **Red Flags** section sourced from M10. **Built** (`services/report.py`, LOCAL assembly + disclaimer; shown in doctor portal). Per-visit `.docx` export of the summary report + raw transcript SHIPPED (S9 step 3, `visit_docx.py`); S12: summary_report carries the C1 possible-condition block + vitals and regenerates FRESH at download (ADR-0037). PDF still pending. |
-| 13 | EHR Database | ✅ | Transcripts, profiles, reports, and audit logs are stored and retrievable by patient ID/date; data encrypted. **Built** (all 15 tables, Alembic head `0009`; retrieval by phone + status; `audit_log` on every state change). Encryption-at-rest still pending. |
-| 14 | Doctor Dashboard | ✅ | Web UI shows report, risk, flags, XAI; doctor can override/annotate; high/critical cases alerted. **Built** (`frontend_doctor/`: queue, risk/red-flags/XAI panel, field edit, Override/Accept; S12: fully bilingual, ↻ Queue removed, print CSS. Medic side: C1 condition card + post-referral summary + .docx download, S12). **S37 (ADR-0058/0059) — the two staff portals were audited as ROLES and given the layers each was missing:** medic = urgency-ordered queue + wait/red-flag/completeness on every row + floor-load strip + **vitals captured BEFORE the referral** (they had been recordable only after it) + an **advisory** handover check that can never block a forward + referral attribution in `audit_log`; doctor = **patient timeline + prescription history** (`prescriptions` had been a write-only table) + a **Completed** scope so a reviewed case stays reachable + review controls that hide once the case is reviewed. Plus `frontend_shared/motion.css` (depth/motion, staff-only, every animation behind `prefers-reduced-motion`). All views are **derived and read-only — no new table, no new column, Alembic still 0012**. Full role/ownership reference: `agent_docs/portal_roles.md`. |
+| 13 | EHR Database | ✅ | Transcripts, profiles, reports, and audit logs are stored and retrievable by patient ID/date; data encrypted. **Built** (all 15 tables, Alembic head `0009`; retrieval by phone + status; `audit_log` on every state change). Encryption-at-rest still pending. **S39 (ADR-0064) — Alembic 0014:** blood glucose is recordable at intake as a VALUE **plus its measurement context**, refused apart, with no band/interpretation column anywhere (rule #2); and the patient NAME now carries its provenance, **derived from `audit_log` with no new column** — the AI auto-fill, which used to write into a permanent medical record leaving no trace, is now audited. The record is exportable in two forms from ONE builder: the FHIR R4 Bundle (S38) and a human-readable **PDF that renders that same bundle** and never re-reads the DB. |
+| 14 | Doctor Dashboard | ✅ | Web UI shows report, risk, flags, XAI; doctor can override/annotate; high/critical cases alerted. **Built** (`frontend_doctor/`: queue, risk/red-flags/XAI panel, field edit, Override/Accept; S12: fully bilingual, ↻ Queue removed, print CSS. Medic side: C1 condition card + post-referral summary + .docx download, S12). **S37 (ADR-0058/0059) — the two staff portals were audited as ROLES and given the layers each was missing:** medic = urgency-ordered queue + wait/red-flag/completeness on every row + floor-load strip + **vitals captured BEFORE the referral** (they had been recordable only after it) + an **advisory** handover check that can never block a forward + referral attribution in `audit_log`; doctor = **patient timeline + prescription history** (`prescriptions` had been a write-only table) + a **Completed** scope so a reviewed case stays reachable + review controls that hide once the case is reviewed. Plus `frontend_shared/motion.css` (depth/motion, staff-only, every animation behind `prefers-reduced-motion`). All views are **derived and read-only — no new table, no new column, Alembic still 0012**. Full role/ownership reference: `agent_docs/portal_roles.md`. **S39 (ADR-0064):** both portals show the patient name WITH its origin; the medic records blood sugar before the referral; the doctor sees it read-only beside the shared reference chart and can download the record as **PDF or FHIR**; and the post-referral screen's duplicate identity/weight editors were REMOVED — they wrote the same row through the same PATCH as the intake form with fewer fields. |
 | 15 | Feedback & Continuous Learning | 🟨 | Doctor feedback is collected and usable to retrain/fine-tune; regression check before deploying updates. **Built** (feedback stored via `POST /api/visits/{uuid}/feedback`); retrain/regression pipeline still future. |
 
 ---

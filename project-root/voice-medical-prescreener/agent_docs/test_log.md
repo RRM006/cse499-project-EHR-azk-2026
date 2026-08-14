@@ -1583,3 +1583,101 @@ Confirmed by hand, at 1280 / 768 / 375 px and in both languages:
   honestly as hand checks, not as automated coverage.
 - **The FHIR bundle against a real receiving system:** not attempted. Structural validity is tested;
   interoperability with a specific EHR is not, and is not claimed.
+
+---
+
+## 2026-08-14 — Session 39 — name provenance, blood glucose, and the EHR PDF (ADR-0064)
+
+- Setup: Windows 11, Python 3.13 venv, `pytest backend/tests/` with `PYTHONIOENCODING=utf-8`.
+  All LLM calls faked; every DB is either in-memory or a throwaway file (rule #4).
+  New deps exercised: **fpdf2 2.8.8**, **uharfbuzz 0.56.0**.
+- Metric: pass/fail counts + the properties each new file pins.
+- Result: **1005 passed, 2 skipped, 0 failures** (S38 baseline: 931 passed, 2 skipped).
+  **+74 tests**, in five new files:
+
+| File | Tests | What it pins |
+|---|---:|---|
+| `test_patient_name_provenance.py` | 10 | the AI identity fill is audited; a name from an earlier visit reports `from_this_visit: false`; a staff edit **timestamped before the visit began** is deduced as not-from-this-visit; a weight-only edit is not mistaken for a rename; an unaudited legacy name reports `unknown`, never a guess; no name in → no name out |
+| `test_intake_vitals_glucose.py` | 16 | a medic records and CORRECTS a reading while the visit is still `awaiting_review`; value and context are refused apart (both directions); an implausible reading and an unknown context are refused; HbA1c is not recordable; a non-clinical actor still gets 403; the referral still works and the doctor receives the value; **nothing anywhere classifies the reading** |
+| `test_migration_0014.py` | 5 | both columns exist and are nullable; the CHECK constraint bites **and the assertion proves it was the constraint**; an in-place upgrade keeps existing rows and invents no reading; **no interpretation column under any spelling**; the downgrade removes both and leaves rev 0013 alone |
+| `test_ehr_pdf.py` | 26 | the PDF is a pure function of the bundle and the module contains no DB read; every Composition section reaches the page; the verbatim Bangla round-trips; an unknown name is NAMED as unknown; absent facts stay absent; **every character the renderer draws exists in the font**; the BMI unit keeps its exponent; the renderer refuses without a font; the FHIR export is unchanged |
+| `test_staff_portal_s39.py` | 17 | neither portal renders a name without its origin; the provenance renderer never treats `null` as `false`; reading and context are sent together; **the frontend mg/dL constant equals the server's**; one glucose chart, mounted by both portals; the duplicate post-referral editors stay gone; one intake save path; both EHR buttons go through one download function |
+
+- ⚠ **Three existing S38 tests were MOVED, not weakened.** `test_the_glucose_panel_*` and
+  `test_glucose_bands_carry_both_unit_systems` now read `STAFF_JS` instead of `MEDIC`, because the
+  panel moved into shared code. **Every assertion is byte-identical.** No test was deleted, weakened,
+  or changed to make a failure disappear.
+
+### Migrations
+
+- `alembic upgrade head` on a fresh throwaway SQLite file → rev **0014**, `patients` gains
+  `blood_glucose_mmol_l` + `blood_glucose_context`, still **18 tables**.
+- `alembic downgrade 0013_height_and_clinical_notes` → both columns removed, `height_cm` intact.
+- An in-place upgrade of a 0013 DB holding a patient row kept `display_name`, `weight_kg` and
+  `height_cm`, and left both new columns **NULL** (an upgrade must not invent a reading).
+
+### Live HTTP walkthrough (real uvicorn, throwaway seeded DB)
+
+34 checks, **all passing**, against `uvicorn --port 8011` with
+`DATABASE_URL=sqlite:///<scratch>/demo.db`. ⚠ **The dev DB was read once, read-only, and never
+modified — its mtime is unchanged** (rule #4). The seed builds the three situations S39 is about: a
+returning patient whose name was typed by staff two days earlier, a patient whose name the AI took
+in the visit itself, and a patient with no name at all.
+
+Verified end to end:
+- name provenance for all three cases, including `from_this_visit: false` for the reported bug's own
+  shape and `has_name: false` with nothing invented for the third;
+- a medic recording sugar **before** any referral (visit still `awaiting_review`, no assigned
+  doctor), a **400** for a reading with no context, persistence across a reload, a correction of both
+  the value and the context, a **403** for an unknown actor, and **no glucose entry appearing in the
+  advisory handover check**;
+- the referral succeeding afterwards (`awaiting_doctor`), the case appearing in the doctor queue, and
+  the doctor's payload carrying the corrected reading;
+- `ehr_bundle` served as `application/fhir+json`, `type: "document"`, `Composition` first, with the
+  glucose Observation categorised **`laboratory`**, carrying its context coding, and holding **no
+  `interpretation` and no `referenceRange`**;
+- `ehr_pdf` served as `application/pdf` (49 739 bytes), filename `ehr-record-visit-<uuid8>-<date>.pdf`;
+  **all 5 Composition sections present in the rendered page**, the visit id present, the verbatim
+  Bangla present, the reading present with its context, and an absent value absent.
+
+### PDF text verified against the ARTIFACT, not the input
+
+Text was read back out of the PDF through its own **ToUnicode CMap** — the same path a
+"select all + copy" in a PDF reader takes — with the extractor made line-aware. Two mistakes in that
+extractor are recorded because both made correct output look broken:
+inserting a separator between kerned runs split `কণ্ঠস্বর` into `কণ ্ ঠস ্ বর`, and treating any Y
+change as a line break split `বিষয়ে` into `বিষয / ় / ে` (HarfBuzz positions Bengali combining marks
+with their own small vertical offset). With both fixed, `আমার অনেক দিন ধরে জ্বর, কষ্ট হচ্ছে।`
+round-trips exactly.
+
+**Visual check (Chrome PDF viewer, at 80%):** Bengali conjuncts and vowel signs are **correctly
+shaped** — `কণ্ঠস্বর প্রাক-পরীক্ষার রেকর্ড`, `শারীরিক পরিমাপ`, `হাতে চামড়ায় ফুসকুড়ি হয়েছে।` all
+render properly. This is the one claim that codepoint round-tripping alone cannot support, so it was
+made by looking.
+
+### Defects found and fixed during this session
+
+| # | Defect | How it was found |
+|---|---|---|
+| 1 | `kg/m²` printed as **`kg/m`** — a different unit — because the font has no U+00B2 and **a missing glyph does not raise, it VANISHES** | reading the rendered PDF in Chrome |
+| 2 | `<br/>` inside a table cell was dropped, so the English and Bangla of one field rendered as one run-on string | reading the rendered PDF in Chrome |
+| 3 | the narrative parser treated `<b>` as a **prefix**, silently reversing `Urgency tier: <b>low</b>` into "low Urgency tier:" | reading the extracted text of a red-flag case |
+| 4 | `<li>` red flags ran together into one paragraph (rule #3 makes their legibility a safety property) | same |
+| 5 | the medic's post-referral screen had a **second identity + weight editor** writing the same row through the same PATCH with **fewer fields** | the Phase 5 redundancy audit |
+| 6 | (mine) a failed `write_text` **truncated `frontend_shared/staff.js` to zero bytes** | the next test run |
+| 7 | (mine) the constraint test in `test_migration_0014` first passed **for the wrong reason** — a missing `created_at` raised `IntegrityError` and satisfied `pytest.raises` without the CHECK constraint ever being consulted | reading the failure message |
+
+Defect 6 was repaired from the file's HEAD blob plus this session's additions and verified as purely
+additive: `git diff --stat` → **196 insertions, 0 deletions**, then `node --check`.
+Defect 7 is now asserted by constraint NAME, not by exception type.
+
+### Not measured (unchanged from S25/S37/S38)
+
+- **WER / precision-recall:** still not formally measured. S25's live run remains the only voice
+  evidence, and S39 touched no voice code.
+- **The portals' appearance:** ⚠ **no browser rendered the new portal DOM this session.** The Browser
+  pane restricts localhost to the `launch.json` port, which was occupied by a server this session did
+  not start and did not stop. The portal changes are covered by static-source assertions and by the
+  HTTP walkthrough; how they LOOK is untested and unclaimed. (The PDF itself was inspected visually.)
+- **The FHIR bundle against a real receiving system:** not attempted, and the PDF inherits that
+  caveat — it is a rendering of the same record, and claims nothing more.

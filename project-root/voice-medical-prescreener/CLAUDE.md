@@ -22,9 +22,9 @@ We build it one module at a time.
 original 20-step build AND the **"Context Fixed Problem 2.0" cycle** are done (teal redesign,
 bilingual portals, background-assessed submit, Dhaka times, M16 assistant, and **real OTP**:
 hashed/expiring/single-use codes behind a pluggable sender seam, `OTP_CHANNEL=dev|textbee`,
-`000000` bypass dev-channel-only — ADR-0045). DB = Alembic head **0013**
-(18 tables) as of S38 — it had held at 0012 since S25. **192 tests passed at S25; the current count
-is 931 (see the S38 paragraph below).**
+`000000` bypass dev-channel-only — ADR-0045). DB = Alembic head **0014**
+(18 tables) as of S39 — it had held at 0012 from S25 to S38. **192 tests passed at S25; the current
+count is 1005 (see the S39 and S38 paragraphs below).**
 **S25: the human live real-mic run PASSED on Windows 11** — TC-V1/V2/V3/F2/R1 all ✅ (STT "very
 accurate", ~2 s latency). On that gate **Modules 1-14 went ✅** (M5 retired, **M15 stays 🟨** =
 future retrain/regression pipeline). What's left is NOT build work: **rotate the 3 API keys** before
@@ -40,6 +40,26 @@ S3 = auto-listen behind an echo guard; S4 = the endpointer). Plan + 12-point liv
 `max_answer_ms` cap, permission/visibility recovery) — verified absent and pinned by a test; its
 permission/visibility half is **blocked** on the open mid-turn word-loss rule #1 decision, which is
 the human's to make. **S6–S7 are not built either** and each needs its own "go".
+**Session 39 (2026-08-14) — ADR-0064, Alembic 0013 → 0014** (two columns on `patients`, no new
+table, still 18 tables). → **1005 tests**. ⚠ **S39 touched NO voice code.**
+**The name bug:** a name showed for a visit in which none was given. NOT invention — `patients` is
+keyed by **phone**, so `display_name` is permanent and every later visit inherits it (a *staff* edit
+had written it two days earlier). Keeping it is right; presenting it as established *here* is not. So
+the name now carries its **origin, derived from `audit_log` with no new column**, and the AI
+auto-fill — previously untraceable — is audited. An origin that cannot be established reports
+**`unknown`**, never a guess. `display_name` was removed from `POST /api/patients/lookup`.
+**Blood sugar:** S38 shipped the reference *chart* and nowhere to write a *reading*. Now recordable
+at intake — ⚠ **value and measurement context are one fact, refused apart**, and **no band or
+interpretation is stored or computed anywhere** (rule #2). HbA1c is deliberately not recordable.
+**The EHR PDF:** a second *rendering*, not a second record — `services/ehr_pdf` is a **pure function
+of the FHIR bundle** and never reads the DB. ⚠ New deps **fpdf2 + uharfbuzz** + an **OFL font in
+`assets/fonts/`**, chosen by **Bangla** (ReportLab cannot shape Bengali; mangled words = rule #1).
+The renderer **refuses** rather than shipping bad Bangla, and ⚠ **a missing glyph VANISHES rather
+than raising** (`kg/m²` printed as `kg/m`) — a test now checks every drawn character against the font.
+Also: the glucose chart **moved** to `frontend_shared/staff.js` (one copy, both portals) and the
+medic's post-referral **duplicate** identity/weight editors were removed. ⚠ **No browser rendered the
+new portal DOM** — behaviour is test-covered, appearance is unclaimed.
+
 **Session 38 (2026-08-14) completed a nineteen-item staff-portal UX + clinical-workflow brief**
 (A1-A7 medic, B1-B7 doctor, C1-C4 workflow) — ADRs **0060/0061/0062/0063**, and the first schema
 change since S25: **Alembic 0012 → 0013**, deliberately just **one column (`patients.height_cm`) and

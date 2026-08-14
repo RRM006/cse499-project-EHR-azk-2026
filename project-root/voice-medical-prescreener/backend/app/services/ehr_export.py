@@ -110,7 +110,24 @@ LOINC = {
     "bp_panel": ("85354-9", "Blood pressure panel with all children optional"),
     "bp_systolic": ("8480-6", "Systolic blood pressure"),
     "bp_diastolic": ("8462-4", "Diastolic blood pressure"),
+    # S39: the GENERIC blood-glucose code, chosen deliberately over the context-specific
+    # ones (fasting, post-load). Following this module's own rule, a code is used only
+    # where it is certainly right: 15074-8 says "glucose, in blood, in mmol/L", which is
+    # exactly and only what is stored. The measurement context travels beside it as
+    # text and as a coding in our own namespace, rather than being asserted through a
+    # more specific LOINC that a receiver would then believe absolutely.
+    "glucose": ("15074-8", "Glucose [Moles/volume] in Blood"),
 }
+
+#: How the stored context codes read in a document. The clinical MEANING of each
+#: context lives in services/clinical_reference and is not repeated here — this is a
+#: label, so that a receiving system is not handed a bare number.
+GLUCOSE_CONTEXT_LABELS = {
+    "fasting": "Fasting (no calorie intake for at least 8 hours)",
+    "ogtt_2h": "2 hours after a 75 g oral glucose load (OGTT)",
+    "random": "Random / casual (any time, regardless of meals)",
+}
+_GLUCOSE_CONTEXT_SYSTEM = "urn:niramoy:glucose-context"
 
 #: Our four tiers -> the FHIR ``risk-probability`` value set, which has no "critical".
 #: Mapping critical to "high" loses information, so the exact tier ALSO travels as
@@ -412,7 +429,11 @@ def build_fhir_bundle(db: Session, visit: Visit) -> dict:
         observation("bmi", "bmi", {"valueQuantity": {
             "value": derived_bmi, "unit": "kg/m2",
             "system": "http://unitsofmeasure.org", "code": "kg/m2"}})
-        vital_rows.append(f"<tr><td>BMI</td><td>{derived_bmi} kg/m²</td></tr>")
+        # S39: "kg/m2", not "kg/m²". It is the UCUM unit already used by the coded
+        # value two lines above, so the narrative and the Observation now agree — and
+        # the superscript was being SILENTLY DROPPED by the PDF renderer (the shipped
+        # font has no U+00B2), which printed "kg/m": a different unit entirely.
+        vital_rows.append(f"<tr><td>BMI</td><td>{derived_bmi} kg/m2</td></tr>")
 
     parsed_bp = _parse_bp(patient.bp if patient else None)
     if parsed_bp:
@@ -447,6 +468,55 @@ def build_fhir_bundle(db: Session, visit: Visit) -> dict:
         # Unparseable: carried as text so nothing is lost, but NOT as a coded reading.
         vital_rows.append(f"<tr><td>Blood pressure (as recorded)</td>"
                           f"<td>{escape(patient.bp)}</td></tr>")
+
+    # S39 (ADR-0064): the medic's blood-sugar reading. Built out here rather than
+    # through observation() for two reasons that both matter to a receiver:
+    #   * its category is `laboratory`, NOT `vital-signs` — a glucose reading is a lab
+    #     measurement, and mis-categorising it would file it beside pulse and weight;
+    #   * the measurement CONTEXT is part of the fact. A fasting 6.5 and a random 6.5
+    #     are different findings, so the context ships three ways (a coding in our own
+    #     namespace, the code's own text, and a human-readable note) and the value is
+    #     never exported without it. The stored pair cannot come apart — the route
+    #     refuses one without the other — but nothing is asserted here either way.
+    # ⚠ No interpretation, no `Observation.interpretation`, no reference range: the
+    # number is reported, and what it means is the clinician's judgement against the
+    # published chart (rule #2; ADR-0060's "glucose_reference() takes no value").
+    if patient is not None and patient.blood_glucose_mmol_l is not None:
+        context_code = patient.blood_glucose_context or ""
+        context_label = GLUCOSE_CONTEXT_LABELS.get(context_code, context_code or "context not recorded")
+        code = dict(_loinc("glucose"))
+        if context_code:
+            code["coding"] = list(code["coding"]) + [
+                {"system": _GLUCOSE_CONTEXT_SYSTEM, "code": context_code,
+                 "display": context_label}
+            ]
+        code["text"] = f"Blood glucose — {context_label}"
+        url = f"urn:uuid:{visit.uuid}-obs-glucose"
+        add(url, {
+            "resourceType": "Observation",
+            "id": f"{visit.uuid}-obs-glucose",
+            "status": "final",
+            "category": [{
+                "coding": [{
+                    "system": "http://terminology.hl7.org/CodeSystem/observation-category",
+                    "code": "laboratory", "display": "Laboratory",
+                }]
+            }],
+            "code": code,
+            "subject": {"reference": ref["patient"]},
+            "encounter": {"reference": ref["encounter"]},
+            "effectiveDateTime": recorded,
+            "valueQuantity": {
+                "value": patient.blood_glucose_mmol_l, "unit": "mmol/L",
+                "system": "http://unitsofmeasure.org", "code": "mmol/L",
+            },
+            "note": [{"text": f"Measurement context: {context_label}."}],
+        })
+        vital_refs.append(url)
+        vital_rows.append(
+            f"<tr><td>Blood glucose</td>"
+            f"<td>{patient.blood_glucose_mmol_l} mmol/L &#183; {escape(context_label)}</td></tr>"
+        )
 
     if vital_rows:
         section("vitals", "<table>" + "".join(vital_rows) + "</table>",

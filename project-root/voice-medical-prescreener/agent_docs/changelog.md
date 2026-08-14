@@ -16,6 +16,121 @@
 
 ---
 
+## Session 39 — 2026-08-14 — **The patient NAME learns where it came from, the medic can finally record BLOOD SUGAR (with the context that makes it mean anything), and the EHR record gains a human-readable PDF rendered from the same FHIR bundle** — 931 → 1005 tests
+- Did: a continuous inspect → root-cause → implement → test → verify → fix loop over one reported
+  bug and two requested features, plus a redundancy audit. **One new ADR: 0064** (a–o, with ten
+  rejections). **Alembic 0013 → 0014** — two columns on `patients`, no new table, 18 tables
+  unchanged. **Two new Python dependencies and one new binary asset** (see below — the first deps
+  added since S30, and the reasons are recorded before the code). **No module changed status; M15
+  stays 🟨.**
+- **THE NAME BUG — the root cause was not invention, and that mattered for the fix.** `patients` is
+  keyed by **phone number**, so `display_name` is patient-scoped and **permanent**: a name recorded
+  in one visit is inherited by every later visit on the same number. Reproduced in the dev DB
+  (read-only): `audit_log` #54, 2026-08-13 17:44, actor 1 — a **staff** edit wrote "মাশরাফি" onto
+  patient 7 through the medic form; **visit 18 the next day** is a different visit by the same phone
+  in which the patient never stated a name, and the portal showed it anyway. Keeping the name is
+  right — a returning patient is the same person. Showing it as though it had been established
+  *here* is not. So: the AI auto-fill now **writes an audit row** (it previously wrote nothing at
+  all, so a model-written name was untraceable forever after — an accountability hole quite apart
+  from this bug); `services/identity` **derives** provenance from `audit_log` with **no new column**;
+  and both staff portals print the origin under the name. ⚠ A staff edit records no visit — but it
+  records **when**, and a name written before this visit began **provably** did not come from it, so
+  that case is reported as `from_this_visit: false` rather than left silent. An edit made *during*
+  the visit stays `None`: it could have come from the patient in the room or a paper form, and "we
+  cannot tell" is the honest answer. A name written before S39 has no audit row and reports
+  `unknown`, never a guess.
+- **Also removed: `display_name` on `POST /api/patients/lookup`.** It was the third writer of the
+  field and the only unaudited one, and **no client ever sent it**. Identity now enters through
+  exactly two paths and both are audited.
+- **BLOOD SUGAR — what was actually missing was the FIELD.** S38 shipped the glucose reference
+  *chart* and no place to write a *reading*, so "the medic cannot edit sugar" was literally true:
+  there was nothing to edit. Editing before referral already worked (S37 moved vitals into the case
+  workspace), so the requirement was met by adding the value, not by changing a permission — and a
+  test now pins that a medic edits pre-referral, that the referral still works afterwards, and that
+  an unauthorised actor still gets a 403. ⚠ **The reading and its measurement context are ONE fact
+  and are refused apart**, server-side and before the write: a fasting 6.5 and a random 6.5 are
+  different findings, and a number stored with no context cannot be read safely by anyone later.
+  The context is constrained in the **database** as well as the schema. ⚠ **No band, class or
+  interpretation is stored or computed anywhere** — the value is reported, the published chart is
+  shown beside it, and a clinician reads one against the other (rule #2; ADR-0060's
+  `glucose_reference()`-takes-no-argument rule, now that a value exists to be tempted with).
+  ⚠ **HbA1c is deliberately not recordable**: a percentage, not mmol/L, and a lab result rather than
+  a bedside reading — it stays a reference row so one column never holds two quantities.
+- **EHR PDF — a second RENDERING, not a second record.** `services/ehr_pdf` **does not read the
+  database**: it is a pure function of the dict `ehr_export.build_fhir_bundle()` already returns, and
+  it typesets that bundle's own section narratives (a FHIR document Bundle is *defined* as a
+  Composition carrying human-readable XHTML per section — the standard's own answer to "what should
+  a person see"). So the PDF cannot hold a fact the JSON lacks or omit a section it has; a test
+  forbids `db.query`/`db.get` anywhere in the module, and another asserts every Composition section
+  appears in the rendered page. New kind `ehr_pdf` beside `ehr_bundle`, same route, same `documents`
+  table, `application/pdf`. The doctor now has both buttons through **one** download function.
+- **⚠ The dependency decision was made by BANGLA, not by PDF features.** Bengali needs conjunct
+  formation and vowel-sign reordering; a library that lays out one glyph per codepoint prints the
+  patient's own words wrongly, which is a **rule #1 defect in the one export a human actually
+  reads**. ReportLab cannot shape Bengali; **fpdf2** delegates to **uharfbuzz**. Both ship wheels for
+  Windows x64 and manylinux. The font — **Noto Sans Bengali (OFL-1.1, 463 KB, `assets/fonts/` with
+  its licence)** — ships **in the repo** rather than being found on the machine: Windows' Nirmala is
+  not redistributable and not on Arch, and a clean Arch box may have no Bengali font at all. The
+  renderer **REFUSES** (raises `PdfFontUnavailable`) rather than emitting a document whose Bangla
+  would be wrong.
+- **The one feature added beyond the brief, and why it is not invention:** S39 put a blood-sugar
+  VALUE on the doctor's case screen, and the reference chart existed only in the medic portal — a
+  number with no chart on the very screen where it is interpreted. The chart **moved** to
+  `frontend_shared/staff.js` and both portals mount the same one; nothing was copied. ⚠ The doctor's
+  glucose row is **read-only**: intake is the medic's to own (`portal_roles` §5), and a second editor
+  would be the duplicate-form defect this same session deleted.
+- **Redundancy audit — one real duplicate found and removed.** The medic's post-referral screen had
+  its own identity editor AND its own weight editor, writing the same `patients` row through the same
+  PATCH as the Intake & Vitals form, but covering a **subset** of the fields (no height, no BP, no
+  sugar). A leftover from before S37 moved editing ahead of the referral. Both are gone with their
+  two save functions; the screen is now a read-only snapshot that says where editing happens. Also
+  unified: four different "no name" placeholders became one `patientNameLabel()`.
+- Decided: **ADR-0064** (a)–(o) with ten rejections — no `display_name_source` column; no re-asking
+  returning patients; no heuristic "verification" of an AI-extracted name; no single glucose column
+  without its context; no band/`is_diabetic` column; no `measured_at` column; no glucose entry in the
+  handover check; no HTML-template or DB-driven PDF; not ReportLab and not an OS-resolved font; and
+  no `"pdf": PdfWriter` in the utterance-grain writer registry.
+- Broke / problem: **four real defects found, three of them by LOOKING AT THE OUTPUT rather than by a
+  test.** (1) `kg/m²` printed as **`kg/m`** — a different unit — because the shipped font has no
+  U+00B2 and **a missing glyph does not raise, it VANISHES**; the narrative now uses the UCUM `kg/m2`
+  it already codes, and a test walks every character the renderer will draw against the font's cmap.
+  (2) `<br/>` inside a table cell was dropped, so the English and Bangla of one field rendered as one
+  run-on string. (3) The narrative parser treated `<b>` as a *prefix*, which is right for
+  `<b>Patient said:</b> …` and silently **reversed** `Urgency tier: <b>low</b>` into "low Urgency
+  tier:"; emphasis is no longer tracked and text is captured in document order. (4) `<li>` red flags
+  ran together into one paragraph — rule #3 makes their legibility a safety property, so they are
+  bullets now. ⚠ **Self-inflicted:** a failed `write_text` on a `unicode_escape`-mangled string
+  **truncated `frontend_shared/staff.js` to zero bytes**; it was rebuilt from its HEAD blob plus this
+  session's additions and verified as purely additive (`git diff --stat`: 196 insertions, **0
+  deletions**), then `node --check`ed.
+- ⚠ **Three existing S38 tests were MOVED, not weakened.**
+  `test_the_glucose_panel_refuses_to_be_a_single_number`,
+  `test_the_glucose_panel_never_reads_a_patient_value` and
+  `test_glucose_bands_carry_both_unit_systems` now read `STAFF_JS` instead of `MEDIC` because the
+  panel moved to shared code. **Every assertion is byte-identical.** No test was deleted, weakened,
+  or changed to make a failure disappear.
+- Verified: **1005 passed, 2 skipped, 0 failures** (was 931/2). New files:
+  `test_patient_name_provenance.py` (10), `test_intake_vitals_glucose.py` (16),
+  `test_migration_0014.py` (5), `test_ehr_pdf.py` (26), `test_staff_portal_s39.py` (17) — 74 new.
+  Alembic upgrade AND downgrade exercised on throwaway SQLite files. A 34-check HTTP walkthrough ran
+  against a real uvicorn on a **throwaway seeded DB** (rule #4 — the dev DB was read once, read-only,
+  and never modified: mtime unchanged), covering all three name-provenance cases, pre-referral
+  glucose editing, correction, the 400 on a context-less reading, the 403 on an unknown actor, the
+  referral, the doctor receiving the value, and both exports. PDF text was read back out through the
+  document's own ToUnicode CMap and the verbatim Bangla round-tripped exactly; the rendered page was
+  **inspected visually in Chrome** and the Bengali conjuncts and vowel signs are correctly shaped.
+- Deferred: the browser-pane pass over the two staff portals themselves (the pane restricts localhost
+  to the launch.json port, which was occupied by a server this session did not start and did not
+  stop) — the portal changes are covered by static-source tests and the HTTP walkthrough, but **no
+  human or headless browser has rendered the new portal DOM**. Still open from earlier cycles:
+  **Step S5**, the mid-turn word-loss rule #1 decision (the human's), rotating the **3 API keys**,
+  formal **WER**, and the Edge run.
+- Next: **a human pass over the two staff portals** — the S38 walkthrough in `current_task.md` still
+  stands, plus the three S39 additions: the name-origin line under the patient name, the blood-sugar
+  row in Intake & Vitals, and the doctor's ⬇ EHR record (PDF) button. And one judgement only a person
+  can make: whether the PDF is the right shape for whatever this clinic would actually file or hand
+  to a patient.
+
 ## Session 38 — 2026-08-14 — **Staff-portal UX + clinical workflow hardening: a real Dhaka clock and a real date policy, an editable intake form with derived BMI, a glucose REFERENCE (not a limit), the prescription inline at the bottom with searchable tests, a FHIR R4 EHR export, M16 widened to tests + case-context, and the four workflow features S37 deferred** — 767 → 931 tests
 - Did: a nineteen-item brief worked continuously (inspect → plan → implement → test → verify →
   fix → document), across both staff portals and the backend behind them. **Four new ADRs: 0060**

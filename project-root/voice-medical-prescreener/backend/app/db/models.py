@@ -74,6 +74,13 @@ class Patient(Base):
     __tablename__ = "patients"
     __table_args__ = (
         UniqueConstraint("clinic_id", "external_ref", name="uq_patients_clinic_external_ref"),
+        # rev 0014: the context keys are the reference chart's own
+        # (services/clinical_reference.RECORDABLE_GLUCOSE_CONTEXTS).
+        CheckConstraint(
+            "blood_glucose_context IS NULL OR "
+            "blood_glucose_context IN ('fasting','ogtt_2h','random')",
+            name="ck_patients_glucose_context",
+        ),
     )
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
@@ -91,6 +98,13 @@ class Patient(Base):
     # (services/clinical_reference.bmi) and a stored copy would go stale the moment
     # a weight is corrected.
     height_cm: Mapped[float | None] = mapped_column(Float, nullable=True)
+    # S39 (rev 0014, ADR-0064): the medic's blood-sugar reading and the measurement
+    # context it was taken in. The context is NOT optional decoration — a fasting 6.5
+    # and a random 6.5 are different facts, so the pair is the unit of meaning.
+    # ⚠ No band/class column, deliberately: the value is stored, the published chart
+    # is displayed beside it, and the clinician reads one against the other (rule #2).
+    blood_glucose_mmol_l: Mapped[float | None] = mapped_column(Float, nullable=True)
+    blood_glucose_context: Mapped[str | None] = mapped_column(String(16), nullable=True)
     consent: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False, server_default="0")
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=_utcnow)
 

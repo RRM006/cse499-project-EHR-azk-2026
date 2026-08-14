@@ -15,8 +15,19 @@ from backend.app.schemas.visit import VisitDetailOut, VisitOut
 
 
 class PatientLookupRequest(BaseModel):
+    """S39 (ADR-0064): ``display_name`` was REMOVED from this request.
+
+    It was an optional name that created a patient row directly, and it was the third
+    writer of ``patients.display_name`` — the one that left no audit trail at all, so
+    a name arriving this way could never be traced afterwards (it is why
+    ``services/identity`` has an ``unknown`` source). No client in this project ever
+    sent it: the kiosk posts ``{phone}`` and nothing else, and the name is captured
+    either by the M3 auto-fill (audited) or by the staff PATCH (audited).
+
+    Identity is now written through exactly those two audited paths.
+    """
+
     phone: str = Field(..., description="Bangladeshi mobile number, any common format.")
-    display_name: str | None = Field(None, description="Optional name for a new patient.")
 
 
 class PatientOut(BaseModel):
@@ -35,8 +46,33 @@ class PatientOut(BaseModel):
     # is NOT a field here: it is derived on demand from height + weight, so it can
     # never disagree with the two values it is made of.
     height_cm: float | None = None
+    # S39 (rev 0014): the medic's blood-sugar reading and the context it was measured
+    # in. Reported as stored — no band, no interpretation (rule #2, ADR-0060).
+    blood_glucose_mmol_l: float | None = None
+    blood_glucose_context: str | None = None
     consent: bool
     created_at: datetime
+
+
+class NameProvenanceOut(BaseModel):
+    """S39 (ADR-0064) — where ``patient.display_name`` came from, DERIVED from
+    ``audit_log`` (see services/identity). Codes on the wire; the sentence a medic
+    reads is built in the portal, like every other label (ADR-0030 item e).
+    """
+
+    has_name: bool = Field(..., description="False = the record has no name at all.")
+    source: str | None = Field(
+        None, description="'staff' | 'ai' | 'unknown' | null when there is no name."
+    )
+    recorded_at: datetime | None = Field(None, description="When the name was written.")
+    visit_uuid: str | None = Field(
+        None, description="The visit during which it was recorded, when that is known."
+    )
+    actor_name: str | None = Field(None, description="Staff member who typed it, if any.")
+    from_this_visit: bool | None = Field(
+        None,
+        description="True when recorded during the visit being viewed; null when unknowable.",
+    )
 
 
 class VisitDetailWithPatientOut(VisitDetailOut):
@@ -45,6 +81,9 @@ class VisitDetailWithPatientOut(VisitDetailOut):
     Defined here, not in visit.py, because patient.py already imports visit.py."""
 
     patient: PatientOut | None = None
+    # S39: travels WITH the patient it describes, so no portal can render the name
+    # without also having been handed the answer to "where did this come from?".
+    name_provenance: NameProvenanceOut | None = None
 
 
 class PatientLookupOut(BaseModel):

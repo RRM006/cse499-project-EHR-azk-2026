@@ -67,6 +67,10 @@ class GlucoseContextOut(BaseModel):
 
 class GlucoseReferenceOut(BaseModel):
     contexts: list[GlucoseContextOut]
+    # S39 (ADR-0064): which of the contexts above a medic may record a reading
+    # against. Served rather than hard-coded in the portal so the storable set and
+    # the published set can never disagree.
+    recordable: list[str] = []
     disclaimer: str
     disclaimer_bn: str
 

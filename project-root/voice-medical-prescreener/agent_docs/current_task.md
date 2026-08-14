@@ -6,14 +6,14 @@
 
 ---
 
-**Date:** 2026-08-14 (end of Session 38)
-**Phase:** **The S38 staff-portal UX + clinical-workflow brief is COMPLETE.** All nineteen requested
-items (A1–A7, B1–B7, C1–C4) are implemented, tested and exercised in a browser.
-Test suite: **931 passed, 2 skipped, 0 failures** (was 767).
-Alembic head: **0013 — `0013_height_and_clinical_notes`** (was 0012). **18 tables** (was 17).
-No new Python dependency. New ADRs: **0060, 0061, 0062, 0063**.
-**No module changed status.** The work lands inside M14 + the medic staff layer (both ✅) and M16.
-**M15 stays 🟨.**
+**Date:** 2026-08-14 (end of Session 39)
+**Phase:** **The S39 brief is COMPLETE.** One reported bug (the patient name) root-caused and fixed,
+two requested features built (medic-recordable blood sugar; a human-readable EHR PDF beside the FHIR
+JSON), one duplicate form removed, and one shared-code move made.
+Test suite: **1005 passed, 2 skipped, 0 failures** (was 931).
+Alembic head: **0014 — `0014_blood_glucose`** (was 0013). Still **18 tables** — two columns, no table.
+New ADR: **0064**. **Two new dependencies (fpdf2, uharfbuzz) + one binary asset (an OFL font).**
+**No module changed status.** The work lands inside M13/M14 and the staff layer. **M15 stays 🟨.**
 
 **⚠ Step S5 is STILL NOT implemented and must not be assumed. See the bottom of this file.**
 
@@ -21,56 +21,48 @@ No new Python dependency. New ADRs: **0060, 0061, 0062, 0063**.
 
 ## 🚦 THE NEXT STEP — **a HUMAN pass over the two staff portals**
 
-Everything S38 built is test-pinned and was driven in a real browser. Three things no test and no
-automated run can settle, because they are judgement calls about this clinic:
-
-1. **Does the glucose panel read as a REFERENCE, or as guidance?** The human asked for "a diabetic
-   limit". There is no such number, so the medic portal shows the published chart instead — fasting
-   / 2-h OGTT / random / HbA1c, each with the sample conditions that make its numbers mean anything,
-   both mmol/L and mg/dL, and the WHO-vs-ADA disagreement stated out loud. If a medic reads it and
-   comes away thinking the system told them something about a patient, that is a defect and the
-   panel should be narrowed.
-2. **Is the FHIR export the right shape for whatever this clinic would actually hand it to?** It is
-   a structurally valid, semantically conservative HL7 FHIR R4 document Bundle — **not** certified
-   and **not** profiled against a national implementation guide. If there is a real receiving system
-   in mind, its expectations should drive the next iteration.
-3. **Is the doctor→medic note a channel this clinic wants?** It is deliberately tiny (a note to a
-   ROLE, no thread, no reply, no notifications). It could equally turn out to be noise on a busy
-   desk, in which case it should be removed rather than grown.
+This is the same next step S38 ended on, and it is now larger rather than smaller: S39 changed the
+portals again, and **the browser-pane pass did not happen this session**. The Browser pane restricts
+localhost to the port in `.claude/launch.json` (8001), and that port was occupied by a uvicorn this
+session did not start and would not stop. Everything is covered by static-source tests and by a
+34-check HTTP walkthrough against a real server, but **no browser has rendered the new portal DOM.**
 
 ### Setup
-- Run: `.venv\\Scripts\\python.exe -m uvicorn backend.app.main:app --reload --port 8001`
+- Stop any server already on 8001, then run:
+  `.venv\\Scripts\\python.exe -m uvicorn backend.app.main:app --reload --port 8001`
 - Open **http://127.0.0.1:8001/medic/** and **http://127.0.0.1:8001/doctor/** in Chrome.
-- No microphone is involved in any of this — S38 touched no voice code.
-- ⚠ The dev DB has every visit in `reviewed`, so both queues will look empty. That is the correct
-  B7 empty state, not a bug. To see the queue features, either run a kiosk session or seed a
-  throwaway DB (S38 used `DATABASE_URL=sqlite:///<scratch>/demo.db` — the real dev DB was **not**
-  modified this session).
+- No microphone is involved — S39 touched **no voice code** and no kiosk file.
+- ⚠ The dev DB has every visit in `reviewed`, so both queues look empty (correct B7 empty state).
+  Use the medic's phone search, or seed a throwaway DB. S39 used
+  `DATABASE_URL=sqlite:///<scratch>/demo.db`; **the dev DB was read once, read-only, and never
+  modified.**
 
-### The exact flow to walk
-1. **Medic:** log in. Check the header clock (real date, 12-hour, ticking) and the "Live · every
-   15s · updated …" line under the queue title. Press **ⓘ** beside "Triage Queue" and read the
-   explanation.
-2. **Medic:** search a phone number, then wait 20 seconds. **The result must NOT be replaced by the
-   full queue** — the line should say "Search result — auto-refresh held".
-3. **Medic:** click the **10/10 meter** on a queue row. It must open a list of which fields are
-   empty, and must NOT open the case.
-4. **Medic:** open a case → **Intake & Vitals** → *Record/Edit*. Enter a height and a weight and
-   watch the **BMI** appear with both WHO ladders. Save; confirm it persists and the "Still to
-   record" line shrinks. Then open **🩸 Sugar reference** and read it with question 1 above in mind.
-5. **Medic:** on a field card the AI extracted, press **✔ Looks right**. The badge must become
-   "✔ Checked", the **value must not change**, and the queue's verified count must go up.
-6. **Medic:** forward a case, then switch to **My referrals** — it must be there, attributed to you.
-7. **Doctor:** open a case → **📝 Write Prescription**. The case must STAY on screen and the form
-   appears below it. Check the Date field is pinned to today and the follow-up will not accept a
-   past date.
-8. **Doctor:** in **Required Tests**, type "cbc" (pick a suggestion), then type a test that is not
-   on the list and press Enter, then remove one.
-9. **Doctor:** **Accept & Write to EHR** → a `.json` file downloads. Open it: it should be a FHIR
-   `Bundle` with `type: "document"` and a `Composition` first. Judge it against question 2.
-10. **Doctor:** **Follow-up & handover** → schedule a recall and send a note to the medic. Then in
-    the **medic** portal open **Inbox** and mark it done. Judge it against question 3.
-11. **Both:** toggle বাংলা throughout and confirm nothing overflows or falls back to English.
+### What is NEW in S39 and needs eyes (in addition to the S38 walkthrough below)
+1. **MEDIC → open a case → Intake & Vitals.** Under the patient's name there is now an **origin
+   line**: "ⓘ Name entered by <staff> on <date>", or "Name taken by the AI from what the patient
+   said", or a ⚠ line saying the name came from an **earlier visit**, or "Origin of this name is not
+   recorded". Judge whether it reads as *reassuring context* or as *alarm* — it appears on every
+   case, so if it reads as an alarm it should be quieter.
+2. **MEDIC → Intake & Vitals → Record/Edit.** There is a **Blood sugar** pair: a mmol/L number and a
+   "Measured as" dropdown (fasting / 2 h after 75 g OGTT / random). Try saving a number **without**
+   picking a context — it must refuse, and the server refuses independently. Save both; the read-back
+   line shows mmol/L **and** mg/dL with the context spelled out. Then open **🩸 Sugar reference** and
+   check the number and the chart sit sensibly together.
+3. **MEDIC → forward a case.** The post-referral summary is now **read-only** — its Edit Details and
+   Edit weight buttons are gone (they duplicated the intake form and covered fewer fields). Confirm
+   the line explaining where editing happens is enough, and that nothing you need is now unreachable.
+4. **DOCTOR → open a case.** The details card has the same name-origin line and a **read-only** Blood
+   sugar row, with a 🩸 Sugar reference button that appears **only when a reading exists**.
+5. **DOCTOR → ⬇ EHR record (PDF)**, beside the existing ⬇ EHR record (FHIR). Open the PDF and judge
+   it against the one question only a person can answer: **is this the right shape for whatever this
+   clinic would actually file, hand to a patient, or post to a specialist?** If a receiving system or
+   a real form is in mind, its expectations should drive the next iteration.
+6. **Both portals, বাংলা toggle**, on every screen above.
+
+### The S38 walkthrough still stands
+The glucose reference chart, the segmented completeness meter, per-field verification, the referral
+history, the recall/handover inbox and the FHIR bundle were all built in S38 and have not been
+re-inspected by a human. See the S38 entry in `changelog.md` for its 11-step list.
 
 ### ⚠ The rule for next session
 **Only change code if the walkthrough reveals a REAL issue.** The brief is complete and test-pinned.
@@ -79,98 +71,87 @@ automated run can settle, because they are judgement calls about this clinic:
 
 ## Also open (the human's choice, not a queue)
 
-1. **Rotate the 3 API keys** — HUMAN-only, still pending since S25, recommended before any public demo.
-2. **Formal WER / precision-recall** on a labelled set — the thesis-evidence gap. S25's live run was
-   qualitative.
+1. **Rotate the 3 API keys** — HUMAN-only, pending since S25, recommended before any public demo.
+2. **Formal WER / precision-recall** on a labelled set — the thesis-evidence gap.
 3. **The mid-turn word-loss rule #1 decision** — what happens to a half-captured answer in
-   `finalBuffer` when the tab is backgrounded or mic permission is revoked mid-answer. **This is
-   yours to decide, and it is what BLOCKS the second half of Step S5.**
+   `finalBuffer` when the tab is backgrounded or mic permission is revoked mid-answer. **Yours to
+   decide, and it is what BLOCKS the second half of Step S5.**
 4. **The Edge run** — every live run so far has been Chrome only.
 5. **Faculty future requirements** (`faculty_future_features.md`): quantized summary model,
-   quantized STT/TTS, the fully voice-driven follow-up loop.
+   quantized STT/TTS, the fully voice-driven follow-up loop (S6–S7 each need their own "go").
 
 ---
 
-## ✅ What Session 38 shipped (settled — do not redo or re-derive)
+## ✅ What Session 39 shipped (settled — do not redo or re-derive)
 
-**Backend, new files**
-- `services/clinical_dates.py` — the Dhaka clock (**fixed UTC+06:00**, not `ZoneInfo`) + the
-  three-category date policy (system / authored-now / scheduled-forward).
-- `services/clinical_reference.py` — BMI bands (WHO + WHO Asian), the glucose reference chart, and
-  the ~50-entry bilingual diagnostic-test vocabulary. **Constants, not a table.**
-- `services/ehr_export.py` — the HL7 FHIR R4 document Bundle builder.
-- `services/notes.py` — recalls + the doctor→medic back-channel on one table.
-- `api/routes_reference.py`, `api/routes_notes.py`, `schemas/reference.py`, `schemas/notes.py`.
-- `migrations/versions/0013_height_and_clinical_notes.py`.
+**The patient-name bug — root cause and fix**
+- Root cause: `patients` is keyed by **phone**, so `display_name` is patient-scoped and permanent and
+  is inherited by every later visit on that number. Nothing was invented; it was **unlabelled**.
+- `services/identity.py` (NEW) — `name_provenance()`, **derived from `audit_log`**, no new column.
+- `services/intake.apply_demographics` now writes a `patient.identity_ai_fill` audit row
+  (`actor_id=None`). It previously wrote **nothing**, so an AI-written name was untraceable.
+- `display_name` **removed** from `POST /api/patients/lookup` (the one unaudited writer; unused).
+- `name_provenance` rides on `GET /api/visits/{uuid}`; both portals render it under the name.
+- `patientNameLabel()` in `shared.js` — ONE "Name not provided" wording, replacing four placeholders.
 
-**Backend, changed**
-- `db/models.py` — `patients.height_cm` + the `ClinicalNote` model. **No BMI column, deliberately.**
-- `services/triage.py` — `field_is_verified()`, `verified_field_keys()`, `completed_referrals()`.
-- `services/assistant.py` — M16 widened (tests + opt-in de-identified case context + a NEW output
-  guard + `suggested_tests`).
-- `routes_dashboard.py` — `POST .../fields/{key}/verify`, `height_cm` on the vitals PATCH,
-  `fields_empty` on the queue row.
-- `routes_prescription.py` — server-side date policy before the write.
-- `services/documents/` + `routes_documents.py` — the `ehr_bundle` kind and `application/fhir+json`.
+**Blood sugar**
+- `migrations/versions/0014_blood_glucose.py` — `patients.blood_glucose_mmol_l` +
+  `blood_glucose_context`, with a DB **CHECK constraint** on the context.
+- `clinical_reference.RECORDABLE_GLUCOSE_CONTEXTS` — fasting / ogtt_2h / random. **HbA1c excluded**
+  (a percentage and a lab result, not a bedside mmol/L reading); it stays on the chart.
+- The vitals PATCH takes both and **refuses either without the other**, server-side, before the write.
+- Shown in: the medic intake card, the post-referral summary, the doctor's card, the .docx meta, and
+  the FHIR bundle as a **`laboratory`** Observation (LOINC 15074-8 + our context coding), with **no
+  `interpretation` and no `referenceRange`**.
 
-**Frontend**
-- `shared.js` — `dhakaNowParts()`, `dhakaTodayIso()`, `localeNum()`, all formatters 12-hour.
-- `staff.js` — the shared auto-refresh timer, `buildCompletenessMeter()`, `renderWorkspaceState()`,
-  `showBmi()`, the per-field verify control.
-- `frontend_medic/index.html` — clock, triage explainer, refresh line, rebuilt Intake & Vitals,
-  glucose panel, Queue/My referrals/Inbox tabs.
-- `frontend_doctor/index.html` — clock, inline prescription at the bottom, two-column advice/tests,
-  the test token editor, the EHR button, the Follow-up & handover card, the widened assistant panel.
-- `motion.css` / `shared.css` — segmented meter, chips, suggestion list, `.rx-two-col`,
-  `.source-verified`, the ≤700px header-wrap fix.
+**The EHR PDF**
+- `services/ehr_pdf.py` (NEW) — a **pure function of the bundle** `ehr_export.build_fhir_bundle()`
+  returns. It never touches the DB, and a test forbids `db.query`/`db.get` in the module.
+- Kind `ehr_pdf` → `.pdf` → `application/pdf`, through the existing documents table and route.
+- Deps: **fpdf2 2.8.8 + uharfbuzz 0.56.0**; asset: **`assets/fonts/NotoSansBengali-Regular.ttf`**
+  (OFL-1.1, licence beside it). The renderer **refuses** rather than shipping mis-shaped Bangla.
+
+**Shared / removed**
+- The glucose reference panel **moved** from `frontend_medic/index.html` into
+  `frontend_shared/staff.js`; both portals mount the same one.
+- The post-referral **identity and weight editors are gone** (they duplicated the intake form with
+  fewer fields), along with `saveIdentity()` and `saveWeight()`.
 
 ## ⚠ Open gaps / honest caveats (carry these forward)
 
-- **🟡 Real-mic status is UNCHANGED by S38** (it touched no voice code). The human confirmed at S37
-  that the real-microphone run of the **S33–S36** changes was carried out; **no per-claim results
-  were supplied and none are documented**, and no defects came back. Do NOT say "no microphone has
-  exercised S33–S36" (false) and do NOT upgrade the three specific S36 claims to "verified" (no
-  evidence). S25's itemised evidence stands unchanged.
-- **The FHIR bundle is not certified and not profiled.** Structurally valid and semantically
-  conservative is exactly the claim; a receiving system will still need to map it. Where a concept
-  had no code we were confident of, it ships as TEXT on purpose.
-- **The glucose chart and the BMI bands are published reference values, transcribed by hand.** They
-  are sourced in the code and in the payload, but a clinician should read them once before any
-  demo.
-- **The test vocabulary is a typing aid, not a formulary.** Bangladesh-outpatient-shaped, ~50
-  entries, and deliberately not exhaustive — anything can be typed.
-- **S38's frontend tests are static-source assertions** (the S28 decision: no JS test runner). They
-  prove wiring and containment, not appearance. Everything visual in the list above was checked in
-  a browser by hand this session and is described in `test_log.md`; none of it is machine-verified.
-- **⚠ Three existing tests were modified** — two fixture date literals made relative, and one
-  assertion on M16's prompt phrasing updated because the module legitimately widened. No test was
-  weakened, deleted, or changed to make a failure disappear. See the S38 changelog entry.
+- **No browser has rendered the new portal DOM** (see the next step above). The PDF itself *was*
+  inspected visually in Chrome and its Bengali shaping is correct.
+- **Real-mic status is UNCHANGED by S39** — it touched no voice code, no kiosk file. The S37 wording
+  stands exactly: the S33–S36 run was carried out, **no per-claim results were supplied**, and no
+  defects came back. Do not upgrade the three S36 claims. S25's itemised evidence stands.
+- **The FHIR bundle is still not certified and not profiled**, and the PDF inherits that honestly —
+  it says on its face that it is a rendering of the same record, nothing more.
+- **The PDF depends on one shipped font.** Any replacement via `PDF_FONT_PATH` must cover Bengali AND
+  Latin with real OpenType shaping tables, or the renderer will refuse.
+- **⚠ A missing glyph does not raise — it VANISHES.** That is how `kg/m²` shipped as `kg/m` before it
+  was caught by looking at the output. A test now walks every character the renderer will draw
+  against the font's cmap; keep it.
+- **S39's frontend tests are static-source assertions** (the S28 decision: no JS test runner). They
+  prove wiring and containment, not appearance.
+- **⚠ Three existing S38 tests were MOVED** (`MEDIC` → `STAFF_JS`) because the glucose panel moved to
+  shared code. Every assertion is byte-identical. Nothing was weakened or deleted.
 - **Still not done from earlier cycles:** the 3 API keys, formal WER, the Edge run, Step S5.
 
 ## Locked decisions — do NOT re-open
 
-- **ADR-0060 (S38):** BMI is **derived, never stored**; one `clinical_notes` table serves both the
-  recall and the back-channel; per-field verification lives in the existing `summary_fields` JSON
-  and **does not touch the value or `source`**; an empty field cannot be verified; the referral
-  history is derived from `audit_log` and **reports what it cannot attribute** rather than inventing
-  an owner; a note is addressed to a **role**, never a person; the clinical reference data is a
-  module, not a table; **there is no single "diabetic limit"** and `glucose_reference()` takes no
-  argument.
-- **ADR-0061 (S38):** dates are policed **by category** — system/historical are never touched, the
-  prescription date must be today, a follow-up/recall must not be in the past; enforced
-  **server-side and before the write**; "today" is the **Dhaka** date from a **fixed UTC+06:00
-  offset** (Windows has no tz database — do not switch to `ZoneInfo` without adding `tzdata`); all
-  staff clocks are 12-hour.
-- **ADR-0062 (S38):** the export is a **FHIR R4 document Bundle**; the **AI suggested condition is
-  excluded from it entirely** (its disclaimer does not survive ingestion elsewhere); the risk tier
-  is a `RiskAssessment`, never a `Condition`; `critical` is never silently downgraded; free-text
-  clinical content ships **uncoded** rather than with a guessed code; Bangla travels via the
-  standard `_title` translation extension.
-- **ADR-0063 (S38):** M16 stays **one service**; case context is **opt-in and off by default**; the
-  **web search receives the question and nothing else, by signature**; the case context is
-  de-identified and carries **no raw transcript**; suggested tests are **clicked** in, never
-  auto-inserted; the M16 output guard must **NOT** reuse M7's dosage rule (a dosage range is the
-  correct answer here); a flagged answer is delivered with a stronger disclaimer, not deleted.
+- **ADR-0064 (S39):** name provenance is **derived from `audit_log`**, never a column; an origin that
+  cannot be established is reported as `unknown`, never guessed; a staff edit **timestamped before
+  the visit began** is reported as not-from-this-visit, and one made during it stays `None`; the AI
+  identity fill is **audited**; glucose is **value + context or neither**, constrained in the DB;
+  **no band, class or interpretation is ever stored or computed** and `glucose_reference()` still
+  takes no argument; **HbA1c is not recordable**; there is **no `measured_at` column** (audit_log
+  answers it); the PDF **renders the bundle and never reads the DB**; the renderer **refuses** rather
+  than mis-shaping Bangla; the font ships **in the repo**; the doctor's glucose row is **read-only**
+  because intake is the medic's to own.
+- **ADR-0060/0061/0062/0063 (S38)** — BMI derived not stored; dates policed by category with a fixed
+  **UTC+06:00** offset (do NOT switch to `ZoneInfo`; Windows has no tz database); the FHIR export
+  excludes the AI suggested condition entirely; M16's web search receives the question and nothing
+  else, by signature. See `decisions.md`.
 - **ADR-0058 / 0059 (S37)** and **0057 / 0056 / 0055 / 0054 / 0053 / 0052 / 0051 / 0050 / 0049 /
   0048 / 0045 / 0040** — see `decisions.md`.
 - **S31's terminal/transient STT split:** `no-speech`, `aborted`, `bad-grammar` must stay OUT of
@@ -182,28 +163,25 @@ automated run can settle, because they are judgement calls about this clinic:
 
 S5 (`faculty_future_features.md` §J) is: **no-speech re-prompt, empty-submit guard, 120 s answer
 cap, and permission/visibility recovery.** S34 built only the narrow empty-capture re-ask its
-Phase 2 required; S35, S36, S37 and **S38 built nothing from S5 at all** (S38 touched no voice
-code). Pinned by `test_step_s5_is_still_not_implemented`: `no_speech_ms` and `max_answer_ms` are
-still marked `S5 (not used yet)` and read by nothing, and there is no `visibilitychange` handler
-and no permission-recovery path anywhere in the kiosk.
+Phase 2 required; S35–S38 built nothing from S5, and **S39 touched no voice code at all**. Pinned by
+`test_step_s5_is_still_not_implemented`: `no_speech_ms` and `max_answer_ms` are still marked
+`S5 (not used yet)` and read by nothing, and there is no `visibilitychange` handler and no
+permission-recovery path anywhere in the kiosk.
 ⚠ **The permission/visibility half is BLOCKED, not merely pending** — see open item 3 above.
-⚠ S38 DID add a `visibilitychange` listener to **`frontend_shared/staff.js`** (the queue
-auto-refresh). That is the STAFF portals and has nothing to do with S5, which is about the kiosk.
+⚠ The `visibilitychange` listener in **`frontend_shared/staff.js`** is the STAFF queue auto-refresh
+(S38) and has nothing to do with S5, which is about the kiosk.
 
 ## Reminders (the four non-negotiables)
 
-- **Rule #1:** raw words are never edited, and never RE-RENDERED elsewhere. S38's FHIR export
-  includes the transcript **verbatim** (escaped for XHTML, never replaced by its correction) and a
-  test reconstructs the text and compares it to the stored string. M16's case context deliberately
-  carries **no** transcript at all.
-- **Rule #2:** never diagnoses. The glucose reference takes no patient value; BMI reports a band and
-  no advice; the AI suggested condition has no FHIR representation; the risk tier exports as a
-  `RiskAssessment`; a clinical note is workflow text nothing reads back; M16's new output guard
-  catches patient-directed assertions.
-- **Rule #3:** red flags ADD-only. Untouched by S38 — the queue chip, the handoff `info` row and the
-  local rule forcing Critical with every LLM down all still stand.
-- **Rule #4:** synthetic/consented data only. S38 used a **throwaway** seeded DB for every browser
-  check and did not modify the dev DB. M16's web search receives the doctor's question and nothing
-  else, by signature.
+- **Rule #1:** raw words are never edited, and never RE-RENDERED elsewhere. The new PDF reproduces
+  the transcript **verbatim**, and a test reads the text back out of the PDF's own ToUnicode map and
+  compares it to the stored string. Correct Bengali **shaping** is part of this: a mis-shaped word is
+  not the patient's word.
+- **Rule #2:** never diagnoses. The glucose value is stored and reported with **no band and no
+  interpretation**, in the portals and in FHIR alike; the chart still takes no patient value.
+- **Rule #3:** red flags ADD-only. Untouched by S39 — and the PDF now renders them as separate
+  bullets instead of one run-on paragraph, which is a legibility fix, not a behaviour change.
+- **Rule #4:** synthetic/consented data only. S39 used a **throwaway** seeded DB for every server
+  check; the dev DB was read once, read-only, and its mtime is unchanged.
 - Run (Windows): `.venv\\Scripts\\python.exe -m uvicorn backend.app.main:app --reload --port 8001`
-- Tests: `pytest backend/tests/` (**931 passing, 2 skipped**). Windows: `PYTHONIOENCODING=utf-8`.
+- Tests: `pytest backend/tests/` (**1005 passing, 2 skipped**). Windows: `PYTHONIOENCODING=utf-8`.

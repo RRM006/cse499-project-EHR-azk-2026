@@ -87,6 +87,18 @@ class VitalsEditRequest(BaseModel):
                             description="Schema codes; display labels live in the frontend.")
     age_years: int | None = Field(None, gt=0, lt=130,
                                   description="Age in years; the server stores birth_year.")
+    # S39 (ADR-0064): the blood-sugar reading a medic takes at intake. The two travel
+    # TOGETHER and are validated together in the route — a number with no measurement
+    # context is not a lesser record, it is an unsafe one (a fasting 6.5 and a random
+    # 6.5 are different facts). Bounds are the plausible range of a glucometer, so a
+    # transposed digit cannot enter the record unnoticed.
+    blood_glucose_mmol_l: float | None = Field(
+        None, gt=0, lt=60, description="Blood glucose in mmol/L."
+    )
+    blood_glucose_context: str | None = Field(
+        None, pattern="^(fasting|ogtt_2h|random)$",
+        description="Which measurement the reading is; schema codes, labels in the portal.",
+    )
     editor_id: int = Field(..., description="users.id of the staff editor (auth is stubbed).")
 
 

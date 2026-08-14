@@ -18,6 +18,8 @@ from sqlalchemy.orm import Session
 from backend.app.db.models import CaseProfile, Patient, Visit
 from backend.app.db.repository_visits import list_visit_utterances
 from backend.app.schemas.profile import SUMMARY_FIELD_KEYS, SummaryFields
+from backend.app.services.audit import audit
+from backend.app.services.identity import IDENTITY_AI_FILL_ACTION
 from backend.app.services.llm_client import call_module
 
 logger = logging.getLogger(__name__)
@@ -141,22 +143,31 @@ def apply_demographics(db: Session, visit: Visit, extracted: dict) -> None:
     """P2-2: harvest ``patient_demographics`` from an M3/M8 extraction onto the
     patients row — FILL-ONLY-WHEN-EMPTY, so a staff-entered (or earlier) value is
     NEVER overwritten by the AI (the staff PATCH is the correction path).
-    Best-effort: absent or malformed data is simply ignored."""
+    Best-effort: absent or malformed data is simply ignored.
+
+    S39 (ADR-0064): every field this writes is now AUDITED. Before, a model could
+    put a name into a permanent medical record and leave no trace at all — the row
+    simply had a name in it afterwards, indistinguishable from one a human typed and
+    with nothing saying which visit it came from. ``actor_id`` stays NULL because
+    there is no human actor; that NULL is precisely the fact worth recording. The
+    audit row is what ``services/identity.name_provenance`` reads back, so this is a
+    provenance trail, not decoration.
+    """
     demo = extracted.get("patient_demographics")
     if not isinstance(demo, dict) or visit.patient_id is None:
         return
     patient = db.get(Patient, visit.patient_id)
     if patient is None:
         return
-    changed = False
+    filled: dict = {}
     name = str(demo.get("name") or "").strip()
     if name and not (patient.display_name or "").strip():
         patient.display_name = name  # exactly as the patient stated it
-        changed = True
+        filled["display_name"] = name
     sex = str(demo.get("sex") or "").strip().lower()
     if sex in _SEX_VALUES and not (patient.sex or "").strip():
         patient.sex = sex
-        changed = True
+        filled["sex"] = sex
     age = demo.get("age_years")
     if (
         patient.birth_year is None
@@ -165,9 +176,18 @@ def apply_demographics(db: Session, visit: Visit, extracted: dict) -> None:
         and 0 < int(age) < 130
     ):
         patient.birth_year = datetime.now(timezone.utc).year - int(age)
-        changed = True
-    if changed:
+        filled["age_years"] = int(age)
+    if filled:
         db.commit()
+        audit(
+            db,
+            action=IDENTITY_AI_FILL_ACTION,
+            entity_type="patient",
+            entity_id=patient.id,
+            actor_id=None,                       # no human wrote this — that is the point
+            clinic_id=patient.clinic_id,
+            detail={"fields": filled, "visit_uuid": visit.uuid},
+        )
 
 
 def run_intake(db: Session, visit: Visit) -> CaseProfile:

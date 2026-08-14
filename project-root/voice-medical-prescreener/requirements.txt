@@ -21,5 +21,20 @@ edge-tts==7.2.8           # TTS-2/ADR-0050: natural Microsoft neural bn-BD voice
                           # ⚠ Sends the question text to Microsoft — a deliberate rule #4 trade-off
                           # (ADR-0050). Set TTS_PROVIDER=espeak for a fully offline/local voice.
 
+fpdf2==2.8.8              # S39/ADR-0064: the HUMAN-READABLE half of the EHR export. LGPL-3.0
+                          # (library use only — no copyleft on this project's code). Pure
+                          # Python; pulls Pillow + fontTools + defusedxml, all of which ship
+                          # wheels for Windows x64 and manylinux — both dev boxes OK.
+                          # ⚠ Chosen over ReportLab specifically BECAUSE of Bangla: fpdf2 can
+                          # delegate text shaping to HarfBuzz (below), and a PDF that mangles
+                          # the patient's own words would break rule #1 in the one export a
+                          # human actually reads.
+uharfbuzz==0.56.0         # S39: complex-script shaping for the PDF. Bengali needs conjunct
+                          # formation and vowel-sign reordering; without it "জ্বর" renders as
+                          # disconnected glyphs in the wrong order. Binary wheels for
+                          # cp313 win_amd64 + manylinux x86_64 — both dev boxes OK.
+                          # ⚠ The PDF writer REFUSES to render without it rather than
+                          # emitting a document with broken Bangla (services/ehr_pdf).
+
 # --- dev / test ---
 pytest==8.3.4             # raw-immutability guard + future tests

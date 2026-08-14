@@ -4,6 +4,44 @@
 > re-exploring the whole project each session. Update it whenever you add or move
 > a folder/file. Keep each note to one line.
 
+**Last updated:** 2026-08-14 (**Session 39 — TWO new production files, FIVE new test files, one
+Alembic revision (0013 → 0014, TWO columns, no new table, still 18 tables), TWO new Python
+dependencies and ONE new binary asset. One file was DELETED from the medic portal by moving it into
+shared code, and two duplicate editors were removed.**)
+
+**NEW in S39 — name provenance, blood glucose, the EHR PDF (ADR-0064):**
+
+| File | What it is |
+|---|---|
+| `backend/app/services/identity.py` | **NEW.** Answers "where did this patient's name come from, when, from which visit, and by whom" — **DERIVED from `audit_log`, no column, no table**. Owns the two audit action constants. ⚠ Honest by construction: a name written before S39 has no audit row and reports `unknown`, never a guess; `from_this_visit` is deduced from the clock only when a staff edit **predates the visit's start**, and is left `None` when it genuinely cannot be answered. |
+| `backend/app/services/ehr_pdf.py` | **NEW.** The EHR record as a human-readable PDF. ⚠ **It never reads the database** — `bundle_to_pdf()` is a pure function of the dict `ehr_export.build_fhir_bundle()` returns, so the PDF and the FHIR file cannot describe the visit differently. Typesets the bundle's own section narratives (a FHIR document Bundle *is* a Composition carrying XHTML per section). Contains a small `<p>/<b>/<br>/<li>/<table>` narrative parser and `renderable_text()`, which exists for one test: **a missing glyph does not raise, it VANISHES**. Raises `PdfFontUnavailable` rather than emitting mis-shaped Bangla. |
+| `backend/migrations/versions/0014_blood_glucose.py` | **NEW.** `patients.blood_glucose_mmol_l` + `blood_glucose_context`, with a DB **CHECK constraint** on the context. ⚠ **No band/class/interpretation column** (rule #2) and **no `measured_at`** — `audit_log` answers when and by whom, exactly as it does for weight and BP. |
+| `assets/fonts/NotoSansBengali-Regular.ttf` + `OFL.txt` | **NEW asset (463 KB, OFL-1.1).** The font the EHR PDF embeds. Ships in the repo rather than being resolved from the OS: Windows' `Nirmala.ttf` is not redistributable and not on Arch, and a clean Arch box may have no Bengali font at all — a medical document must render identically on both dev machines. Covers Bengali **and** Latin, so one file serves the whole document. Override with `PDF_FONT_PATH`. |
+| `backend/tests/test_patient_name_provenance.py` | **NEW (10).** The reported bug, pinned: a name inherited from an earlier visit must say so. |
+| `backend/tests/test_intake_vitals_glucose.py` | **NEW (16).** Medic edits pre-referral; value and context refused apart; nothing classifies the reading. |
+| `backend/tests/test_migration_0014.py` | **NEW (5).** Fresh + in-place upgrade, the CHECK constraint biting **by name**, no interpretation column under any spelling, downgrade. |
+| `backend/tests/test_ehr_pdf.py` | **NEW (26).** Reads text back out of the PDF through its own **ToUnicode CMap** (helpers `pdf_text` / `pdf_flat`), so assertions are about the artifact, not the input. |
+| `backend/tests/test_staff_portal_s39.py` | **NEW (17).** Static-source assertions over the shipped portals (the S28 no-JS-runner method). |
+
+**CHANGED in S39:**
+
+| File | Change |
+|---|---|
+| `backend/app/services/intake.py` | `apply_demographics` now writes a `patient.identity_ai_fill` audit row (`actor_id=None`). It previously wrote **nothing**, so an AI-written name was untraceable forever after. |
+| `backend/app/api/routes_visits.py` | `GET /visits/{uuid}` carries `name_provenance` beside the patient. ⚠ `display_name` **removed** from `POST /patients/lookup` — the third writer of the field and the only unaudited one; no client ever sent it. |
+| `backend/app/db/repository_visits.py` | `get_or_create_patient_by_phone` no longer takes a `display_name`. |
+| `backend/app/api/routes_dashboard.py` | The vitals PATCH takes the glucose pair and **refuses either without the other**, server-side, before the write. |
+| `backend/app/services/clinical_reference.py` | `RECORDABLE_GLUCOSE_CONTEXTS` (fasting / ogtt_2h / random). ⚠ **HbA1c is excluded** — a percentage and a lab result, not a bedside mmol/L reading; it stays a reference row with no input beside it. |
+| `backend/app/services/ehr_export.py` | A **`laboratory`** glucose Observation (LOINC 15074-8 + a context coding in our own namespace), with **no `interpretation` and no `referenceRange`**. ⚠ The BMI narrative now says `kg/m2` (the UCUM unit it already codes) — `kg/m²` was being silently truncated to `kg/m` by the PDF renderer, a different unit. |
+| `backend/app/services/documents/` | New visit-document kind **`ehr_pdf`** → `.pdf` → `application/pdf`, beside `ehr_bundle`. ⚠ The `_WRITERS` registry is untouched: it is the UTTERANCE-grain seam, and the EHR PDF is visit-grain. |
+| `backend/app/core/config.py` | `DEFAULT_PDF_FONT` + `pdf_font_path` / `resolved_pdf_font`. |
+| `frontend_shared/shared.js` | `patientNameLabel()` — ONE "Name not provided" wording, replacing four different placeholders. |
+| `frontend_shared/staff.js` | `renderNameProvenance()`, the glucose label map + `glucoseText()`, and **the glucose reference chart moved here from the medic portal** so the doctor sees the same one. ⚠ `MMOL_TO_MGDL` must equal `clinical_reference.MMOL_TO_MGDL`; a test asserts it. |
+| `frontend_medic/index.html` | Name-origin line, the blood-sugar pair in the intake form (value + context, validated together), the sugar read-back line. ⚠ **The post-referral identity and weight editors are GONE**, with `saveIdentity()` and `saveWeight()` — they wrote the same `patients` row through the same PATCH as the intake form but covered fewer fields. The screen is now a read-only snapshot. |
+| `frontend_doctor/index.html` | Name-origin line, a **read-only** blood-sugar row (intake is the medic's to own), the shared sugar chart mounted only when a reading exists, and **⬇ EHR record (PDF)** beside the FHIR button — both through ONE `downloadEhrExport(btn, kind)`. |
+| `requirements.txt` | **+fpdf2 2.8.8, +uharfbuzz 0.56.0.** ⚠ Chosen by BANGLA, not by PDF features: Bengali needs conjunct formation and vowel-sign reordering, ReportLab cannot shape it, and a PDF that mangles the patient's own words is a rule #1 defect in the one export a human reads. |
+| `backend/tests/test_staff_portal_s38.py` | ⚠ Three tests **MOVED** from reading `MEDIC` to reading `STAFF_JS` because the glucose panel moved. **Every assertion is byte-identical** — nothing weakened or deleted. |
+
 **Last updated:** 2026-08-14 (**Session 38 — EIGHT new production files, SIX new test files, and
 the first schema change since S25: Alembic 0012 → 0013, ONE column + ONE table, 18 tables.
 No new Python dependency.**)
@@ -429,6 +467,7 @@ voice-medical-prescreener/
 │     # DESIGN-mintlify.md carries a SUPERSEDED banner — design source of truth is frontend_shared/shared.css.
 ├── requirements.txt              # CORE deps (FastAPI, uvicorn, pydantic-settings, SQLAlchemy, alembic, openai, python-docx, pytest)
 │                                  #   + ddgs (S23, M16 web search — ADR-0044) + httpx (S24, TextBee OTP sender)
+│                                  #   + edge-tts (S30) + fpdf2 & uharfbuzz (S39, the EHR PDF — ADR-0064)
 ├── .gitignore                    # ignores .env, .venv/, *.db, *.db.*.bak, *.bak, data/, audio/, models/
 ├── .claude/launch.json           # preview dev-server configs (uvicorn; PORT 8001): Windows + backend-linux
 ├── agent_docs/                   # the project's shared brain (living docs) — now incl. architecture.md,
@@ -451,8 +490,9 @@ voice-medical-prescreener/
 │   │                              #   0004_intake_profile (case_profiles, module_events) · 0005_followup_questions ·
 │   │                              #   0006_risk_xai · 0007_reports · 0008_doctor_reviews_feedback · 0009_audit_log ·
 │   │                              #   0010_prescriptions_letterhead (visit-grain docs, vitals, letterhead, prescriptions — ADR-0032) ·
-│   │                              #   0011_visit_submitted_at (P3-1, S23) · 0012_otp_codes (P4-1, S24 — ADR-0045)
-│   ├── prescreener.db            # SQLite (gitignored); 17 tables + alembic_version (head 0012)
+│   │                              #   0011_visit_submitted_at (P3-1, S23) · 0012_otp_codes (P4-1, S24 — ADR-0045) ·
+    │                              #   0013_height_and_clinical_notes (S38) · 0014_blood_glucose (S39 — ADR-0064)
+│   ├── prescreener.db            # SQLite (gitignored); 18 tables + alembic_version (head 0014)
 │   ├── prescreener.db.pre-000{3,4,5,6,7}.bak · .pre-0010.bak  # per-migration backups (gitignored)
 │   ├── data/documents/           # generated .docx (gitignored)
 │   ├── app/

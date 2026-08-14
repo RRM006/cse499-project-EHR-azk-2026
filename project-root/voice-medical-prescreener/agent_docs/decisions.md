@@ -2064,3 +2064,136 @@ AI service if the existing one can be extended"*.
   said cannot judge how much to trust the tool.
 
 - Status: Accepted (S38, 2026-08-14).
+
+## ADR-0064 — 2026-08-14 — S39: the patient NAME carries its origin; blood sugar is a value AND a context; the EHR record gets a second RENDERING, not a second record
+
+**Context.** Three things, reported together. (1) *"I did NOT provide any patient name in the Patient
+Portal, but the Medic Portal shows a patient name — fix this at the root cause, and the system must
+NOT invent, hard-code, silently substitute, or display an incorrect patient name."* (2) *"The Medic
+Portal cannot properly edit Sugar/Glucose and other Intake & Vitals information; a MEDIC must be able
+to edit Intake & Vitals BEFORE referring the patient. Do NOT make referral a prerequisite."* (3) *"I
+want the EHR record available in TWO formats: FHIR JSON and a human-readable PDF … do NOT create a
+second competing EHR representation."*
+
+### The name (a)–(e)
+
+- **The root cause, stated plainly.** Nothing was invented. `patients` is keyed by **phone number**,
+  so `display_name` is **patient-scoped and permanent**, and a name recorded during one visit is
+  inherited by every later visit on the same number. It was reproduced in the dev DB: `audit_log`
+  row #54 (2026-08-13 17:44, actor 1) wrote `display_name: "মাশরাফি"` onto patient 7 through the
+  staff form; visit 18 the next day is a *different* visit by the same phone in which the patient
+  never stated a name, and the portal showed it. Keeping the name is correct — a returning patient
+  is the same person. Presenting it as though it had been established *in the case on screen* is not.
+- Decision (a) — **the AI's identity auto-fill is AUDITED.** `intake.apply_demographics` previously
+  wrote a name into a permanent medical record and left **no trace whatsoever**; a model-written name
+  was indistinguishable from a human-typed one forever after. It now writes a
+  `patient.identity_ai_fill` row with `actor_id = NULL` — and that NULL is precisely the fact worth
+  recording. This is an accountability fix quite apart from the reported bug.
+- Decision (b) — **provenance is DERIVED from `audit_log`, not stored.** `services/identity`
+  answers "where did this name come from, when, from which visit, and by whom" out of rows that
+  already exist. **No column, no table, Alembic untouched by this half** — the same
+  derived/stored boundary ADR-0060 drew for the referral history.
+- Decision (c) — **honest by construction.** A name written before S39 has no audit row and is
+  reported as `unknown`, never guessed at. `from_this_visit` is answered two ways and left `None`
+  otherwise: the AI fill records its visit, and a **staff edit whose timestamp precedes the visit's
+  start provably did not come from it** — the reported bug's own case. A staff edit made *during*
+  the visit could have come from the patient in the room or from a paper form, so it stays `None`
+  and renders as a neutral note rather than a warning.
+- Decision (d) — **the name is never rendered without its origin.** `name_provenance` travels on the
+  visit-detail payload beside the patient it describes, and both staff portals print a line under
+  the name. Codes on the wire, sentences in the portal (ADR-0030 e).
+- Decision (e) — **one wording for an absent name.** `patientNameLabel()` in `shared.js` replaces
+  four different placeholders (`(no name)`, two `—`, and the .docx's `—`) with "Name not
+  provided" / "নাম দেওয়া হয়নি". ⚠ It is a LABEL, never a value: the FHIR bundle still OMITS the
+  `name` element entirely, which is the correct machine-readable way to say "absent".
+- Decision (f) — **`display_name` was REMOVED from `POST /api/patients/lookup`.** It was the third
+  writer of the field, the only unaudited one, and no client ever sent it. Identity now enters
+  through exactly two paths and both are audited.
+
+### Blood sugar (g)–(j)
+
+- **What was actually missing.** S38 shipped the glucose reference *chart* (A6) and no place to
+  record a *reading*. "The medic cannot edit sugar" was literally true: there was nothing to edit.
+  Editing before referral, by contrast, already worked — S37 moved vitals into the case workspace —
+  so the requirement was met by adding the field, not by changing a permission.
+- Decision (g) — **a reading and its measurement context are ONE fact, refused apart.** Rev 0014 adds
+  `patients.blood_glucose_mmol_l` **and** `blood_glucose_context`, and the route rejects either
+  without the other, before the write. A fasting 6.5 and a random 6.5 are different findings; a
+  number stored with no context cannot be read safely by anyone afterwards. The context is
+  constrained in the **database** as well as the schema.
+- Decision (h) — **no band, class or interpretation is stored or computed, anywhere.** The value is
+  reported; the published chart is displayed beside it; a clinician reads one against the other.
+  This is ADR-0060's `glucose_reference()`-takes-no-argument rule, now that a value exists to be
+  tempted with — and the FHIR Observation ships with no `interpretation` and no `referenceRange`.
+- Decision (i) — **HbA1c is not recordable.** It is a percentage, not mmol/L, and a laboratory result
+  rather than the bedside reading a medic takes at intake. It stays a reference row with no input
+  beside it, so one column never holds two different quantities.
+- Decision (j) — **it lives on `patients`, through the existing vitals PATCH.** Same row as weight
+  (rev 0010) and height (rev 0013), same endpoint, same audit action, same permission — no new
+  table, no new endpoint, no new clinical permission. **No `measured_at` column:** `audit_log`
+  already records when and by whom, exactly as weight and BP do.
+
+### The EHR PDF (k)–(n)
+
+- Decision (k) — **the PDF renders the FHIR bundle; it does not read the database.**
+  `ehr_pdf.bundle_to_pdf()` is a pure function of the dict `ehr_export.build_fhir_bundle()` returns.
+  That is what makes "the same record in two formats" structural rather than aspirational: the PDF
+  cannot contain a fact the JSON lacks or omit a section it has, because there is nothing else for
+  it to read. A test forbids `db.query`/`db.get` anywhere in the module.
+- Decision (l) — **it renders the document's own narrative.** A FHIR document Bundle is *defined* as
+  a Composition whose sections carry human-readable XHTML (`text.div`). That is the standard's own
+  answer to "what should a person see", so the PDF typesets it rather than re-interpreting the data.
+- Decision (m) — **fpdf2 + uharfbuzz + an OFL font in the repo, chosen by BANGLA.** Bengali needs
+  conjunct formation and vowel-sign reordering; a library that lays out one glyph per codepoint
+  prints the patient's own words wrongly, which is a **rule #1 defect in the one export a human
+  reads**. ReportLab cannot shape Bengali; fpdf2 delegates to HarfBuzz. The font ships in
+  `assets/fonts/` rather than being found on the machine: Windows' `Nirmala.ttf` is not
+  redistributable and not on Arch, and a clean Arch box may have no Bengali font at all — a medical
+  document must render identically on both dev machines.
+- Decision (n) — **the renderer REFUSES rather than degrades.** Missing HarfBuzz or an unloadable
+  font raises `PdfFontUnavailable` and no file is produced. A PDF with mangled Bangla looks like a
+  working feature and is a corrupted medical record; an error is recoverable, a wrong document handed
+  to a patient is not. ⚠ The related trap, found in the browser: **a missing glyph does not raise, it
+  VANISHES** — `kg/m²` printed as `kg/m`, a different unit. The narrative now uses the UCUM `kg/m2`
+  it already codes, and a test walks every character the renderer will draw against the font's cmap.
+
+### Shared, not copied (o)
+
+- Decision (o) — **the glucose reference chart moved to `frontend_shared/staff.js`.** S39 put a
+  blood-sugar VALUE on the doctor's case screen, and the chart existed only in the medic portal —
+  a number with no chart on the screen where it is interpreted. Copying ~70 lines of published
+  clinical thresholds into a second portal is the drift this codebase keeps removing, so there is
+  one panel and each portal mounts it. ⚠ The doctor's row is **read-only**: blood sugar is intake
+  data and the medic owns intake (`portal_roles` §5); a second editor would be the duplicate-form
+  defect this same session deleted.
+
+### Rejections
+
+- Rejected (1) — **a `display_name_source` column.** Provenance is a question about rows that already
+  exist; `audit_log` records the staff edit already, and the AI write only needed to start recording
+  itself. A column would have been a second, drift-prone copy of a fact the audit trail owns.
+- Rejected (2) — **re-asking every returning patient to confirm their name.** It changes the kiosk's
+  voice flow, was not asked for, and adds a turn to every repeat visit to fix a display problem.
+- Rejected (3) — **deleting or "verifying" an AI-extracted name heuristically** (e.g. requiring it to
+  appear verbatim in the transcript). It would destroy correct names for the sake of a guess, which
+  is worse than the defect.
+- Rejected (4) — **one `blood_glucose` column without the context.** The most dangerous option on the
+  table: it stores a number that cannot be interpreted and invites exactly the "diabetic limit"
+  reasoning ADR-0060 refused.
+- Rejected (5) — **a glucose band / `is_diabetic` / interpretation column.** Rule #2. A stored verdict
+  is one refactor from being printed beside a patient's name.
+- Rejected (6) — **a `blood_glucose_measured_at` column.** `audit_log` answers it, and weight and BP
+  set the precedent of carrying no timestamp of their own.
+- Rejected (7) — **adding glucose to the advisory handover check.** Not every patient needs a
+  glucometer reading, and a `vitals_missing`-style warning would imply otherwise.
+- Rejected (8) — **generating the PDF from the database directly, or from an HTML template.** Either
+  is a second EHR representation that can disagree with the FHIR file — the exact thing the brief
+  forbade.
+- Rejected (9) — **ReportLab**, and **resolving a Bengali font from the operating system.** The first
+  cannot shape Bengali at all; the second produces different output per machine and none at all on a
+  box without a Bengali font.
+- Rejected (10) — **a `"pdf": PdfWriter` entry in the `_WRITERS` registry.** That registry is the
+  UTTERANCE-grain seam (one Utterance → one file); the EHR PDF is visit-grain, like the FHIR bundle.
+  An entry there would promise a per-utterance PDF that nothing wants and nothing builds.
+
+- Status: Accepted (S39, 2026-08-14).

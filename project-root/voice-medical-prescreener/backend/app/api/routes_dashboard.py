@@ -457,12 +457,23 @@ def edit_patient_vitals(
     if patient is None:
         raise HTTPException(status_code=404, detail=f"Patient {patient_id} not found")
     updates = (payload.weight_kg, payload.bp, payload.display_name, payload.sex,
-               payload.age_years, payload.height_cm)
+               payload.age_years, payload.height_cm, payload.blood_glucose_mmol_l,
+               payload.blood_glucose_context)
     if all(v is None for v in updates):
         raise HTTPException(
             status_code=400,
             detail="Nothing to update — send weight_kg, height_cm, bp, display_name, "
-                   "sex, or age_years.",
+                   "sex, age_years, or blood_glucose_mmol_l with blood_glucose_context.",
+        )
+    # S39 (ADR-0064): the reading and its context are ONE fact and are refused apart.
+    # A stored 6.5 with no context cannot be read safely by anyone later, and a context
+    # with no number is a measurement nobody took. Enforced HERE, before the write —
+    # the portal's paired inputs are a convenience, not the control.
+    if (payload.blood_glucose_mmol_l is None) != (payload.blood_glucose_context is None):
+        raise HTTPException(
+            status_code=400,
+            detail="A blood-glucose reading and its measurement context must be sent "
+                   "together — a value without a context cannot be interpreted.",
         )
 
     if payload.weight_kg is not None:
@@ -477,6 +488,9 @@ def edit_patient_vitals(
         patient.sex = payload.sex
     if payload.age_years is not None:
         patient.birth_year = datetime.now(timezone.utc).year - payload.age_years
+    if payload.blood_glucose_mmol_l is not None:
+        patient.blood_glucose_mmol_l = payload.blood_glucose_mmol_l
+        patient.blood_glucose_context = payload.blood_glucose_context
     db.commit()
     db.refresh(patient)
     # Audit only what was actually edited (None = field not sent).
@@ -484,6 +498,8 @@ def edit_patient_vitals(
         "weight_kg": payload.weight_kg, "height_cm": payload.height_cm, "bp": payload.bp,
         "display_name": payload.display_name, "sex": payload.sex,
         "age_years": payload.age_years,
+        "blood_glucose_mmol_l": payload.blood_glucose_mmol_l,
+        "blood_glucose_context": payload.blood_glucose_context,
     }.items() if v is not None}
     audit(db, action="patient.vitals_edit", entity_type="patient", entity_id=patient.id,
           actor_id=editor.id, clinic_id=patient.clinic_id, detail=detail)

@@ -184,9 +184,18 @@
             <!-- S38 (B1): the EHR file stays downloadable AFTER the case is reviewed —
                  that is when a doctor most often needs to hand it on, and before S38
                  the accept action was the only moment it existed. -->
-            <button class="btn btn-secondary fx-lift" id="btn-ehr" onclick="downloadEhrBundle(this)"
+            <button class="btn btn-secondary fx-lift" id="btn-ehr" onclick="downloadEhrExport(this, 'ehr_bundle')"
                     title="Structured clinical record — HL7 FHIR R4 document Bundle (.json)"
                     data-en="⬇ EHR record (FHIR)" data-bn="⬇ EHR রেকর্ড (FHIR)">⬇ EHR record (FHIR)</button>
+            <!-- S39 (ADR-0064): the SAME record, for a person to read. Both buttons are
+                 offered because they answer different questions - the .json is what
+                 another system ingests, the .pdf is what a human at this clinic files,
+                 hands to a patient or posts to a specialist. Neither is a summary of
+                 the other: services/ehr_pdf renders the very bundle the button beside
+                 it downloads. -->
+            <button class="btn btn-secondary fx-lift" id="btn-ehr-pdf" onclick="downloadEhrExport(this, 'ehr_pdf')"
+                    title="The same record, typeset to be read by a person (.pdf)"
+                    data-en="⬇ EHR record (PDF)" data-bn="⬇ EHR রেকর্ড (PDF)">⬇ EHR record (PDF)</button>
             <button class="btn btn-secondary fx-lift" onclick="openPrescription()" data-en="📝 Write Prescription" data-bn="📝 প্রেসক্রিপশন লিখুন">📝 Write Prescription</button>
             <button class="btn btn-danger-outline fx-lift" id="btn-override" onclick="review('low')" data-en="Override to Low-Risk" data-bn="স্বাভাবিক ঝুঁকিতে নামান">Override to Low-Risk</button>
             <button class="btn btn-primary fx-lift" id="btn-accept" onclick="review(null)" data-en="Accept &amp; Write to EHR" data-bn="গ্রহণ করে EHR-এ লিখুন">Accept &amp; Write to EHR</button>
@@ -543,9 +552,26 @@
         row(t('Height', 'উচ্চতা'), 'pd-height') +
         row(t('Weight', 'ওজন'), 'pd-weight') +
         row(t('Blood Pressure', 'রক্তচাপ'), 'pd-bp') +
+        /* S39 (ADR-0064): read-only here on purpose. Blood sugar is an INTAKE
+           measurement and the medic owns intake (portal_roles §5) — the doctor's
+           editor below is for re-measuring weight/BP in the consulting room, not for
+           re-running a glucometer. Showing the value without an Edit button beside it
+           is the honest rendering of that ownership; a second editor would be the
+           duplicate-form defect S39 removed from the medic portal. */
+        row(t('Blood sugar', 'রক্তে সুগার'), 'pd-sugar') +
+        /* S39 (ADR-0064): the chart the medic already had, now where the reading is
+           actually INTERPRETED. It is the same panel (frontend_shared/staff.js), not a
+           copy — published thresholds exist in one place, and the button appears only
+           when there is a reading to read against it. */
+        `<div id="pd-sugar-ref-wrap" style="display:none;">
+           <button class="btn btn-secondary fx-lift" id="pd-sugar-ref-btn" style="padding:4px 10px; font-size:.72rem;"
+                   title="${t('Blood sugar reference values', 'রক্তে সুগারের রেফারেন্স মান')}">🩸 ${t('Sugar reference', 'সুগার রেফারেন্স')}</button>
+           <div class="explainer" id="pd-glucose-panel" style="display:none; margin-top:6px;"></div>
+         </div>` +
         row(t('Submitted', 'জমার সময়'), 'pd-submitted') +
         // S38 (A5): derived from the two rows above it, never stored (ADR-0060).
-        `<div id="pd-bmi" style="font-size:.85rem; margin-top:2px;"></div>
+        `<div id="pd-name-origin" style="font-size:.76rem; font-weight:600;"></div>
+         <div id="pd-bmi" style="font-size:.85rem; margin-top:2px;"></div>
          <div id="vitals-editor" style="display:none; gap:8px; align-items:center; flex-wrap:wrap; border-top:1px dashed var(--border-color); padding-top:10px; margin-top:4px;">
            <input class="input-field" id="vitals-height" type="number" min="30" max="260" step="0.5" style="width:130px; padding:6px 10px;" placeholder="${t('Height (cm)', 'উচ্চতা (সেমি)')}">
            <input class="input-field" id="vitals-weight" type="number" min="1" max="499" step="0.1" style="width:130px; padding:6px 10px;" placeholder="${t('Weight (kg)', 'ওজন (কেজি)')}">
@@ -555,13 +581,23 @@
          </div>`;
 
       // Dynamic values via textContent (never innerHTML — patient-supplied / staff text).
-      document.getElementById('pd-name').textContent = p.display_name || '—';
+      document.getElementById('pd-name').textContent = patientNameLabel(p.display_name);
       document.getElementById('pd-phone').textContent = p.external_ref || '—';
       document.getElementById('pd-age').textContent = age;
       document.getElementById('pd-gender').textContent = genderLabel(p.sex);
       document.getElementById('pd-height').textContent = p.height_cm != null ? `${p.height_cm} cm` : '—';
       document.getElementById('pd-weight').textContent = p.weight_kg != null ? `${p.weight_kg} kg` : '—';
       document.getElementById('pd-bp').textContent = p.bp || '—';
+      const sugar = glucoseText(p.blood_glucose_mmol_l, p.blood_glucose_context);
+      document.getElementById('pd-sugar').textContent =
+        sugar || t('not recorded', 'রেকর্ড করা হয়নি');
+      // No reading, no chart: an unreadable reference beside "not recorded" is one
+      // more control that does nothing.
+      document.getElementById('pd-sugar-ref-wrap').style.display = sugar ? 'block' : 'none';
+      document.getElementById('pd-sugar-ref-btn').onclick =
+        () => toggleGlucosePanel('pd-glucose-panel');
+      // S39 (ADR-0064): the doctor sees the same origin line the medic does.
+      renderNameProvenance('pd-name-origin', (currentCase.detail || {}).name_provenance);
       showBmi('pd-bmi', p.weight_kg, p.height_cm);
       // P3-1: when the patient hit Confirm & Submit, rendered in Asia/Dhaka
       // (dhakaDateTime pins offset-less UTC strings — same P2-1 helper as the queue).
@@ -1016,6 +1052,7 @@
       tickClock();
       renderQueueRefreshState();
       renderWorkspaceState();
+      renderGlucosePanel('pd-glucose-panel');   // S39: the chart follows the toggle too
       document.getElementById('queue-scope-label').textContent =
         document.getElementById('seg-recent').classList.contains('active')
           ? t('Completed', 'সম্পন্ন') : t('Assigned', 'নির্ধারিত');
@@ -1042,25 +1079,33 @@
         // S38 (B1): "Accept & Write to EHR" now actually produces the EHR record —
         // a structured, portable file rather than only a status change. Generated
         // AFTER the review so the document carries the review that was just made.
-        await downloadEhrBundle(document.getElementById('btn-ehr'), { silent: true });
+        await downloadEhrExport(document.getElementById('btn-ehr'), 'ehr_bundle', { silent: true });
       } catch (e) { showError(e.message); }
     }
 
-    /* ---- S38 (B1): the encounter as an HL7 FHIR R4 document Bundle ----
+    /* ---- S38 (B1) / S39 (ADR-0064): the encounter as an EHR record, in two forms ----
 
-       The server assembles it fresh from rows that already exist (services/ehr_export)
-       and records it in the SAME `documents` table as every other export, so it
-       downloads through the same route and is retrievable later.
+       ONE function, one endpoint, one `documents` table - the only thing that varies
+       is which visit-document `kind` is asked for:
+
+         * `ehr_bundle` -> HL7 FHIR R4 document Bundle (.json), for another system;
+         * `ehr_pdf`    -> the SAME bundle, typeset (.pdf), for a person.
+
+       They are deliberately not two code paths. The server builds the bundle once
+       (services/ehr_export) and the PDF renders that bundle rather than re-reading the
+       database (services/ehr_pdf), so the two files cannot describe the visit
+       differently - and neither can this function, which does not know or care what is
+       inside either one.
 
        ⚠ Called with { silent: true } from the accept path: a failure there must not
        make a SUCCESSFUL review look like it failed. The review is committed either
-       way; the file can be re-downloaded from the button that stays on the bar. */
-    async function downloadEhrBundle(btn, opts) {
+       way; the file can be re-downloaded from the buttons that stay on the bar. */
+    async function downloadEhrExport(btn, kind, opts) {
       if (!currentCase) return showError(t('Select a case first.', 'আগে একটি কেস নির্বাচন করুন।'));
       if (btn) btn.disabled = true;
       try {
         const doc = await api('POST',
-          `/api/visits/${currentCase.uuid}/documents/ehr_bundle`);
+          `/api/visits/${currentCase.uuid}/documents/${kind}`);
         const a = document.createElement('a');
         a.href = doc.download_url;
         a.download = doc.filename || '';
@@ -1070,7 +1115,7 @@
       } catch (e) {
         if (!(opts && opts.silent)) showError(e.message);
         else showError(t('The case was accepted, but the EHR file could not be generated: ',
-                         'কেসটি গ্রহণ করা হয়েছে, তবে EHR ফাইল তৈরি করা যায়নি: ') + e.message);
+                         'কেসটি গ্রহণ করা হয়েছে, তবে EHR ফাইল তৈরি করা যায়নি: ') + e.message);
       }
       if (btn) btn.disabled = false;
     }

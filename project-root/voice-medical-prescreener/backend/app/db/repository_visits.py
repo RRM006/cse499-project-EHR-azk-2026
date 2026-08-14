@@ -65,9 +65,15 @@ def get_default_clinic(db: Session) -> Clinic:
 
 
 def get_or_create_patient_by_phone(
-    db: Session, *, clinic_id: int, phone: str, display_name: str | None = None
+    db: Session, *, clinic_id: int, phone: str
 ) -> tuple[Patient, bool]:
-    """Find the patient by normalized phone (external_ref), creating if absent."""
+    """Find the patient by normalized phone (external_ref), creating if absent.
+
+    S39 (ADR-0064): a new patient is created with NO name. The ``display_name``
+    parameter this used to accept was an untraceable way into the one field whose
+    provenance now has to be answerable — see schemas/patient.PatientLookupRequest.
+    A name arrives through the audited M3 auto-fill or the audited staff PATCH.
+    """
     normalized = normalize_phone(phone)
     patient = (
         db.query(Patient)
@@ -76,7 +82,7 @@ def get_or_create_patient_by_phone(
     )
     if patient is not None:
         return patient, False
-    patient = Patient(clinic_id=clinic_id, external_ref=normalized, display_name=display_name)
+    patient = Patient(clinic_id=clinic_id, external_ref=normalized)
     db.add(patient)
     db.commit()
     db.refresh(patient)

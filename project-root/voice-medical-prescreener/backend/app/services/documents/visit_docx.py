@@ -26,7 +26,9 @@ from backend.app.services.documents.docx_writer import _apply_bengali_font, _fmt
 #: S38 (B1): "ehr_bundle" is the FHIR R4 document Bundle — the only kind here that is
 #: NOT a .docx, which is why generate_visit_document branches on format rather than
 #: assuming one (services/ehr_export owns its content).
-VISIT_DOCUMENT_KINDS = ("transcript", "summary_report", "ehr_bundle")
+#: S39 (ADR-0064): "ehr_pdf" is the SAME record as "ehr_bundle", typeset for a person
+#: (services/ehr_pdf renders the bundle, it does not re-read the database).
+VISIT_DOCUMENT_KINDS = ("transcript", "summary_report", "ehr_bundle", "ehr_pdf")
 
 #: Which file format each visit-grain kind produces. Keeping this beside the kinds is
 #: what stops a new kind being added with a silently wrong extension.
@@ -34,6 +36,7 @@ VISIT_DOCUMENT_FORMATS = {
     "transcript": "docx",
     "summary_report": "docx",
     "ehr_bundle": "json",
+    "ehr_pdf": "pdf",
 }
 
 # Bilingual labels for the 10 fixed fields (EN / BN, matching the kiosk's numbering).
@@ -72,7 +75,10 @@ def _patient_meta(patient: Patient | None) -> list[tuple[str, str]]:
     if patient is None:
         return [("Patient", "—")]
     rows = [
-        ("Patient", patient.display_name or "—"),
+        # S39 (ADR-0064): a dash is what this writer prints for every unrecorded
+        # value; the one field a patient is identified by says what its emptiness
+        # MEANS, so a reader cannot mistake it for a rendering fault.
+        ("Patient", patient.display_name or "Name not provided"),
         ("Phone", patient.external_ref or "—"),
     ]
     if patient.sex:
@@ -83,6 +89,15 @@ def _patient_meta(patient: Patient | None) -> list[tuple[str, str]]:
         rows.append(("Weight", f"{patient.weight_kg:g} kg"))
     if patient.bp:
         rows.append(("Blood pressure", patient.bp))
+    # S39: value and context together or not at all - a bare number in a document
+    # somebody reads weeks later cannot be interpreted safely.
+    if patient.blood_glucose_mmol_l is not None:
+        from backend.app.services.ehr_export import GLUCOSE_CONTEXT_LABELS
+
+        context = GLUCOSE_CONTEXT_LABELS.get(
+            patient.blood_glucose_context or "", "context not recorded"
+        )
+        rows.append(("Blood glucose", f"{patient.blood_glucose_mmol_l:g} mmol/L ({context})"))
     return rows
 
 
