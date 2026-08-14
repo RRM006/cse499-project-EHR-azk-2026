@@ -4,6 +4,24 @@
 > re-exploring the whole project each session. Update it whenever you add or move
 > a folder/file. Keep each note to one line.
 
+**Last updated:** 2026-08-14 (**Session 40 — TWO new test files, no new production file, and NO
+backend file touched at all. Alembic stays 0014, 18 tables, no new dependency.**)
+
+**NEW in S40 — the inline-script parse gate + the kiosk redesign (ADR-0065):**
+
+| File | What it is |
+|---|---|
+| `backend/tests/test_portal_inline_script_parses.py` | **NEW (3).** The gate that would have caught the S40 outage. An S39 developer note inside a template literal named the `patients` table **in backticks**, which ended the string and made the whole medic inline script a `SyntaxError` — so `login()` and `tickClock()` were undefined and the portal could not be entered. ⚠ Static-source tests could not see it: the file still *contained* every asserted string; only its **executability** was gone. Layer 1 bans a backtick inside an HTML comment inside a `<script>` (dependency-free, always runs). Layer 2 runs `node --check` over every inline block and every shared script, and **skips with a reason when node is not on PATH** — one requirements.txt must still install on Windows and Arch, so Node is a helper, never a dependency. |
+| `backend/tests/test_kiosk_s40_layout.py` | **NEW (23).** The kiosk redesign, pinned where it would regress silently: the two columns and which side is whose; that they are built by grid **placement with no wrapper elements** (the DOM and the screen-reader order are unchanged); the enlarged transcript as a **more specific** rule, never an equal-specificity duplicate; that a stepped-back control is **dimmed and never disabled** (asserted per CSS rule); that the step strip has **no JS driver**; that the review rail is placed by **`order`, not `grid-column`**; and that no second recogniser or `speechSynthesis.speak()` was introduced. |
+
+**Changed in S40 (no new production files):** `frontend_medic/index.html` — the note moved out of the
+template literal into the `/* S39 */` JS comment above `renderPostReferral()`. `frontend/kiosk.html` —
+two-column conversation, prominent transcript, the CSS-only step strip, the confirming-stage
+emphasis, and the review rail (`.review-rail`) holding the assistant + still-missing notice + the
+three buttons. `frontend/kiosk.js` — one new helper, `bringIntoView()` (`block: 'nearest'`,
+reduced-motion aware), four call sites, and `data-kiosk-stage` set/cleared by the read-back gate.
+⚠ **No voice/STT/TTS logic changed.**
+
 **Last updated:** 2026-08-14 (**Session 39 — TWO new production files, FIVE new test files, one
 Alembic revision (0013 → 0014, TWO columns, no new table, still 18 tables), TWO new Python
 dependencies and ONE new binary asset. One file was DELETED from the medic portal by moving it into

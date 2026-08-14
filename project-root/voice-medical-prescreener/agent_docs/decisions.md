@@ -2197,3 +2197,101 @@ second competing EHR representation."*
   An entry there would promise a per-utterance PDF that nothing wants and nothing builds.
 
 - Status: Accepted (S39, 2026-08-14).
+
+---
+
+## ADR-0065 — 2026-08-14 — S40: a developer note broke a portal; the kiosk becomes two columns, and one thing at a time is emphasised
+
+**Context.** Three reports. (1) *"Clicking `ড্যাশবোর্ডে প্রবেশ করুন` does not enter the Medic
+dashboard"*, with the server logging only ordinary `304 Not Modified` responses. (2) *"The Medic
+portal does not visibly show time when opened"* — although S38 shipped a live Dhaka clock into that
+exact header. (3) The patient kiosk *"looks congested and is not sufficiently understandable"* for
+children, elderly patients, people with little schooling, and people who have never used a computer.
+
+### The outage (a)–(d)
+
+- **(a) One root cause produced BOTH staff symptoms, and it was not the backend.** S39 added a
+  developer note inside `renderPostReferral()`'s template literal, written as an HTML comment, and
+  the note named the `patients` table **in backticks**. A backtick inside a template literal *ends
+  it*. The browser parsed the next word as code and threw
+  `Uncaught SyntaxError: Unexpected identifier 'patients'`. A syntax error is not partial: the whole
+  `<script>` block is discarded before one line of it runs, so **every function it declared was
+  undefined** — `login()` did not exist (the button did nothing at all) and `tickClock()` never ran
+  (the clock sat on its "—" placeholder). The 304s were a red herring; the assets were served
+  correctly and one of them could not be parsed.
+- **(b) The fix is where the note lives, not how it is escaped.** Escaping the backticks would have
+  worked and would have left the trap armed. Prose that names code belongs in a `/* */` comment,
+  where a backtick is just a backtick; an HTML comment inside generated markup is also shipped into
+  the DOM of every case a medic opens. The paragraph was moved into the existing `/* S39 */` comment
+  above the function, which already explained the same removal.
+- **(c) Why 1005 passing tests could not see it.** Every frontend test in this project is a
+  static-source assertion (the S28 decision: no vitest, no jsdom). The file still *contained* every
+  string those tests search for — the source was intact, only its **executability** was gone. This
+  is precisely the gap S39 recorded about itself ("no browser has rendered the new portal DOM").
+- **(d) So the gap is closed in two layers, and neither adds a runtime dependency.** A
+  dependency-free assertion bans the exact construct (a backtick inside an HTML comment inside an
+  inline `<script>`), and a `node --check` parse of every inline block and shared script runs when
+  node is on PATH and **skips with a reason when it is not** — the project must still install and
+  run from one `requirements.txt` on Windows and Arch, and no Node dependency is being added for a
+  test. REJECTED: making node a hard test dependency; and banning HTML comments outright, which
+  would have meant rewriting live markup that never broke.
+
+### The kiosk (e)–(j)
+
+- **(e) The screen is split by WHOSE side of the conversation it is.** Everything the machine does
+  (robot, status, the conversation thread) is the left column; everything the patient does (their
+  live words, the read-back, the mic, the buttons, the mode switch) is the right. Previously both
+  were one tall column, so "where the AI is" and "where I speak" were the same place, stacked, and
+  the patient's own words sat in the middle of the pile.
+- **(f) Built with grid PLACEMENT and no wrapper elements.** The DOM is unchanged, so every id, every
+  `aria-live` relationship and the reading order a screen reader follows are untouched, and one media
+  query returns the layout to exactly the single column it was before. REJECTED: wrapping each side
+  in a `<section>`, which would have changed the DOM and the tests' structural splits for a purely
+  visual result.
+- **(g) The patient's own words are the loudest thing on the screen** — 1.3rem, upright (italic grey
+  reads as "placeholder, not real yet"), in a bordered box that turns red-edged while the mic is
+  open. Done with a MORE SPECIFIC selector (`.voice-dock .dock-transcript`), never a second
+  equal-specificity rule, which would be dead CSS that reads as applied (the S33 regression).
+- **(h) One emphasised thing at a time.** At the confirmation step the old screen showed the
+  question, the read-back, "just say yes or no", two buttons, "tap the mic when you are ready" and
+  the mic — all presented as though all were live. While an answer waits to be checked, everything
+  else is **dimmed, never disabled**: no `pointer-events: none`, no `display: none`, because a
+  patient reaching for the mouse must still be able to use it and hiding controls mid-turn is how a
+  kiosk traps someone. A test asserts that on every rule the stage drives.
+- **(i) `data-kiosk-stage` is not a second state machine.** It is set in the one function that opens
+  the read-back gate and cleared in the one that closes it — the gate reporting itself, exactly as
+  `data-kiosk-state` is the one derived avatar state reporting itself (ADR-0054). The three-step
+  strip is lit purely by those two attributes and has **no JS at all**, so it can never tell a
+  patient the mic is open when it is not.
+- **(j) Automatic movement is `block: 'nearest'`, and nothing else.** The requirement is that the
+  patient never has to search the page; the failure mode is a kiosk that yanks itself around while
+  an elderly patient is mid-sentence. `nearest` means an element already on screen **does not move
+  at all**, so the helper is silent on a wide screen and only acts on a stacked or short one. It is
+  called at four moments (mic opens, read-back opens, a follow-up question opens, a screen changes)
+  and **deliberately never per recognition result** — scrolling on every interim chunk is how a page
+  becomes unusable while someone is talking. It honours `prefers-reduced-motion`.
+
+### The review page (k)–(l)
+
+- **(k) The answers take column 1, and what to DO about them takes column 2.** The three buttons were
+  a full-width bar at the very bottom, so the patient scrolled past every answer card to reach the
+  one action the screen exists for. The assistant, the still-missing notice and the buttons are now
+  one sticky rail beside the answers, with "Confirm & Submit" first and full width.
+- **(l) The rail is placed with `order`, NOT `grid-column`.** An explicit `grid-column: 2` would
+  **create an implicit second track** the moment any single-column rule applies — the exact class of
+  bug S36 fixed on this grid when a hidden float left its track behind. With auto-placement, one
+  column means one column and the two children simply stack. This is what let every existing
+  collapse rule (`.no-float`, both media queries) keep working untouched, and it was verified in a
+  browser at 1280/900/375 px and in the `no-float` state.
+
+### What was NOT done
+
+- **No backend file was touched.** No route, service, schema, migration, FHIR builder, PDF renderer,
+  OTP path or auth code changed — verified from the diff.
+- **No voice/STT/TTS logic changed.** `kiosk.js` gained one helper and four call sites; the
+  recogniser, the endpointer, `finalBuffer`, the raw-transcript path, the echo guard and the submit
+  flow are otherwise untouched.
+- **Three pinned test literals were UPDATED, not weakened**, because the structure they described
+  genuinely changed: two `grid-template-columns` values on the review grid, and the assertion that
+  the forced reflow precedes `scrollIntoView` — now asserted inside the shared helper the reflow
+  moved into. Every test's stated intent is preserved and re-stated in place.

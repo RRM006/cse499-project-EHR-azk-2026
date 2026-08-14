@@ -90,7 +90,10 @@ def test_the_collapsed_column_outranks_both_responsive_overrides():
     each rewrite `grid-template-columns` for their own reasons."""
     html = kiosk_html()
     short = html.split("@media (max-height: 820px) {")[1].split("\n    }")[0]
-    assert "grid-template-columns: 170px minmax(0, 1fr)" in short
+    # S40: the rail is the SECOND track now (answers first), so the short-screen
+    # override narrows the RAIL - the same decision as before, the same side of the
+    # layout giving up width first, written for the flipped order.
+    assert "grid-template-columns: minmax(0, 1fr) 250px" in short
     # …and neither override is itself specific enough to beat the collapsed form.
     assert ".summary-body.no-float" not in short
 

@@ -254,10 +254,17 @@ def test_the_panel_is_brought_above_the_fold_after_layout_is_current():
     """Measured, not assumed: with the panel open the dock is taller than a 694px
     viewport and both buttons landed below the fold. The forced reflow is load-bearing —
     in the same tick as display='flex' the layout is stale and scrollIntoView is a
-    silent no-op (the same defect and the same fix as F5b's phone read-back)."""
+    silent no-op (the same defect and the same fix as F5b's phone read-back).
+
+    S40 moved the reflow one level down, into the shared bringIntoView() helper that
+    every "bring this into view" call site now goes through. The load-bearing property
+    is unchanged and is asserted where it now lives: the panel is handed to that helper,
+    and that helper forces layout BEFORE it scrolls."""
     show = fn_body("showAnswerConfirm")
-    assert "void panel.offsetHeight;" in show
-    assert show.index("void panel.offsetHeight;") < show.index("panel.scrollIntoView({")
+    assert "bringIntoView(panel)" in show
+    helper = fn_body("bringIntoView")
+    assert "void el.offsetHeight;" in helper
+    assert helper.index("void el.offsetHeight;") < helper.index("el.scrollIntoView({")
 
 
 # --- both docks, both languages, and a way out ---

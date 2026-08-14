@@ -16,6 +16,99 @@
 
 ---
 
+## Session 40 — 2026-08-14 — **A backtick in a comment had killed the whole Medic portal; the patient kiosk becomes TWO COLUMNS with one thing emphasised at a time** — 1005 → 1031 tests
+- Did: root-caused and fixed the reported Medic-portal outage, gave the kiosk the clarity redesign
+  (1A–1F), and closed the test gap that let the outage ship. **One new ADR: 0065.** **No backend file
+  was touched** — no route, service, schema, migration, FHIR builder, PDF renderer, OTP path or auth
+  code. **Alembic stays 0014, 18 tables, no new dependency.** **No module changed status; M15 stays 🟨.**
+- **THE MEDIC BUG — one root cause, both reported symptoms, and it was never the backend.** S39 added
+  a developer note inside `renderPostReferral()`'s **template literal**, written as an HTML comment,
+  and the note named the `patients` table **in backticks**. A backtick inside a template literal ends
+  it, so the browser parsed the next word as code: `Uncaught SyntaxError: Unexpected identifier
+  'patients'`. A syntax error is not partial — the entire `<script>` block is discarded before one
+  line runs, so **every function it declared was undefined**. `login()` did not exist, which is
+  exactly why "ড্যাশবোর্ডে প্রবেশ করুন" did nothing at all; and `tickClock()` never ran, which is why
+  the S38 clock sat on its "—" placeholder. **The reported "no time is shown" was not a second bug.**
+  The `304 Not Modified` lines were a red herring: every asset was served correctly and one of them
+  could not be parsed.
+- **The fix is WHERE the note lives, not how it is escaped.** Escaping the backticks would have
+  worked and left the trap armed. The paragraph moved into the existing `/* S39 */` comment above the
+  function, which already explained the same removal. Verified in a real browser: the dashboard
+  opens, `👤 Staff: Medic Rahman`, and the clock ticks (`১১:২৪:৩৯ PM`, `শুক্রবার, ১৪ আগস্ট, ২০২৬`) —
+  clicked through in **Bangla**, on the exact button text that was reported.
+- **⚠ Why 1005 passing tests could not see it, and what now can.** Every frontend test here is a
+  static-source assertion (S28: no vitest, no jsdom), and the file still *contained* every string
+  those tests search for — the source was intact, only its **executability** was gone. That is the
+  gap S39 wrote down about itself ("no browser has rendered the new portal DOM"). Now closed in two
+  layers: a dependency-free ban on the exact construct, and a `node --check` parse of every inline
+  block and shared script that **skips with a reason** when node is not on PATH (one
+  requirements.txt, Windows and Arch — no Node dependency was added). **Both layers were proved
+  non-vacuous against the HEAD version of the file before it was fixed.**
+- **KIOSK — the screen is now split by WHOSE side of the conversation it is.** Left = everything the
+  machine does (robot, status, thread); right = everything the patient does (their live words, the
+  read-back, the mic, the buttons, the mode switch). It had been one tall column, so "where the AI
+  is" and "where I speak" were the same place, stacked, with the patient's own words in the middle of
+  the pile. ⚠ **Done with grid PLACEMENT and no wrapper elements** — the DOM, every id, every
+  `aria-live` relationship and the screen-reader reading order are unchanged, and one media query
+  returns it to exactly the single column it was before.
+- **The patient's own words are now the loudest thing on screen**: 1.3rem, upright (italic grey reads
+  as "placeholder, not real yet"), in a box that turns red-edged while the mic is open — via a MORE
+  SPECIFIC selector, never a second equal-specificity rule (the S33 dead-CSS trap). A caption labels
+  it, because the box is **emptied between turns** and its own placeholder is gone after the first
+  answer.
+- **ONE emphasised thing at a time (the reported name-confirmation confusion).** While an answer
+  waits to be checked, the mic row, the mode switch and the "tap the mic" hint step back and the
+  read-back is the only lit thing. ⚠ **Dimmed, never disabled** — no `pointer-events: none`, no
+  `display: none`, asserted per-rule by a test: a patient reaching for the mouse must still be able
+  to use it. A three-step strip (1 I ask · 2 You speak · 3 You check) shows the order of the exchange
+  without a sentence to read, and is lit **purely by CSS** from the two attributes the kiosk already
+  publishes — it has no JS at all, so it can never claim the mic is open when it is not.
+- **Automatic movement is `block: 'nearest'`, and that is the whole restraint.** An element already
+  on screen does not move, so the helper is silent on a wide screen and acts only on a stacked or
+  short one. Four call sites (mic opens, read-back opens, follow-up question opens, screen changes)
+  and ⚠ **deliberately never per recognition result** — scrolling on every interim chunk is how a
+  page becomes unusable while someone is talking. Honours `prefers-reduced-motion`.
+- **REVIEW PAGE — the answers take column 1, what to DO about them takes column 2.** The three
+  buttons had been a full-width bar at the very bottom, so the patient scrolled past every answer
+  card to reach the one action the screen exists for. Assistant + still-missing notice + buttons are
+  now one **sticky** rail beside the answers, "Confirm & Submit" first and full width. ⚠ Placed with
+  **`order`, not `grid-column`** — an explicit column would create an implicit second track the
+  moment any single-column rule applies, which is the exact bug S36 fixed here; auto-placement means
+  one column really is one column, so `.no-float` and both media queries kept working untouched.
+- Decided: **ADR-0065** (a)–(l), with four rejections — not escaping the backticks in place; not
+  making node a hard test dependency; not banning HTML comments outright (it would have meant
+  rewriting live markup that never broke); and no wrapper `<section>`s for the two columns.
+- Broke / problem: nothing regressed, and one suspected bug turned out **not** to be one — a language
+  toggle appeared to wipe the live transcript, but that was the test harness writing `textContent`
+  directly; the real recogniser path already mirrors live text into **both** language slots (P1-2,
+  rule #1). Verified in source rather than assumed, and now pinned by a test.
+- ⚠ **Three pinned test literals were UPDATED, not weakened**, because the structure they describe
+  genuinely changed: two `grid-template-columns` values on the review grid, and the assertion that
+  the forced reflow precedes `scrollIntoView` — now asserted inside the shared helper the reflow
+  moved into. Each test's stated intent is preserved and re-stated in place. No test was deleted or
+  loosened.
+- Verified: **1031 passed, 2 skipped, 0 failures** (was 1005/2). New files:
+  `test_portal_inline_script_parses.py` (3) and `test_kiosk_s40_layout.py` (23) — 26 new.
+  **Real-browser verification, which is what this session was missing:** medic login clicked in
+  Bangla and the dashboard entered, clock ticking; doctor portal entered, **both ⬇ EHR record (FHIR)
+  and (PDF) buttons present**, the S39 name-provenance line correctly reporting a name from an
+  *earlier* visit; kiosk driven **end to end through a real session** (phone → OTP → conversation →
+  10-card Bangla review) with a clean console on every page. Layout measured at **1280 / 900 / 375
+  px** and in the `no-float` state: two columns at 1280 (774 + 400 conversation; 641 + 250 review,
+  both columns top-aligned), one column at 900 and 375, **no horizontal scroll at any width**, mic
+  and primary action in view without scrolling.
+- Deferred: **pixel screenshots could not be taken** — the Browser pane was not displayed, so it
+  composites no frames. Everything above is measured DOM geometry and computed styles, which is
+  precise about position, size and state but says nothing about how it *looks*; a human still owns
+  that judgement. Also unchanged and still open: **Step S5**, the mid-turn word-loss rule #1 decision
+  (the human's), rotating the **3 API keys**, formal **WER**, and the Edge run.
+- ⚠ Note for next session: driving the kiosk end to end left **one synthetic in-progress visit**
+  (phone `1999000111`, synthetic Bangla answers) in the dev DB. It was never submitted, so it sits in
+  the medic queue as a waiting case. Delete it or ignore it — it is test data, not a patient.
+- Next: **a human pass over all three portals in a real browser** — the S38/S39 walkthrough still
+  stands, plus this session's kiosk redesign, where the one question only a person can answer is
+  whether it now reads as *simple* to someone who has never used a computer.
+
 ## Session 39 — 2026-08-14 — **The patient NAME learns where it came from, the medic can finally record BLOOD SUGAR (with the context that makes it mean anything), and the EHR record gains a human-readable PDF rendered from the same FHIR bundle** — 931 → 1005 tests
 - Did: a continuous inspect → root-cause → implement → test → verify → fix loop over one reported
   bug and two requested features, plus a redundancy audit. **One new ADR: 0064** (a–o, with ten

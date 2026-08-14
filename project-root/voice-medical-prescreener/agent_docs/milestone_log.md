@@ -6,6 +6,73 @@
 
 **Status keys:** ⬜ Not started · 🟨 In progress · 🟦 Blocked · ✅ Done · ⛔ Retired
 
+**Last updated:** 2026-08-14 (**Session 40 — the reported Medic-portal outage root-caused and fixed,
+the patient kiosk given its clarity redesign, and the test gap that let the outage ship closed.
+1005 → 1031 tests pass, 2 skipped, 0 failures.** New ADR **0065**.
+⚠ **NO BACKEND FILE WAS TOUCHED** — no route, service, schema, migration, FHIR builder, PDF renderer,
+OTP path or auth code. **Alembic stays 0014. 18 tables. No new dependency.**
+⚠ **NO MODULE CHANGED STATUS.** The work is entirely in the three front ends. **M15 stays 🟨.**
+⚠ **S40 changed NO voice/STT/TTS logic**, so the real-mic status is unchanged.
+
+**THE MEDIC-PORTAL OUTAGE — one root cause, BOTH reported symptoms, and it was never the backend.**
+Reported as two things: `ড্যাশবোর্ডে প্রবেশ করুন` did not enter the dashboard, and the portal showed
+no time. They were the same defect. S39 had added a developer note inside `renderPostReferral()`'s
+**template literal**, written as an HTML comment, and the note named the `patients` table **in
+backticks** — and a backtick inside a template literal *ends it*, so the browser parsed the next word
+as code and threw `SyntaxError: Unexpected identifier 'patients'`.
+A syntax error is not partial: **the entire `<script>` block is discarded before one line of it
+runs**, so every function it declared was undefined. `login()` did not exist, and `tickClock()` never
+ran — which is why the S38 clock sat on its "—" placeholder. The `304 Not Modified` lines in the log
+were a red herring; every asset was served correctly and one of them could not be parsed.
+The fix is **where the note lives, not how it is escaped**: escaping the backticks would have worked
+and left the trap armed, so the paragraph moved into the existing `/* S39 */` JS comment above the
+function. Verified in a real browser, clicking the Bangla button that was reported.
+
+⚠ **WHY 1005 PASSING TESTS COULD NOT SEE IT.** Every frontend test in this project is a
+static-source assertion (the S28 decision — no vitest, no jsdom). The file still *contained* every
+string those tests search for; the source was intact and only its **executability** was gone. This is
+exactly the gap S39 recorded about itself ("no browser has rendered the new portal DOM"). It is now
+closed in two layers that add **no runtime dependency**: a dependency-free ban on the precise
+construct, and a `node --check` parse of every inline block and shared script which **skips with a
+reason** when node is not on PATH. Both layers were **proved non-vacuous** against the pre-fix blob.
+
+**THE KIOSK — split by WHOSE side of the conversation it is.** The reported problem was not that it
+was ugly but that it was *not understandable* for a child, an elderly patient, or someone who has
+never used a computer. It had been one tall column — robot, then the whole conversation, then a dock
+holding the transcript, the read-back, the countdown, three buttons, a hint, a mode switch and a text
+box — so "where the AI is" and "where I speak" were the same place, stacked, with the patient's own
+words in the middle of the pile. Now: **machine on the left, patient on the right**, their live words
+large and upright in a box that turns red-edged while the mic is open, a 92px microphone, and a
+three-step strip (1 I ask · 2 You speak · 3 You check) that shows the order of the exchange without a
+sentence to read.
+⚠ Built with grid **PLACEMENT and no wrapper elements** — the DOM, every id, every `aria-live`
+relationship and the screen-reader reading order are unchanged, and one media query returns the page
+to exactly the single column it was before.
+⚠ **The step strip has NO JavaScript** and `data-kiosk-stage` is set only by the function that opens
+the read-back gate and cleared by the one that closes it — the gate reporting itself, never a second
+state machine that could tell a patient the mic is open when it is not (ADR-0054's rule).
+⚠ While an answer waits to be checked, everything else is **dimmed, NEVER disabled** — no
+`pointer-events: none`, no `display: none`, asserted per CSS rule by a test: a patient reaching for
+the mouse must still be able to use it, and hiding controls mid-turn is how a kiosk traps someone.
+⚠ Automatic movement is **`block: 'nearest'`** and nothing else, so an element already on screen does
+not move at all — and it is **never** called per recognition result, because scrolling on every
+interim chunk is how a page becomes unusable while someone is talking.
+
+**THE REVIEW PAGE — the answers take column 1, what to DO about them takes column 2.** The three
+buttons had been a full-width bar at the very bottom, so the patient scrolled past every answer card
+to reach the one action the screen exists for. The assistant, the still-missing notice and the
+buttons are now one **sticky** rail beside the answers, "✔ Confirm & Submit" first and full width.
+⚠ Placed with **`order`, not `grid-column`**: an explicit column would create an implicit second
+track the moment any single-column rule applies, which is the exact bug S36 fixed on this grid — so
+`.no-float` and both media queries kept working untouched.
+
+⚠ **What was NOT verified this session: APPEARANCE.** No screenshot could be taken (the Browser pane
+was not displayed, so it composites no frames). Everything claimed above is **measured DOM geometry
+and computed style** in a real browser — two columns at 1280px, one at 900 and 375, no horizontal
+scroll at any width, both review columns top-aligned, dimmed-but-clickable confirmed — plus a real
+end-to-end kiosk session (phone → OTP → conversation → 10-card Bangla review) with a clean console.
+That is precise about position and state and **silent about how it looks**; a human still owns that.
+
 **Last updated:** 2026-08-14 (**Session 39 — one reported BUG root-caused and fixed, two requested
 features built, one duplicate form removed. 931 → 1005 tests pass, 2 skipped, 0 failures.** New ADR
 **0064** (a–o, ten rejections). **Alembic 0013 → 0014** — TWO columns on `patients`, no new table,

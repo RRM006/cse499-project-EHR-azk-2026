@@ -209,10 +209,16 @@ def test_the_assistant_uses_no_external_asset():
 def test_the_review_is_two_columns_that_can_actually_shrink():
     """`minmax(0, 1fr)`, not a bare `1fr`: an auto-min track refuses to go below its
     content's min-content width, so one wide card would push the whole review sideways
-    instead of wrapping inside its column."""
+    instead of wrapping inside its column.
+
+    S40 flipped WHICH track is which: the patient's answers now take the wide FIRST
+    column and the review rail (assistant, still-missing notice, the three buttons)
+    the fixed second one, so the thing the patient must DO sits beside their
+    information instead of below all of it. The property this test exists for is
+    unchanged - the flexible track is still minmax(0, 1fr) and can still shrink."""
     css = top_level_css()
     body = css.split(".summary-body {")[1].split("}")[0]
-    assert "grid-template-columns: 210px minmax(0, 1fr)" in body
+    assert "grid-template-columns: minmax(0, 1fr) 300px" in body
     narrow = kiosk_html().split("@media (max-width: 620px) {")[1]
     assert ".summary-body { grid-template-columns: minmax(0, 1fr); }" in narrow
     assert ".doctor-float { position: static; }" in narrow

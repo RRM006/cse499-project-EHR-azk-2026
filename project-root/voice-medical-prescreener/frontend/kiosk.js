@@ -275,6 +275,13 @@ function startNewSession() {
 
 function showScreen(id) {
   document.querySelectorAll('.screen').forEach((s) => s.classList.toggle('active', s.id === id));
+  /* S40 (1C): a screen the patient has just arrived at starts at ITS top. `.screen` is
+     the scroll container (S34), and it keeps its scroll position across an
+     activate/deactivate cycle — so returning to the review after a follow-up question
+     used to drop the patient wherever they had scrolled to last time. Instant, not
+     smooth: this is a page change, and animating it would just look like a glitch. */
+  const shown = document.getElementById(id);
+  if (shown) shown.scrollTop = 0;
 }
 
 /* P1-2: bubble labels (and assistant text that HAS a bilingual source) carry
@@ -349,6 +356,36 @@ function scrollThreadToEnd(thread) {
     } catch (_) { /* older engine — fall through to the instant path */ }
   }
   thread.scrollTop = thread.scrollHeight;
+}
+
+/* S40 (1C) — bring the thing the patient must act on into view, and NOTHING else.
+
+   The requirement is "the patient should not need to search the page"; the failure mode
+   is a kiosk that yanks itself around while an elderly patient is mid-sentence. Both are
+   handled by ONE choice: `block: 'nearest'`. An element already on screen does not move
+   at all — the browser scrolls only far enough to reveal something that is genuinely
+   out of view — so this is silent during normal use on a wide screen (where the S40 two
+   columns already put the assistant and the patient's panel on screen together) and only
+   does anything on a stacked/short screen, which is exactly where it was needed.
+
+   ⚠ Deliberately NOT called per recognition result. Scrolling on every interim chunk is
+   how a page becomes unusable while someone is talking, and the dock is already in view
+   from the moment the microphone opened.
+
+   `void offsetHeight` first: in the same tick that a panel is un-hidden the layout is
+   still stale and scrollIntoView() is a silent no-op — the measured reason
+   showAnswerConfirm() has carried that line since S34. */
+function bringIntoView(target, { block = 'nearest' } = {}) {
+  const el = typeof target === 'string' ? document.getElementById(target) : target;
+  if (!el || !el.scrollIntoView) return;
+  void el.offsetHeight;
+  const reduced = window.matchMedia
+    && window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+  try {
+    el.scrollIntoView({ block, inline: 'nearest', behavior: reduced ? 'auto' : 'smooth' });
+  } catch (_) {
+    el.scrollIntoView();   // older engine: no options object, still lands in view
+  }
 }
 
 /* P1-2: JS-written UI text must survive the EN/BN toggle — writing through here keeps
@@ -1442,6 +1479,10 @@ function toggleListening() {
   setBilingualText(activeDock().hint, listeningHint().en, listeningHint().bn);   // S4: mode-aware
   ttsCancel();   // ADR-0049: silences server audio too, not just speechSynthesis
   try { recognition.start(); } catch (_) {}   // already-started engine throws InvalidStateError
+  /* S40 (1C): the microphone is open, so the place the patient speaks into must be on
+     screen. ONE call site for both paths — a tap and the S3 auto-open both arrive here,
+     which is the same "one code path, not two" this function already relies on. */
+  bringIntoView(activeDock().mic);
 }
 
 function stopListening(sendTurn) {
@@ -1591,16 +1632,25 @@ function showAnswerConfirm(text) {
      so on a laptop screen the two buttons land BELOW THE FOLD — the patient hears their
      answer read back and sees nothing to press. Same defect, same proven fix as
      showPhoneConfirm(): force layout to be current (in this tick it is still stale and
-     scrollIntoView is a silent no-op), then bring the panel up. */
+     scrollIntoView is a silent no-op), then bring the panel up.
+     ⚠ S40: both halves now live in bringIntoView(), which every "bring this into view"
+     call site shares — the forced reflow did not go away, it moved. */
+  /* S40 (1D): publish "an answer is waiting to be checked" so the CSS can make the
+     read-back the ONLY emphasised thing on screen. Set in exactly the two functions
+     that open and close this gate, so it cannot drift: it is not a second state
+     machine, it is this one gate reporting itself, the same way `data-kiosk-state` is
+     the derived avatar state reporting itself. */
+  document.body.dataset.kioskStage = 'confirming';
   const active = activeDock();
   const panel = active.confirmPanel ? document.getElementById(active.confirmPanel) : null;
   if (!panel) return;
-  void panel.offsetHeight;
-  panel.scrollIntoView({ block: 'nearest' });
+  bringIntoView(panel);   // S40: the shared helper — same 'nearest', now reduced-motion aware
 }
 
 function hideAnswerConfirm() {
   if (state) state.pendingAnswer = null;
+  // S40 (1D): the gate is closed - the rest of the dock comes back to full strength.
+  delete document.body.dataset.kioskStage;
   Object.values(DOCKS).forEach((dock) => {
     const panel = dock.confirmPanel ? document.getElementById(dock.confirmPanel) : null;
     if (panel) panel.style.display = 'none';
@@ -2400,6 +2450,7 @@ function setResumeMode(question, scripted = null) {
   if (layout) layout.classList.toggle('no-float', state.resumeActive);
   if (state.resumeActive) {
     document.getElementById('resume-question').textContent = text;
+    bringIntoView('resume-dock');   // S40 (1C): a new question must not open below the fold
     state.lastQuestionText = text;   // S34: so a rejected read-back re-asks THIS question
     askAloud(text);   // ADR-0028 + S3: spoken, then the mic arms itself
   } else {

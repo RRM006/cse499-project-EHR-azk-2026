@@ -72,6 +72,82 @@ transcribed by hand (the "ground truth"). Record the model + machine each time.
 
 ## Test entries (newest first)
 
+## 2026-08-14 — Session 40 — the Medic-portal outage, the kiosk two-column redesign — suite **1005 → 1031**
+
+- **Setup:** Windows 11, Python 3.14 venv, `pytest backend/tests/` with `PYTHONIOENCODING=utf-8`.
+  Browser verification in the in-app Chromium against a real uvicorn on **port 8001**
+  (`.claude/launch.json`); the human's own server was on 8000 and was neither stopped nor touched.
+  The app is port-agnostic (all front-end paths are relative), so 8001 and 8000 are equivalent.
+- **Result: 1031 passed, 2 skipped, 0 failed** (was 1005 passed / 2 skipped). +26 tests, all new.
+  Targeted runs during the session: staff portals 77/77; kiosk answer-confirm 23/23; review +
+  resume-layout + required-info 48/48; the two new files 3/3 and 23/23.
+
+### The defect this session existed to find, and why the suite could not see it
+
+- **Found:** `frontend_medic/index.html` failed to parse. An S39 developer note sat inside
+  `renderPostReferral()`'s template literal as an HTML comment and named the `patients` table **in
+  backticks**; the backtick ended the literal and the browser threw
+  `Uncaught SyntaxError: Unexpected identifier 'patients'`.
+- **Blast radius (measured in the browser, not inferred):** the entire inline `<script>` was
+  discarded, so `login()` and `tickClock()` were **undefined**. Both reported symptoms — "the login
+  button does nothing" and "no time is shown" — were this one defect.
+- **Why 1005 tests passed anyway:** every frontend test here is a static-source assertion (S28 — no
+  vitest, no jsdom). The file still *contained* every asserted string; only its executability was
+  gone.
+- **After the fix, measured live:** `typeof login === "function"`, `typeof tickClock === "function"`,
+  clock reading `11:03:50 pm` then `11:04:10 pm` (i.e. actually ticking), and after clicking the
+  Bangla button `ড্যাশবোর্ডে প্রবেশ করুন`: `#login-screen` hidden, `#portal-main` `display: flex`,
+  `👤 Staff: Medic Rahman`, error banner empty, 5 stat tiles rendered.
+
+### New coverage
+
+- `backend/tests/test_portal_inline_script_parses.py` — **3 tests.** Layer 1 (always runs): no
+  backtick inside an HTML comment inside any inline `<script>` of `/medic/`, `/doctor/`,
+  `/kiosk.html`. Layer 2 (skips when `node` is absent): `node --check` over every inline block **and**
+  `shared.js` / `staff.js` / `tts.js` / `kiosk.js`.
+- **Both layers proved NON-VACUOUS** by running them against the pre-fix HEAD blob of
+  `frontend_medic/index.html`: layer 1 → `True` (would have caught it), layer 2 → `True`.
+- `backend/tests/test_kiosk_s40_layout.py` — **23 tests** over the redesign: the two columns and
+  which side is whose; the DOM left unwrapped; the single-column fallback; the enlarged transcript as
+  a *more specific* rule (never an equal-specificity duplicate); the confirming stage set/cleared by
+  the gate itself; **dimmed-not-disabled asserted per CSS rule**; the step strip having no JS driver;
+  the review rail placed by `order` rather than `grid-column`; `bringIntoView` using `block:
+  'nearest'` and honouring reduced motion; nothing scrolling per recognition result; and that no
+  second recogniser or `speechSynthesis.speak()` was introduced.
+
+### Browser verification (what was and was NOT proven)
+
+- **Medic:** login clicked **in Bangla**, dashboard entered, live clock `১১:২৪:৩৯ PM` /
+  `শুক্রবার, ১৪ আগস্ট, ২০২৬`. Fresh tab → **no console messages at all**.
+- **Doctor:** entered, clock live, a completed case opened; **both `⬇ EHR রেকর্ড (FHIR)` and
+  `⬇ EHR রেকর্ড (PDF)` present**, and the S39 name-provenance line correctly read
+  `⚠ নাম লিখেছেন Medic Rahman — ১৩ আগ, ২০২৬, ১১:৪৪ PM — এটি আগের একটি ভিজিটে, এই ভিজিটে নয়।`
+  Fresh tab → no console errors.
+- **Kiosk, driven end to end through a real session** (typed path; no microphone in this
+  environment): phone → OTP (`000000` dev bypass) → conversation → four answers → **10-card Bangla
+  review**. Clean console; error banner empty throughout.
+- **Layout, measured (not eyeballed):**
+  - 1280×720 conversation: assistant column `x=48 w=774`, patient dock `x=832 w=400`; transcript
+    font `20.8px`; mic `92px`; mic and "Done" both in view; **no page scroll, no horizontal scroll**.
+  - 1280×720 review with 10 real cards: answers `x=178 w=641`, rail `x=837 w=250`, **both tops at
+    y=215** (aligned), submit inside the rail, grid does not overflow.
+  - 900×720 → single column (`844px`), dock below, mic back to `74px`. 375×812 → single column,
+    step strip 314px, **no horizontal scroll**.
+  - `no-float` (a follow-up question open — the S36 regression): grid goes **641 → 909px** rather
+    than being squeezed into a narrow track; no overflow; restored to 641px on close.
+  - State-driven emphasis: normal `dock-row` opacity `1`; confirming `0.38` with
+    `pointer-events: auto` (**still clickable**) and the hint hidden; listening turns the transcript
+    border solid red.
+- ⚠ **NOT proven: appearance.** The Browser pane was not displayed, so it composites no frames and
+  **no screenshot could be taken**. Everything above is DOM geometry and computed style — precise
+  about position, size and state, silent about how it looks. A human still owns that judgement.
+- ⚠ **NOT proven: the microphone.** No real-mic run happened this session. The S37 wording stands
+  unchanged for S33–S36, and S40 changed no voice logic.
+- ⚠ Driving the kiosk left **one synthetic in-progress visit** (phone `1999000111`) in the dev DB.
+  Never submitted; sits in the medic queue as a waiting case. Test data, not a patient (rule #4).
+
+
+
 ## 2026-08-13 — Session 37 — staff-portal roles (medic operations + doctor longitudinal) + the motion layer: suite **723 → 767**
 - Setup: Python 3.13.3 on Windows 11; `pytest backend/tests/` with `PYTHONIOENCODING=utf-8`. Backend
   tests are fully offline (no LLM, no network) — visits, profiles and risk rows are written straight

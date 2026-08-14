@@ -75,7 +75,43 @@
     .confirm-row { display: flex; gap: 10px; flex-wrap: wrap; justify-content: center; }
 
     /* conversation */
-    .convo-layout { flex: 1; display: flex; flex-direction: column; padding: 20px 28px; gap: 14px; min-height: 0; max-width: 900px; margin: 0 auto; width: 100%; }
+    /* ============================================================
+       S40 — the conversation is TWO COLUMNS: the assistant on the left, the patient on
+       the right. Reported problem: the screen "looks congested and is not sufficiently
+       understandable" for a child, an elderly patient, or someone who has never used a
+       computer. It was one tall column — robot, then the whole conversation, then a
+       dock holding the transcript, the read-back, the countdown, three buttons, a hint,
+       a mode switch and a text box — so "where the AI is" and "where I speak" were the
+       same place, stacked, and the patient's own words sat in the middle of the pile.
+
+       Split by WHOSE side of the conversation it is: everything the machine does is on
+       the left, everything the patient does is on the right, and neither moves.
+
+       ⚠ Done with grid PLACEMENT and no wrapper elements, on purpose. The DOM stays
+       exactly as it was, so every JS id, every screen-reader relationship and the
+       doctor-stage/chat-thread adjacency the tests read are untouched, and one media
+       query returns the whole thing to the original single column on a narrow screen.
+       ============================================================ */
+    .convo-layout {
+      flex: 1; display: grid; min-height: 0; width: 100%;
+      max-width: 1240px; margin: 0 auto; padding: 20px 28px; gap: 14px 22px;
+      grid-template-columns: minmax(0, 1fr) minmax(330px, 400px);
+      grid-template-rows: auto minmax(0, 1fr);
+    }
+    .convo-layout > .doctor-stage { grid-column: 1; grid-row: 1; }
+    .convo-layout > .chat-thread  { grid-column: 1; grid-row: 2; }
+    .convo-layout > .voice-dock   { grid-column: 2; grid-row: 1 / -1; }
+
+    /* In a 330-400px column three buttons side by side is a squeeze, and the mic is not
+       one of three equal things anyway — it is THE control. So the row becomes a stack
+       with the microphone on top at nearly half again its old size (68 -> 92px), and the
+       two secondary buttons full width beneath it, where a shaky hand cannot miss them.
+       `order: -1` rather than reordering the markup: the DOM order is the one a screen
+       reader and the keyboard follow, and "repeat the question" genuinely does come
+       before "I am done". */
+    .voice-dock .dock-row { flex-direction: column; gap: 11px; }
+    .voice-dock .dock-row .btn { width: 100%; }
+    .voice-dock .mic-btn { width: 92px; height: 92px; font-size: 2.1rem; order: -1; }
     .chat-thread { flex: 1; overflow-y: auto; min-height: 0; display: flex; flex-direction: column; gap: 14px; padding: 4px 2px; }
     .chat-turn { max-width: 84%; border-radius: 14px; padding: 14px 18px; line-height: 1.6; box-shadow: var(--shadow-sm); font-size: 1.12rem; position: relative; }
     .chat-turn.ai { align-self: flex-start; background: var(--bg-white); border: 1px solid var(--border-color); border-top-left-radius: 4px; }
@@ -97,9 +133,119 @@
     .chat-turn.patient .bubble-speak:hover { background: rgba(255,255,255,.2); }
     /* KIOSK-2: visible hint when no Bangla TTS voice is installed */
     .voice-hint { display: none; font-size: .8rem; color: #92400E; background: #FEF3C7; border: 1px solid #FDE68A; border-radius: var(--radius); padding: 6px 12px; }
-    .voice-dock { border-top: 1px solid var(--border-color); padding-top: 14px; display: flex; flex-direction: column; align-items: center; gap: 10px; }
+    /* S40: the patient's own panel. A card rather than a rule-off strip at the bottom
+       of the page — it is now a PLACE ("this side is mine"), not the leftover space
+       under the conversation. It scrolls inside itself so the microphone can never be
+       pushed under the fold by a long read-back, which is the S34 defect one level up. */
+    .voice-dock {
+      display: flex; flex-direction: column; align-items: center; gap: 12px;
+      min-height: 0; overflow-y: auto;
+      background: var(--bg-white); border: 1px solid var(--border-color);
+      border-radius: 18px; padding: 15px 16px 18px;
+      box-shadow: 0 4px 16px rgba(13,63,60,.07);
+    }
+    /* Who this column belongs to, said once, in the same place, on every screen. The
+       left column needs no twin: the robot's face and "Your AI health assistant" under
+       it already say whose side that is, and a second label there would be the
+       unnecessary panel this redesign is removing. */
+    .dock-title {
+      width: 100%; font-size: 1rem; font-weight: 800; color: var(--primary-color);
+      display: flex; align-items: center; gap: 8px;
+      padding-bottom: 10px; border-bottom: 2px solid #D8ECE8;
+    }
+    /* The label that names the box below it. The box itself is EMPTIED between turns
+       (setBilingualText(dock.transcript, '', '')), so its placeholder is gone after the
+       first answer — a caption above it is what keeps the box explained all session. */
+    .dock-caption {
+      width: 100%; font-size: .82rem; font-weight: 700; letter-spacing: .04em;
+      text-transform: uppercase; color: var(--text-muted);
+    }
     .dock-transcript { width: 100%; min-height: 46px; background: #F4FAF8; border: 1px dashed var(--border-color); border-radius: var(--radius); padding: 11px 16px; font-style: italic; color: var(--text-muted); text-align: center; font-size: 1.05rem; }
     .dock-row { display: flex; align-items: center; gap: 18px; width: 100%; justify-content: space-between; }
+
+    /* ============================================================
+       S40 (1B) — THE PATIENT'S OWN WORDS ARE THE LOUDEST THING ON THE SCREEN.
+       More specific than `.dock-transcript` on purpose: the phone/OTP/resume docks keep
+       the compact original (they sit under a form, not beside a conversation), and a
+       second EQUAL-specificity rule would silently lose to whichever came last — the
+       exact dead-CSS bug `test_no_selector_is_sized_twice_at_the_same_specificity`
+       exists to catch.
+       Not italic and not muted: italic grey reads as "placeholder, not real yet", and
+       this is the one thing on screen that IS real — it is what the machine believes
+       the patient just said, and getting it wrong ends up in a medical record. */
+    .voice-dock .dock-transcript {
+      min-height: 118px; display: flex; align-items: center;
+      font-size: 1.3rem; font-style: normal; font-weight: 600; line-height: 1.55;
+      color: var(--text-color); background: #F7FCFB; text-align: left;
+      border: 2px dashed #B8E5DC; padding: 14px 16px;
+    }
+    /* Listening: the box the patient is filling turns red-edged and lit, in step with
+       the microphone and the robot's face. No new state — this is the same
+       `body[data-kiosk-state]` S35 already publishes from the ONE derived state. */
+    body[data-kiosk-state="listening"] .voice-dock .dock-transcript {
+      border-style: solid; border-color: var(--danger-color); background: #FFF7F7;
+      box-shadow: 0 0 0 4px rgba(220,38,38,.10);
+    }
+
+    /* S40 — the three steps, so the ORDER of the exchange is visible without reading a
+       sentence. The target patient may not read comfortably in either language; a row
+       of three numbers with one of them lit says "we are here, that comes next" on its
+       own. Purely presentational: every state below is read from the attributes the
+       kiosk already sets, so this strip cannot disagree with the microphone. */
+    .step-strip { display: flex; align-items: center; gap: 6px; width: 100%; }
+    .step {
+      flex: 1; display: flex; flex-direction: column; align-items: center; gap: 2px;
+      padding: 7px 4px; border-radius: 12px; text-align: center;
+      background: #F4FAF8; border: 1px solid var(--border-color);
+      font-size: .68rem; font-weight: 700; color: var(--text-muted); line-height: 1.25;
+    }
+    .step-num {
+      width: 22px; height: 22px; border-radius: 50%; display: flex;
+      align-items: center; justify-content: center; font-size: .78rem; font-weight: 800;
+      background: var(--border-color); color: var(--text-muted);
+    }
+    .step.on {
+      background: #E6F7F3; border-color: var(--secondary-color); color: var(--primary-color);
+    }
+    .step.on .step-num { background: var(--secondary-color); color: #fff; }
+    body[data-kiosk-state="speaking"]  #step-ask     { background: #E6F7F3; border-color: var(--secondary-color); color: var(--primary-color); }
+    body[data-kiosk-state="speaking"]  #step-ask .step-num { background: var(--secondary-color); color: #fff; }
+    body[data-kiosk-state="listening"] #step-speak   { background: #FFF1F1; border-color: var(--danger-color); color: var(--danger-color); }
+    body[data-kiosk-state="listening"] #step-speak .step-num { background: var(--danger-color); color: #fff; }
+    body[data-kiosk-stage="confirming"] #step-check  { background: #E6F7F3; border-color: var(--secondary-color); color: var(--primary-color); }
+    body[data-kiosk-stage="confirming"] #step-check .step-num { background: var(--secondary-color); color: #fff; }
+
+    /* ============================================================
+       S40 (1D) — ONE ACTIVE THING AT A TIME.
+       Reported: at the name-confirmation moment the screen showed the question, the
+       read-back, "just say yes or no", two buttons, "Tap the mic when you are ready"
+       and the mic itself — every state presented as though all of them were live. The
+       patient cannot tell which one is theirs.
+       While an answer is waiting to be confirmed, the read-back is the only thing that
+       matters, so everything else steps back. Dimmed, never DISABLED and never
+       pointer-events:none — a patient who reaches for the mouse must still be able to
+       use it (1C), and hiding controls mid-turn is how a kiosk traps someone.
+       ⚠ `data-kiosk-stage` is set in exactly the two functions that open and close the
+       read-back gate. It is not a second state machine competing with the avatar's — it
+       is the one gate reporting itself, the same way `data-kiosk-state` is the one
+       derived state reporting itself. */
+    body[data-kiosk-stage="confirming"] .voice-dock .dock-row,
+    body[data-kiosk-stage="confirming"] .voice-dock .mode-switch,
+    body[data-kiosk-stage="confirming"] .voice-dock .dock-caption,
+    body[data-kiosk-stage="confirming"] .voice-dock .dock-transcript,
+    body[data-kiosk-stage="confirming"] .resume-dock .dock-row,
+    body[data-kiosk-stage="confirming"] .resume-dock .mode-switch,
+    body[data-kiosk-stage="confirming"] .resume-dock .dock-transcript {
+      opacity: .38;
+    }
+    /* The instruction under the dock tells the patient to tap the mic. During
+       confirmation that is the wrong instruction, and the panel above carries the right
+       one ("just say yes or no"), so it stands down rather than competing. */
+    body[data-kiosk-stage="confirming"] #listening-hint,
+    body[data-kiosk-stage="confirming"] #resume-hint { visibility: hidden; }
+    body[data-kiosk-stage="confirming"] .answer-confirm {
+      box-shadow: 0 0 0 4px rgba(13,148,136,.18); border-color: var(--secondary-color);
+    }
     .mic-btn { width: 68px; height: 68px; border-radius: 50%; background: var(--secondary-color); border: none; color: #fff; font-size: 1.6rem; cursor: pointer; box-shadow: var(--shadow-md); }
     .mic-btn.listening { background: var(--danger-color); }
 
@@ -284,7 +430,7 @@
 
     /* summary (KIOSK-5: one card per field; P1-6: Teal Medical tints, ADR-0043) */
     .summary-layout { flex: 1; padding: 24px 28px; display: flex; flex-direction: column; gap: 16px; max-width: 980px; margin: 0 auto; width: 100%; overflow-y: auto; }
-    .summary-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 14px 16px; }
+    .summary-grid { order: 1; display: grid; grid-template-columns: 1fr 1fr; gap: 14px 16px; }
     .summary-item {
       background: rgba(255,255,255,.78);
       -webkit-backdrop-filter: blur(8px); backdrop-filter: blur(8px);
@@ -319,7 +465,11 @@
       background: #FEF3C7; color: #B45309; border: 1px solid #FDE68A;
       padding: 3px 9px; border-radius: 999px;
     }
-    .summary-actions { display: flex; justify-content: flex-end; gap: 12px; align-items: center; }
+    /* In a rail the three buttons stack, and the PRIMARY one is first and full width:
+       "which button do I press" must not be a reading exercise. */
+    .summary-actions { display: flex; flex-direction: column; gap: 10px; align-items: stretch; }
+    .summary-actions .btn { width: 100%; }
+    .summary-actions #confirm-submit-btn { font-size: 1.05rem; padding: 15px 18px; font-weight: 700; }
     /* KIOSK-7: completeness chip + resume-question voice dock */
     .progress-chip {
       display: none; margin-top: 10px; padding: 6px 16px; border-radius: 999px;
@@ -347,7 +497,17 @@
     /* minmax(0, 1fr), not 1fr: a bare `1fr` track cannot shrink below its content's
        min-content width, so one wide card would push the whole review sideways instead
        of wrapping inside its column. */
-    .summary-body { display: grid; grid-template-columns: 210px minmax(0, 1fr); gap: 18px; align-items: start; }
+    /* S40 (1E): the ANSWERS take column 1 and the review rail takes column 2 — the
+       patient's own information first, the thing they must do about it beside it.
+       ⚠ Placed by `order` on the two children, NOT by `grid-column`. That is what keeps
+       every collapse rule below working untouched: an explicit `grid-column: 2` would
+       CREATE an implicit second column the moment a single-column rule applies, which
+       is the exact class of bug S36 fixed here. With auto-placement, one column means
+       one column, and the two children simply stack in `order`. */
+    .summary-body { display: grid; grid-template-columns: minmax(0, 1fr) 300px; gap: 18px; align-items: start; }
+    /* Sticky so "Confirm & Submit" is on screen at every scroll position of a long
+       review — the whole reason the bar left the bottom of the page. */
+    .review-rail { order: 2; position: sticky; top: 8px; display: flex; flex-direction: column; gap: 14px; }
     /* S36 (ADR-0057), Finding 1 — the track must not outlive its occupant.
        MEASURED defect, not a style preference: when the resume dock opens, S34's
        setResumeMode() hides #summary-float, and a hidden grid item stops being placed
@@ -462,11 +622,29 @@
       .summary-layout { padding: 16px 28px; gap: 12px; }
       /* S34: on a short screen the review must still show cards, so the floating
          assistant gives up its height first — same rule as the conversation avatar. */
-      .summary-body { grid-template-columns: 170px minmax(0, 1fr); }
+      .summary-body { grid-template-columns: minmax(0, 1fr) 250px; }
       .doctor-float-inner { padding: 10px 8px; gap: 5px; }
       .answer-text { font-size: 1.12rem; padding: 9px 12px; }
       .answer-confirm { padding: 12px 14px; gap: 9px; }
       .digit-preview { font-size: 1.3rem; }
+    }
+    /* S40 — below this width two columns stop helping: the conversation gets too
+       narrow to read and the patient's panel too narrow to hold the read-back. The
+       layout returns to EXACTLY the single column it was before S40 — the same order,
+       the same dock — so nothing about the narrow-screen experience was traded away to
+       get the wide-screen one. */
+    @media (max-width: 1000px) {
+      .convo-layout {
+        grid-template-columns: minmax(0, 1fr);
+        grid-template-rows: auto minmax(0, 1fr) auto;
+        max-width: 900px;
+      }
+      .convo-layout > .voice-dock { grid-column: 1; grid-row: 3; }
+      .voice-dock { overflow-y: visible; }
+      .voice-dock .dock-row { flex-direction: row; gap: 18px; }
+      .voice-dock .dock-row .btn { width: auto; }
+      .voice-dock .mic-btn { width: 74px; height: 74px; font-size: 1.7rem; order: 0; }
+      .voice-dock .dock-transcript { min-height: 72px; font-size: 1.18rem; }
     }
     @media (max-width: 620px) {
       .center-col { padding: 20px 14px; }
@@ -492,6 +670,7 @@
          becomes an ordinary centred chip instead of overlapping the heading. */
       .summary-body { grid-template-columns: 1fr; }
       .doctor-float { position: static; }
+      .review-rail { position: static; }
       .doctor-float-inner { flex-direction: row; flex-wrap: wrap; justify-content: center; text-align: left; }
       .doctor-float .btn { width: auto; }
       .confirm-row .btn { width: 100%; }
@@ -684,9 +863,23 @@
       </div>
       <div class="chat-thread" id="chat-thread"></div>
       <div class="voice-dock">
+        <!-- S40: whose column this is, and the three steps of one exchange. The strip
+             is lit entirely by CSS from `data-kiosk-state` / `data-kiosk-stage`, which
+             the kiosk already sets from its ONE derived state - so it can never claim
+             the mic is open when it is not. -->
+        <div class="dock-title" data-en="🙋 You - speak here" data-bn="🙋 আপনি - এখানে বলুন">🙋 You - speak here</div>
+        <div class="step-strip" aria-hidden="true">
+          <div class="step" id="step-ask"><span class="step-num">1</span>
+            <span data-en="🔊 I ask" data-bn="🔊 আমি বলি">🔊 I ask</span></div>
+          <div class="step" id="step-speak"><span class="step-num">2</span>
+            <span data-en="🎤 You speak" data-bn="🎤 আপনি বলুন">🎤 You speak</span></div>
+          <div class="step" id="step-check"><span class="step-num">3</span>
+            <span data-en="✔ You check" data-bn="✔ আপনি দেখুন">✔ You check</span></div>
+        </div>
         <div class="voice-hint" id="voice-hint"
              data-en="⚠ No Bangla voice is installed on this device — questions will not play as audio, but they always appear as text on screen."
              data-bn="⚠ এই যন্ত্রে কোনো বাংলা ভয়েস ইনস্টল করা নেই — প্রশ্ন শোনা যাবে না, তবে সবসময় পর্দায় লেখা থাকবে।">⚠ No Bangla voice is installed on this device — questions will not play as audio, but they always appear as text on screen.</div>
+        <div class="dock-caption" data-en="🗣 What you are saying" data-bn="🗣 আপনি যা বলছেন">🗣 What you are saying</div>
         <div class="dock-transcript" id="dock-transcript" aria-live="polite"
              data-en="Your speech will appear here as you talk..." data-bn="আপনি বলার সাথে সাথে এখানে দেখা যাবে...">Your speech will appear here as you talk...</div>
         <!-- S34 (ADR-0055): the spoken-answer read-back. Nothing is stored until the
@@ -756,6 +949,13 @@
            conversation avatar (there is one state machine, not three) — so it speaks
            while the review is being read aloud and idles while the patient reads. -->
       <div class="summary-body">
+        <!-- S40 (1E): COLUMN 2 - everything the patient must DO or CHECK, in one place
+             that does not scroll away: who is talking, what is still missing, and the
+             three buttons. They used to be a full-width bar at the very BOTTOM of the
+             review, so on any real screen the patient had to scroll past every answer
+             card to find "Confirm & Submit" - the one action the whole screen exists
+             for. COLUMN 1 is their answers. -->
+        <div class="review-rail">
         <div class="doctor-float" id="summary-float">
           <div class="doctor-float-inner">
             <div class="doctor-avatar" id="summary-avatar" data-avatar-state="idle" role="img"
@@ -774,6 +974,21 @@
             <button class="btn btn-secondary" id="read-summary-btn" onclick="toggleSummaryReadAloud()"
                     data-en="🔊 Hear my answers" data-bn="🔊 আমার উত্তরগুলো শুনুন">🔊 Hear my answers</button>
           </div>
+        </div>
+        <!-- F3: what is still required, named in the patient's language. Written by JS
+             from the SERVER's readiness verdict, so it can never claim the case is ready
+             when the server would refuse the submit. -->
+        <div class="required-notice" id="required-notice"></div>
+        <div class="summary-actions card" style="padding:16px 20px;">
+          <span style="font-size:.85rem; color:var(--text-muted);"
+                data-en="Tap 🔊 on any card to hear it. If anything is wrong, tap Speak Again."
+                data-bn="যেকোনো কার্ডের 🔊 চেপে শুনুন। কিছু ভুল থাকলে “আবার বলুন” চাপুন।">Tap 🔊 on any card to hear it. If anything is wrong, tap Speak Again.</span>
+          <!-- S34: reviewSpeakAgain(), not a bare showScreen() — leaving the review must
+               also stop its clock, or it would submit a screen the patient has left. -->
+          <button class="btn btn-accent" id="confirm-submit-btn" onclick="confirmSubmit()" data-en="✔ Confirm &amp; Submit" data-bn="✔ নিশ্চিত ও জমা দিন">✔ Confirm &amp; Submit</button>
+          <button class="btn btn-secondary" onclick="reviewSpeakAgain()" data-en="🎤 Speak Again" data-bn="🎤 আবার বলুন">🎤 Speak Again</button>
+          <button class="btn btn-secondary" id="download-transcript-btn" onclick="downloadRawTranscript()" data-en="⬇ Download Raw Transcript (.docx)" data-bn="⬇ মূল কথোপকথন ডাউনলোড (.docx)">⬇ Download Raw Transcript (.docx)</button>
+        </div>
         </div>
         <div class="summary-grid" id="summary-grid"></div>
       </div>
@@ -848,20 +1063,6 @@
                  data-en-placeholder="Describe in Bangla or English..." data-bn-placeholder="বাংলা বা ইংরেজিতে লিখুন...">
           <button class="btn btn-primary" onclick="sendResumeTyped()" data-en="Send" data-bn="পাঠান">Send</button>
         </div>
-      </div>
-      <!-- F3: what is still required, named in the patient's language. Written by JS
-           from the SERVER's readiness verdict, so it can never claim the case is ready
-           when the server would refuse the submit. -->
-      <div class="required-notice" id="required-notice"></div>
-      <div class="summary-actions card" style="padding:16px 20px;">
-        <span style="font-size:.85rem; color:var(--text-muted); margin-right:auto;"
-              data-en="Tap 🔊 on any card to hear it. If anything is wrong, tap Speak Again."
-              data-bn="যেকোনো কার্ডের 🔊 চেপে শুনুন। কিছু ভুল থাকলে “আবার বলুন” চাপুন।">Tap 🔊 on any card to hear it. If anything is wrong, tap Speak Again.</span>
-        <!-- S34: reviewSpeakAgain(), not a bare showScreen() — leaving the review must
-             also stop its clock, or it would submit a screen the patient has left. -->
-        <button class="btn btn-secondary" onclick="reviewSpeakAgain()" data-en="Speak Again" data-bn="আবার বলুন">Speak Again</button>
-        <button class="btn btn-secondary" id="download-transcript-btn" onclick="downloadRawTranscript()" data-en="Download Raw Transcript (.docx)" data-bn="মূল কথোপকথন ডাউনলোড (.docx)">Download Raw Transcript (.docx)</button>
-        <button class="btn btn-accent" id="confirm-submit-btn" onclick="confirmSubmit()" data-en="Confirm & Submit" data-bn="নিশ্চিত ও জমা দিন">Confirm &amp; Submit</button>
       </div>
     </div>
   </div>

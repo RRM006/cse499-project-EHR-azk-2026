@@ -975,10 +975,24 @@
     }
 
     /* S39 (ADR-0064): saveIdentity() and saveWeight() lived here and went with the
-       duplicate editors above. Identity and vitals are now edited in exactly ONE
-       place - the Intake & Vitals form in the case workspace, before the referral
-       (saveIntake) - which is the only form that covers every field. There is no
-       longer a screen from which a medic can change half of them. */
+       duplicate editors this screen used to carry. Identity and vitals are now edited
+       in exactly ONE place - the Intake & Vitals form in the case workspace, before the
+       referral (saveIntake) - which is the only form that covers every field. There is
+       no longer a screen from which a medic can change half of them.
+
+       Why they were wrong: they were a leftover from before S37, when the vitals editor
+       existed ONLY on this screen, so a case reached the doctor with no weight and no
+       BP. S37 moved the editing into the case workspace, before the referral, where it
+       belongs - but left these behind, so the portal ended up with two forms writing the
+       same patients row through the same PATCH, and this was the weaker of the two: it
+       could edit name/age/gender/weight and NOT height, BP or blood sugar. A medic
+       correcting a weight here and a height there is how two screens start disagreeing
+       about one patient. This screen is now a read-only snapshot of what was forwarded.
+
+       S40: the paragraph above used to live inside renderPostReferral()'s template
+       literal as an HTML comment - and it named the patients table in BACKTICKS, which
+       closed the template literal and made the whole inline script a SyntaxError. A
+       developer note belongs in JS comment syntax, never in generated markup. */
 
     function renderPostReferral() {
       if (!postrefSnap) return;
@@ -1009,20 +1023,6 @@
          <div class="card" style="display:flex; flex-direction:column; gap:8px;">
            <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:4px;">
              <h3 style="font-size:1rem; color:var(--primary-color);">👤 ${t('Patient Details', 'রোগীর তথ্য')}</h3>
-             <!-- S39 (ADR-0064) - the two editors that used to sit here are GONE, and
-                  this line is what replaced them.
-
-                  They were a leftover from before S37, when the vitals editor existed
-                  ONLY on this screen and a case therefore reached the doctor with no
-                  weight and no BP. S37 moved the editing into the case workspace,
-                  BEFORE the referral, where it belongs - but left these behind, so the
-                  portal ended up with two forms writing the same `patients` row through
-                  the same PATCH, and this was the weaker of the two: it could edit
-                  name/age/gender/weight and NOT height, BP or blood sugar. A medic
-                  correcting a weight here and a height there is how two screens start
-                  disagreeing about one patient.
-
-                  This screen is now a read-only snapshot of what was forwarded. -->
              <span style="font-size:.76rem; color:var(--text-muted);">${t(
                'Recorded before the referral - reopen the case from the queue to change anything.',
                'রেফারালের আগে রেকর্ড করা - পরিবর্তন করতে তালিকা থেকে কেসটি আবার খুলুন।')}</span>
