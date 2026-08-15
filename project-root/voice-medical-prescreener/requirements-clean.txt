@@ -1,0 +1,13 @@
+﻿fastapi==0.115.6          # web framework + API
+uvicorn[standard]==0.34.0 # ASGI server (run the app)
+pydantic-settings==2.7.1  # load config/keys from backend/.env
+SQLAlchemy==2.0.51        # SQLite persistence (foundation for future EHR); 2.0.51+ needed for Python 3.14
+alembic==1.14.0           # versioned DB schema migrations (pure Python; cross-platform)
+openai==1.59.6            # OpenAI-compatible client for Gemini correction
+python-docx==1.1.2        # generate .docx exports of completed sessions (pure Python, cross-platform)
+ddgs==9.14.4              # P3-3 free no-key DuckDuckGo web search for the M16 drug-info assistant
+httpx==0.28.1             # P4-1 TextBee OTP sender HTTP calls (was already installed transitively
+edge-tts==7.2.8           # TTS-2/ADR-0050: natural Microsoft neural bn-BD voice for M7 audio.
+fpdf2==2.8.8              # S39/ADR-0064: the HUMAN-READABLE half of the EHR export. LGPL-3.0
+uharfbuzz==0.56.0         # S39: complex-script shaping for the PDF. Bengali needs conjunct
+pytest==8.3.4             # raw-immutability guard + future tests
