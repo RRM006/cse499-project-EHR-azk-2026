@@ -16,6 +16,85 @@
 
 ---
 
+## Session 42 — 2026-08-19 — **The demo-eve outage: Groq's model was decommissioned, OpenRouter's free model was rate-limited, and the raw provider error was being shown to the patient** — 1056 → 1087 tests
+- Did: root-caused and fixed the reported `POST /api/visits/<uuid>/intake` **502**, hardened the
+  provider layer so no single free model is a point of failure, closed the disclosure leak that put
+  upstream provider text on a patient's screen, and gave a total AI outage a controlled, bilingual,
+  **retryable** UI. **One new ADR: 0067.** ⚠ **No schema, migration, Alembic or dependency change** —
+  head stays **0014, 18 tables**. **No module changed status; M15 stays 🟨.** ⚠ **No STT/TTS logic
+  changed** — the speech pipeline was deliberately not touched.
+- **ROOT CAUSE — three faults lined up, none of them the one that was reported.** (1) Groq's
+  `llama-3.3-70b-versatile` is **GONE** from Groq's live model list — the call answers
+  `404 model_not_found`. Groq is `FALLBACK_ORDER[0]`, so the *first* bucket every module falls back to
+  had been dead. (2) OpenRouter's `google/gemma-4-31b-it:free` answered **429 from its SHARED upstream
+  pool** — that is ADR-0026's *universal fallback*. (3) Which left **Gemini as the only working
+  provider**, so its ordinary daily 429 took the whole system down. The reported symptom named only
+  the last provider to fail, which is why it looked like an OpenRouter problem.
+- ⚠ **THE PATIENT WAS BEING SHOWN THE UPSTREAM PROVIDER'S ERROR.** Six routes answered
+  `HTTPException(502, detail=str(exc))`, and `str(exc)` ends in the raw provider body — measured as
+  containing the model id, `'provider_name': 'Google AI Studio'` and a signup URL. The kiosk pipes
+  `detail` straight into its banner. This is configuration disclosure from a system handling medical
+  data, and it is fixed at ONE helper (`api/_llm_errors.py`) that every LLM route now uses; a test
+  walks `routes_*.py` and fails if any of them skips it.
+- **A BUCKET NOW NAMES SEVERAL MODELS.** `OPENROUTER_MODEL` is comma-separated and each entry is its
+  own attempt with its **own cooldown**. Measured: the configured id and one sibling were 429 while
+  three other siblings answered the identical request correctly **in the same minute** — a `:free` id
+  is not a quota you own, it is a queue you share. S41 fixed this bucket by swapping one dead id for
+  one live id; that could only hold until the new id got busy.
+- **Models replaced with live-verified ones:** Groq → `openai/gpt-oss-120b` (valid JSON, the
+  patient's name kept in Bangla script, ~2.8 s on the real M3 prompt). ⚠ **Rejected in the same
+  measurement:** `qwen/qwen3.6-27b` emits a `<think>` block that breaks `_parse_json`, and
+  `groq/compound*` carry **built-in web search** — sending patient speech to a search tool would
+  breach rule #4.
+- **ONE BOUNDED RETRY, AND A BOUND ON THE WHOLE CALL.** A 429/5xx/timeout gets one more pass after
+  ~1.5 s (the provider's own body says "retry shortly" and means it); a 404 or 401 gets none.
+  Separately, `CALL_DEADLINE_S = 90` bounds the ENTIRE call — five attempts x 45 s x a retry pass was
+  **7.5 minutes** of spinner, and "stuck loading" is worse than an honest error because an error at
+  least carries the retry button. 90 s is ~6x the slowest measured degraded success.
+- **A TOTAL OUTAGE IS NOW A WAIT THE PATIENT CAN ACT ON.** An amber panel — deliberately not red; an
+  upstream queue clearing in a moment is a WAIT, and danger-red tells an unwell patient something is
+  wrong with *them* — says "The assistant is busy right now / Your answers are saved" in both
+  languages and offers **Try again**. It does not auto-hide. ⚠ **The retry resumes from the step that
+  FAILED and never re-posts the utterance** — re-posting would write the patient's sentence into
+  their verbatim record twice (rule #1).
+- **`check_api_keys` was accusing a VALID key.** Groq's 404 body reads `'type':
+  'invalid_request_error'`, and the classifier tested `"invalid"` **before** `404`, so it reported
+  "REJECTED — the key is wrong, revoked, or not yet active" and would have sent the human to rotate a
+  perfectly good credential. Order fixed; it now also probes **every** model of every bucket.
+- **A `visibilitychange` guard — and it is explicitly NOT Step S5.** Backgrounding the tab ends the
+  recognition session, `r.onend` restarts it (correctly, per S31), and the kiosk sits showing the red
+  "🎤 এখন কথা বলুন" banner while listening to nothing. The handler calls the **existing**
+  `stopListening(false)`, so it takes **no new position** on the patient's half-captured words — the
+  open rule #1 decision stays the human's. A test forbids it from touching `finalBuffer`, any submit
+  path, or any S5 timing.
+- Decided: **ADR-0067** (a)–(k).
+- Verified — **live, not simulated.** ⚠ **The original failure condition is ACTIVE on this machine:**
+  Gemini's free daily quota is genuinely exhausted (`...FreeTier`, limit 20/day). Under the old code
+  that call *was* the reported 502; it now falls back to Groq in 825 ms and intake completes in 7.3 s.
+  A second uvicorn was run with **deliberately invalid keys** (the human's `.env` untouched) to force
+  a REAL total outage: the server answered 502 + `Retry-After: 30` with **zero** leaked terms, the
+  kiosk showed its bilingual panel, **all four patient utterances were stored verbatim** through the
+  outage, and clicking **Try again** after the provider returned completed the intake with **zero
+  duplicate utterances**. Full patient flow then driven end to end (phone → OTP → 4 scripted turns →
+  intake → follow-up loop → resume loop → 10/10 fields → submit), landing in the medic queue as HIGH.
+  Medic **Edit → Save** measured at y=677 in a 720px viewport (S41's fix intact, was y=727). S41
+  containment re-measured at 375/768/1280 px: nothing escapes, no horizontal page scroll.
+- ⚠ **First appearance evidence this project has had** — the Browser pane composites frames now, so
+  the panel is screenshotted in both languages. S41 could not claim this.
+- Broke / problem: I converted 12 files from LF to CRLF by writing them with Python on Windows, which
+  broke two tests that split on a bare newline. Caught and reverted; the diff is content-only. ⚠ Two tests were
+  UPDATED, not weakened: the profile-render guard now **searches** for every function that renders a
+  profile instead of naming one (stronger — it would catch a second unguarded render), and the S5
+  pin now asserts the **boundary** (the visibility handler must not touch `finalBuffer`, submits or
+  timings) instead of the absence of a string.
+- Deferred: rotating the 3 keys (they authenticate; **Gemini's daily quota is spent** — see
+  current_task.md); untracking the six committed `.bak` files (unchanged repo-content decision);
+  **Step S5**; the mid-turn word-loss rule #1 decision; formal **WER**; the Edge run. ⚠ **No
+  real-microphone run was performed** — the browser here reports `microphone: denied`. Everything
+  above used the typed path, which is the SAME pipeline (`source: manual` vs `mic`, ADR-0048).
+- Next: **add `CEREBRAS_API_KEY`** (free, ~1M tokens/day, sits ahead of OpenRouter in the chain) so
+  the demo does not depend on two providers, then a real-microphone pass.
+
 ## Session 41 — 2026-08-15 — **The first real-microphone run's findings, fixed: the patient's words stay in their box, the microphone says it is open in words, and "Edit does nothing" turned out to be a scroll** — 1031 → 1056 tests
 - Did: fixed the four defects the human's **real-microphone** run surfaced, deleted the synthetic
   test visit, and did the half of the API-key rotation a tool can safely do. **One new ADR: 0066.**

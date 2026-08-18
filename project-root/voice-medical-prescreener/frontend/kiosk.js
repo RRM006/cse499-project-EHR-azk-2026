@@ -187,6 +187,13 @@ resetState();
 
 let sessionEpoch = 0;
 
+/* S42 — the step to re-run when the patient presses "Try again", or null. Declared HERE
+   rather than beside its helpers because `endSession()` (just below) clears it, and a
+   `let` is in its temporal dead zone until its own line runs. Nothing calls endSession()
+   at module load today, but a TDZ reference from exactly this region is what killed the
+   entire kiosk in S33 — the declaration is cheap insurance, and the note is the point. */
+let pendingAiRetry = null;
+
 /** Capture the session that is on screen NOW. The returned predicate is false from the
  *  moment endSession() runs, which is exactly the question every `await` on a
  *  patient-facing path must ask before it touches `state` or the DOM. */
@@ -254,6 +261,12 @@ function endSession() {
   if (resumeQ) resumeQ.textContent = '';
   hideConvoProgress();   // S36 Finding 7: the next patient starts at no question, not at 4
   setReadAloudLabel(false);
+  /* S42: the AI-retry panel belongs to the patient who hit the outage. Left up, the
+     next patient would meet a "Try again" button whose closure still points at the
+     PREVIOUS patient's visit — the epoch guard would refuse to write, so nothing
+     unsafe happens, but the button would silently do nothing, which is the exact
+     class of defect S36 exists to prevent. It goes with everything else. */
+  hideAiRetry();
 }
 
 /** The ONE way a new patient begins: end the previous session, THEN build clean state,
@@ -1853,6 +1866,83 @@ function sendTypedFallback() {
   submitPatientTurn(text, 'manual');
 }
 
+/* --- S42: an AI outage is a WAIT the patient can act on, not a dead end ------------
+
+   The outage this exists for: every provider in the chain was failing, so
+   `POST /visits/<uuid>/intake` answered 502 and the kiosk put the server's `detail`
+   into the 8-second error banner. Three things were wrong with that at once.
+
+   1. The detail was the raw upstream body - model id, upstream provider name, a signup
+      URL. Fixed server-side (api/_llm_errors.py); this side no longer echoes server
+      text for these calls AT ALL, so a future regression there cannot reach a patient.
+   2. It was English-only server text on a bilingual screen.
+   3. It vanished after 8 seconds and offered nothing, leaving a patient who had just
+      spoken for two minutes staring at an unchanged screen with no idea what to do.
+
+   The retry resumes from the step that FAILED - it never re-posts the utterance,
+   because the utterance succeeded. Re-posting would write the patient's sentence into
+   their verbatim record twice, and a transcript that says something twice that was said
+   once is no longer verbatim (rule #1). */
+
+function showAiRetry(retryFn) {
+  pendingAiRetry = retryFn;
+  const panel = document.getElementById('ai-retry-panel');
+  if (!panel) { showError(t('The assistant is busy. Please try again.', 'সহকারী ব্যস্ত। আবার চেষ্টা করুন।')); return; }
+  const btn = document.getElementById('ai-retry-btn');
+  if (btn) btn.disabled = false;
+  panel.style.display = '';
+  applyLanguage();          // the panel is bilingual like everything else
+  bringIntoView(panel);
+}
+
+function hideAiRetry() {
+  pendingAiRetry = null;
+  const panel = document.getElementById('ai-retry-panel');
+  if (panel) panel.style.display = 'none';
+}
+
+async function retryLastAiStep() {
+  const again = pendingAiRetry;
+  if (!again) return;
+  const btn = document.getElementById('ai-retry-btn');
+  if (btn) btn.disabled = true;          // one retry at a time - no double submission
+  hideAiRetry();
+  try {
+    await again();
+  } catch (e) {
+    if (isAiUnavailable(e)) showAiRetry(again);   // still down: offer it again, unchanged
+    else showError(e.message);
+  }
+  if (btn) btn.disabled = false;
+}
+
+/* Is this the "provider chain is down" failure, as opposed to a real client error?
+
+   The server answers 502 for it and 4xx for anything the patient or the kiosk got
+   wrong, and only the 502 is worth a retry button - retrying a 409 "question already
+   answered" would just fail again. `api()` attaches the status to the Error it throws
+   so this can be decided on the STATUS rather than by matching message text. */
+function isAiUnavailable(err) {
+  return !!err && err.status === 502;
+}
+
+/* S42: intake + the first follow-up question, as ONE retryable unit. Extracted from
+   submitPatientTurn so the retry button can re-run exactly this and nothing before it.
+   `state.intakeDone` guards the intake call, so a retry after intake succeeded but the
+   question failed does not run extraction a second time. */
+async function startOpeningLoop(mine) {
+  if (!state.intakeDone) {
+    await api('POST', `/api/visits/${state.visitUuid}/intake`);
+    if (!mine()) return;
+    state.intakeDone = true;
+  }
+  const res = await api('POST', `/api/visits/${state.visitUuid}/followup/next`);
+  if (!mine()) return;
+  if (res.complete) { await finishConversation(); return; }
+  state.activeQuestion = res.question;
+  await assistantSays(res.question.question_text, { record: false });
+}
+
 async function submitPatientTurn(rawText, source) {
   if (state.busy) return;
   state.busy = true;
@@ -1892,20 +1982,15 @@ async function submitPatientTurn(rawText, source) {
         raw_text: rawText, role: 'patient', source,
         stt_provider: source === 'mic' ? 'browser_webspeech' : 'manual',
       });
-      await api('POST', `/api/visits/${state.visitUuid}/intake`);
-      if (!mine()) return;
-      state.intakeDone = true;
-      const res = await api('POST', `/api/visits/${state.visitUuid}/followup/next`);
-      if (!mine()) return;
-      if (res.complete) await finishConversation();
-      else {
-        state.activeQuestion = res.question;
-        await assistantSays(res.question.question_text, { record: false });
-      }
+      /* S42: the utterance is now STORED. Everything past this point is AI processing,
+         so a failure below must be retryable WITHOUT re-posting those words (rule #1 -
+         see showAiRetry). `startOpeningLoop` is therefore the retry unit. */
+      await startOpeningLoop(mine);
     }
   } catch (e) {
     if (!mine()) return;   // an error from a finished session is not this patient's problem
-    showError(e.message);
+    if (isAiUnavailable(e)) showAiRetry(() => startOpeningLoop(mine));
+    else showError(e.message);
   }
   if (!mine()) return;     // …and neither is clearing their busy flag
   state.busy = false;
@@ -1933,6 +2018,24 @@ async function submitFinalTurn(rawText) {
   }
 }
 
+/* S42: intake (if still owed) + profile + summary render, as ONE retryable unit -
+   the same shape as startOpeningLoop, for the same reason. Nothing here writes an
+   utterance, so running it twice is safe. */
+async function buildSummary(mine) {
+  if (!state.intakeDone) {
+    await api('POST', `/api/visits/${state.visitUuid}/intake`);
+    if (!mine()) return;
+    state.intakeDone = true;
+  }
+  const profile = await api('GET', `/api/visits/${state.visitUuid}/profile`);
+  /* S36: the previous patient's summary must never be drawn onto - nor navigated to
+     on - the new patient's screen. This is the last await before both happen. */
+  if (!mine()) return;
+  renderSummary(profile);
+  showScreen('screen-summary');
+  await refreshResumeLoop(profile);   // KIOSK-7: fill remaining fields before submit
+}
+
 async function finishConversation() {
   if (state.finishing) return;  // P1-1: ignore double-clicks while finishing
   state.finishing = true;
@@ -1954,21 +2057,14 @@ async function finishConversation() {
       finalBuffer = '';
       if (text) await submitFinalTurn(text);
     }
-    if (!state.intakeDone) {
-      await api('POST', `/api/visits/${state.visitUuid}/intake`);
-      if (!mine()) return;
-      state.intakeDone = true;
-    }
-    const profile = await api('GET', `/api/visits/${state.visitUuid}/profile`);
-    /* S36: the previous patient's summary must never be drawn onto — nor navigated to
-       on — the new patient's screen. This is the last await before both happen. */
-    if (!mine()) return;
-    renderSummary(profile);
-    showScreen('screen-summary');
-    await refreshResumeLoop(profile);   // KIOSK-7: fill remaining fields before submit
+    await buildSummary(mine);
   } catch (e) {
     if (!mine()) return;
-    showError(e.message);
+    /* S42: the patient pressed "Done" and the AI was unreachable. Their whole
+       conversation is stored; only the summary could not be built. Offer that step
+       again rather than stranding them on the conversation screen. */
+    if (isAiUnavailable(e)) showAiRetry(() => buildSummary(mine));
+    else showError(e.message);
   }
   if (!mine()) return;
   state.finishing = false;
@@ -2713,3 +2809,49 @@ function initTypedInputs() {
 initTypedInputs();
 setInputMode('voice', { focus: false });
 loadKioskConfig();   // S1/S3: voice_loop + timings from backend/.env; defaults if it fails
+
+/* --- S42: the tab stopped being visible while the microphone was open ---------------
+
+   NOT Step S5. S5 (faculty_future_features.md §J) is a larger, GO-gated piece of work
+   whose permission/visibility half is BLOCKED on an open rule #1 decision that belongs
+   to the human: what happens to a half-captured answer in `finalBuffer` when a turn is
+   interrupted mid-sentence. That decision is NOT taken here, and this handler must not
+   be read as having taken it.
+
+   What is fixed here is narrower and has no clinical content: a kiosk that gets stuck.
+
+   MEASURED BEHAVIOUR of the Web Speech API when a tab is backgrounded: Chrome ends the
+   recognition session. `r.onend` then restarts it because `listening` is still true —
+   the very restart that keeps continuous listening alive in the foreground (S31, and
+   deliberately not simplified). Backgrounded, that becomes a start-end-start loop
+   against a recogniser that cannot hear anything, while the screen still shows the red
+   "🎤 এখন কথা বলুন" banner. The patient returns to a kiosk that claims to be listening
+   and is not. At a demo that is indistinguishable from a hang.
+
+   The response is the one the kiosk ALREADY has for "this turn stops without being
+   sent": `stopListening(false)`. That is the identical call `setInputMode('type')` and
+   `finishConversation()` make, with the identical disposition of `finalBuffer` — so
+   this introduces NO new rule about the patient's captured words. It reuses the
+   existing one, and when the human settles the S5 question, the answer lands in
+   `stopListening` and this path inherits it for free.
+
+   The patient is then told what happened, in both languages, and invited to continue.
+   Nothing is submitted, nothing is discarded that was not already discarded here. */
+const INTERRUPTED_BY_HIDE = {
+  en: 'Recording stopped because this page was left. Please tap the microphone and say your answer again.',
+  bn: 'পেজটি ছেড়ে যাওয়ায় রেকর্ডিং থেমে গেছে। মাইক্রোফোনে চাপ দিয়ে আবার আপনার উত্তরটি বলুন।',
+};
+
+function handleVisibilityChange() {
+  if (!document.hidden) return;
+  /* S3: a mic the AI had armed to open after its question must not open onto a hidden
+     tab either — it would start a recogniser the patient cannot see or hear. */
+  cancelPendingMic();
+  if (!listening) return;
+  stopListening(false);          // the existing mid-turn stop; no new rule (see above)
+  showError(t(INTERRUPTED_BY_HIDE.en, INTERRUPTED_BY_HIDE.bn));
+  /* The face must not keep saying "I am listening" once the microphone is shut. */
+  setAvatarOverride('error', { clearAfterMs: 8000 });
+}
+
+document.addEventListener('visibilitychange', handleVisibilityChange);

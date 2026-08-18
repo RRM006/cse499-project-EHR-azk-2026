@@ -775,6 +775,27 @@
 
   <div id="error-banner" class="error-banner" style="margin: 10px 28px 0;"></div>
 
+  <!-- S42: the AI-unavailable panel. The error banner above hides itself after 8 s,
+       which is right for "you typed something wrong" and WRONG for "the assistant could
+       not be reached": that message must stay on screen until the patient acts on it,
+       and it must offer the action. A patient who has just spoken for two minutes needs
+       to be told, in their own language, that their words are SAFE and that they may
+       simply try again — not shown an upstream provider's 429 body, which is what this
+       replaces. Hidden until something actually fails. -->
+  <div id="ai-retry-panel" class="ai-retry-panel" style="display:none;" role="alert" aria-live="assertive">
+    <div class="ai-retry-icon" aria-hidden="true">⏳</div>
+    <div class="ai-retry-text">
+      <div class="ai-retry-title" id="ai-retry-title"
+           data-en="The assistant is busy right now"
+           data-bn="সহকারী এই মুহূর্তে ব্যস্ত">The assistant is busy right now</div>
+      <div class="ai-retry-sub" id="ai-retry-sub"
+           data-en="Your answers are saved. Please try again."
+           data-bn="আপনার উত্তরগুলো সংরক্ষিত আছে। আবার চেষ্টা করুন।">Your answers are saved. Please try again.</div>
+    </div>
+    <button class="btn btn-primary" id="ai-retry-btn" type="button" onclick="retryLastAiStep()"
+            data-en="Try again" data-bn="আবার চেষ্টা করুন">Try again</button>
+  </div>
+
   <!-- 1: phone -->
   <div class="screen active" id="screen-phone">
     <div class="center-col">

@@ -195,12 +195,31 @@ def test_the_verified_otp_cannot_install_a_previous_patients_visit():
 
 
 def test_a_late_profile_is_never_drawn_onto_the_next_patients_review():
-    for name in ("submitResumeAnswer", "finishConversation"):
+    """S42: ``finishConversation`` no longer renders the summary itself — the intake +
+    profile + render sequence moved into ``buildSummary`` so the AI-retry button can
+    re-run exactly that and nothing before it. The guarantee is unchanged and is
+    asserted where it now lives.
+
+    ⚠ Checked by SEARCHING for the render rather than by naming one function, so this
+    keeps holding if the code moves again: EVERY place that renders a profile must
+    check whose session it is first. That is stronger than the previous form, which
+    could pass while a second, unguarded render existed elsewhere."""
+    js = kiosk_js()
+    renderers = [name for name in ("submitResumeAnswer", "finishConversation",
+                                   "buildSummary", "retryLastAiStep")
+                 if f"function {name}(" in js and "renderSummary(profile);" in fn_body(name)]
+    assert set(renderers) == {"submitResumeAnswer", "buildSummary"}, (
+        f"the set of functions that render a profile changed: {renderers} — "
+        "each one needs the epoch guard, so this test must be updated deliberately")
+    for name in renderers:
         body = fn_body(name)
-        assert "renderSummary(profile);" in body
         before = body.split("renderSummary(profile);")[0]
         assert "if (!mine()) return;" in before, \
             f"{name}() renders a profile without checking whose session it is"
+
+    # …and the retry path reaches the render only through a guarded function.
+    assert "buildSummary(mine)" in fn_body("finishConversation")
+    assert "showAiRetry(() => buildSummary(mine))" in fn_body("finishConversation")
 
 
 def test_a_stale_error_does_not_interrupt_the_next_patient():

@@ -19,6 +19,7 @@ from backend.app.db import repository_visits as repo
 from backend.app.db.database import get_db
 from backend.app.schemas.assistant import DrugInfoOut, DrugInfoRequest
 from backend.app.services.assistant import answer_drug_question
+from backend.app.api._llm_errors import llm_unavailable
 from backend.app.services.llm_client import LLMCallError
 
 router = APIRouter(prefix="/api", tags=["assistant"])
@@ -36,4 +37,4 @@ def drug_info(
             db, visit, payload.question, use_case_context=payload.use_case_context
         ))
     except LLMCallError as exc:
-        raise HTTPException(status_code=502, detail=str(exc))
+        raise llm_unavailable(exc)   # S42: never str(exc) — it carries the raw provider body

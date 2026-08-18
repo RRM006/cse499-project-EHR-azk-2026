@@ -189,10 +189,61 @@ def test_step_s5_is_still_not_implemented():
     assert "no_speech_ms: 10000,     // S5 (not used yet)" in js
     assert "max_answer_ms: 120000,   // S5 (not used yet)" in js
     code = code_only(js)
-    for absent in ("visibilitychange", "document.hidden", "navigator.permissions"):
+    for absent in ("navigator.permissions", "no_speech_ms;", "max_answer_ms;"):
         assert absent not in code, (
             f"{absent} appeared — if S5 was implemented, update its status in "
             "milestone_log.md and current_task.md rather than letting this test pass silently")
     # the two knobs are still served (S1's seam), just still unused by the kiosk
     assert "no_speech_ms" in client.get("/api/config").json()
     assert "max_answer_ms" in client.get("/api/config").json()
+    # ⚠ The two S5 timings must be READ by nothing. Served, yes; used, no.
+    for knob in ("no_speech_ms", "max_answer_ms"):
+        assert code.count(knob) == 1, (
+            f"{knob} is referenced more than once — the config default and a USE. "
+            "That is S5 being built; update milestone_log.md and current_task.md.")
+
+
+def test_the_s42_visibility_handler_is_a_stuck_mic_guard_and_not_step_s5():
+    """⚠ S42 added a `visibilitychange` handler. S5 also needs one, so the boundary
+    between them is pinned here rather than left to a future reader's judgement.
+
+    What S42's handler is allowed to be: when the tab is hidden while the microphone is
+    open, stop the recogniser so the restart loop in `r.onend` cannot spin against a
+    recogniser that cannot hear, leaving the red "speak now" banner up on a kiosk that
+    is not listening. It calls the EXISTING `stopListening(false)` — the identical call
+    `setInputMode('type')` and `finishConversation()` already make — so it introduces no
+    new rule about the patient's captured words.
+
+    What it must NOT become without a decision from the human: a `finalBuffer`
+    disposition of its own, a timing watchdog, or a permission-recovery path. Those are
+    S5, and the `finalBuffer` half is BLOCKED on the open rule #1 decision."""
+    body = fn_body("handleVisibilityChange")
+
+    # It does the one safe thing, through the path that already exists.
+    assert "stopListening(false);" in body
+    assert "cancelPendingMic();" in body
+    assert "if (!listening) return;" in body, "it must do nothing when no mic is open"
+
+    # It takes NO position on the patient's half-captured words.
+    for forbidden in ("finalBuffer", "submitPatientTurn", "submitResumeAnswer",
+                      "submitFinalTurn", "acceptAnswer", "/utterances"):
+        assert forbidden not in body, (
+            f"handleVisibilityChange references {forbidden} — that decides the fate of a "
+            "half-captured answer, which is the open rule #1 decision reserved for the "
+            "human (current_task.md). It is not this handler's to take.")
+
+    # …and it is not a watchdog: no timer, no S5 timing.
+    for forbidden in ("setTimeout", "setInterval", "no_speech_ms", "max_answer_ms"):
+        assert forbidden not in body, f"{forbidden} in the visibility handler is S5, not S42"
+
+
+def test_the_visibility_handler_tells_the_patient_what_happened_in_both_languages():
+    """A microphone that stops on its own is only safe if the patient is told. The
+    kiosk is bilingual, so the notice is too — an English-only sentence on a Bangla
+    screen is the half-translated failure the project's bilingual rule exists to stop."""
+    js = kiosk_js()
+    block = js.split("const INTERRUPTED_BY_HIDE = {")[1].split("};")[0]
+    assert "en:" in block and "bn:" in block
+    # Bangla script, not transliteration.
+    assert any("ঀ" <= ch <= "৿" for ch in block), "the bn string is not Bangla"
+    assert "t(INTERRUPTED_BY_HIDE.en, INTERRUPTED_BY_HIDE.bn)" in fn_body("handleVisibilityChange")

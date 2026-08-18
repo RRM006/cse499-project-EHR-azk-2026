@@ -131,6 +131,25 @@ body {
 .xai-box { font-size: .85rem; color: #7F1D1D; background: rgba(254,226,226,.5); padding: 10px 14px; border-radius: 6px; border-left: 3px solid var(--danger-color); margin-top: 8px; }
 
 /* --- misc --- */
+/* S42 — the AI-unavailable panel (kiosk). Deliberately NOT styled as an error: an
+   upstream queue that will clear in a moment is a WAIT, and painting it in danger red
+   tells an unwell patient that something is wrong with THEM or with their answers.
+   Amber + an hourglass says "not now, shortly". It stays until acted on — see the
+   comment in kiosk.html for why the auto-hiding banner is the wrong control here. */
+.ai-retry-panel { display: flex; align-items: center; gap: 14px; margin: 10px 28px 0;
+  background: #FFFBEB; border: 1px solid #FDE68A; border-left: 4px solid #F59E0B;
+  border-radius: var(--radius); padding: 14px 18px; }
+.ai-retry-icon { font-size: 1.6rem; line-height: 1; }
+.ai-retry-text { flex: 1 1 auto; min-width: 0; }
+.ai-retry-title { font-weight: 700; color: #92400E; font-size: 1rem; }
+.ai-retry-sub { color: #92400E; font-size: .85rem; margin-top: 2px;
+  overflow-wrap: anywhere; }
+.ai-retry-panel .btn { flex: none; }
+@media (max-width: 560px) {
+  .ai-retry-panel { flex-wrap: wrap; }
+  .ai-retry-panel .btn { width: 100%; }
+}
+
 .error-banner { background: #FEF2F2; color: var(--danger-color); border: 1px solid #FEE2E2; border-radius: var(--radius); padding: 10px 16px; font-size: .85rem; display: none; }
 .modal-overlay { position: fixed; inset: 0; background: rgba(15,23,42,.6); z-index: 100; display: none; align-items: center; justify-content: center; }
 .modal-box { background: var(--bg-white); border-radius: 16px; max-width: 460px; width: 90%; padding: 28px; text-align: center; }

@@ -70,17 +70,33 @@ class Settings(BaseSettings):
     # --- per-bucket model names (ADR-0026: three independent free quota buckets) ---
     gemini_flash_model: str = "gemini-flash-latest"
     gemini_flash_lite_model: str = "gemini-flash-lite-latest"
-    groq_model: str = "llama-3.3-70b-versatile"
-    # S41: was "meta-llama/llama-3.3-70b-instruct:free", which OpenRouter has RETIRED.
-    # The key still authenticated, so nothing looked wrong until a call was made and the
-    # provider answered 404 model-not-found — and this is the UNIVERSAL FALLBACK
-    # (ADR-0026), the bucket every module drops to when its own quota is spent. It was
-    # therefore a safety net that would only be discovered missing at the moment it was
-    # needed. Verified live against the OpenRouter model list and by a real completion,
-    # which also came back correctly in Bengali ("জ্বর"), the thing this fallback has to
-    # be able to do. ⚠ `:free` model ids are retired regularly upstream — if this 404s
-    # again, re-run backend/scripts/check_api_keys.py and pick a current `:free` id.
-    openrouter_model: str = "google/gemma-4-31b-it:free"
+    # S42: was "llama-3.3-70b-versatile", which Groq has DECOMMISSIONED — the live model
+    # list no longer contains any Llama chat model at all, and the call answered
+    # 404 model_not_found. Groq is FALLBACK_ORDER[0], i.e. the first bucket every module
+    # drops to, so this dead id had quietly removed the whole middle of the chain and
+    # left Gemini as the only working provider. Replaced with Groq's current flagship,
+    # verified live on this project's REAL M3 extraction prompt: valid JSON, the
+    # patient's name preserved in Bangla script ("রফিক"), age correct, ~2.8 s.
+    # ⚠ Rejected in the same measurement: `qwen/qwen3.6-27b` emits a `<think>` block that
+    # breaks _parse_json, and `groq/compound*` are agentic models with built-in web
+    # search — sending patient speech to a search tool would breach rule #4.
+    groq_model: str = "openai/gpt-oss-120b"
+    # S42: was the single id "google/gemma-4-31b-it:free", which answered 429 from
+    # OpenRouter's SHARED upstream pool ("temporarily rate-limited upstream") — this is
+    # the failure that broke the Patient Portal. A `:free` id is not a quota you own; it
+    # is a queue you share, so ANY single one of them is unreliable by construction, and
+    # S41's fix (swap one dead id for one live id) could only ever hold until that id got
+    # busy. This setting therefore accepts a COMMA-SEPARATED LIST and each entry is tried
+    # in turn with its OWN cooldown, so one busy model no longer takes the universal
+    # fallback down with it. All three below were verified live on the real M3 prompt in
+    # the same minute the configured id was returning 429.
+    # ⚠ These ids are retired/rotated upstream regularly — re-run
+    # `python -m backend.scripts.check_api_keys` if the demo ever reports the fallback dry.
+    openrouter_model: str = (
+        "nvidia/nemotron-3-super-120b-a12b:free,"
+        "z-ai/glm-5.2:free,"
+        "google/gemma-4-26b-a4b-it:free"
+    )
 
     # --- follow-up loop (M7–M9) ---
     # Loop guardrails from the capstone brief: stop on completeness OR max turns

@@ -29,6 +29,7 @@ from backend.app.db.models import CaseProfile, FollowupQuestion, Visit
 from backend.app.schemas.followup import AnswerOut, AnswerRequest, NextQuestionOut
 from backend.app.services.completion import completeness_score
 from backend.app.services.followup import generate_next_question, missing_summary_fields
+from backend.app.api._llm_errors import llm_unavailable
 from backend.app.services.llm_client import LLMCallError
 from backend.app.services.profile_update import process_answer
 
@@ -74,7 +75,7 @@ def _fields_scope_step(
     try:
         question = generate_next_question(db, visit, profile, missing=missing)
     except LLMCallError as exc:
-        raise HTTPException(status_code=502, detail=str(exc))
+        raise llm_unavailable(exc)   # S42: never str(exc) — it carries the raw provider body
     return question is None, score, question
 
 
@@ -94,7 +95,7 @@ def next_question(
     try:
         question = generate_next_question(db, visit, profile)
     except LLMCallError as exc:
-        raise HTTPException(status_code=502, detail=str(exc))
+        raise llm_unavailable(exc)   # S42: never str(exc) — it carries the raw provider body
     if question is None:  # max turns reached or nothing left to ask
         return NextQuestionOut(complete=True, completeness_score=score)
     return NextQuestionOut(complete=False, completeness_score=score, question=question)
@@ -127,7 +128,7 @@ def answer_question(
     try:
         profile = process_answer(db, visit=visit, question=question, answer=answer)
     except LLMCallError as exc:
-        raise HTTPException(status_code=502, detail=str(exc))
+        raise llm_unavailable(exc)   # S42: never str(exc) — it carries the raw provider body
 
     if scope == "fields":  # KIOSK-7 resume loop — no threshold gate
         complete, score, next_q = _fields_scope_step(db, visit, profile)
@@ -139,7 +140,7 @@ def answer_question(
     try:
         next_q = generate_next_question(db, visit, profile)
     except LLMCallError as exc:
-        raise HTTPException(status_code=502, detail=str(exc))
+        raise llm_unavailable(exc)   # S42: never str(exc) — it carries the raw provider body
     if next_q is None:
         return AnswerOut(complete=True, completeness_score=score)
     return AnswerOut(complete=False, completeness_score=score, next_question=next_q)

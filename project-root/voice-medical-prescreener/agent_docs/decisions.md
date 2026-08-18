@@ -2407,3 +2407,87 @@ the dev DB, and the three API keys pending rotation since S25.
   banner's size/weight, and two references to the helper that moved. Each test's stated intent is
   preserved and re-stated in place, and the auto-mode test now asserts the property directly ("the
   auto-mode sentence must not ask for a tap") instead of matching one exact sentence.
+
+---
+
+## ADR-0067 — 2026-08-19 — S42: a provider bucket names SEVERAL models, and a dead chain never speaks to the patient
+
+**Context.** The day before a demo, the Patient Portal answered **502** on
+`POST /api/visits/<uuid>/intake`. Traced, not guessed. Three independent faults had lined up:
+
+1. **Groq's `llama-3.3-70b-versatile` was DECOMMISSIONED.** The live model list contains no Llama
+   chat model at all; the call answered `404 model_not_found`. Groq is `FALLBACK_ORDER[0]` — the
+   first bucket every module falls back to — so the middle of ADR-0026's chain had been dead, and
+   nothing said so.
+2. **OpenRouter's `google/gemma-4-31b-it:free` answered 429** from its **shared upstream pool**.
+   That is ADR-0026's universal fallback. S41 had fixed this same bucket by swapping one dead id for
+   one live id, which could only hold until that id got busy.
+3. Which left **Gemini as the only working provider**. When its free daily quota hit 429 — measured
+   live on this machine at `GenerateRequestsPerDayPerProjectPerModel-FreeTier`, limit 20/day — the
+   whole chain was gone and the route answered 502.
+
+And the 502's `detail` was `str(exc)`, i.e. the raw upstream body. **The patient's screen showed the
+model id, the upstream provider's name ("Google AI Studio") and a signup URL.**
+
+### The provider layer (a)–(e)
+
+- **(a) A bucket names a LIST of models, not one.** `OPENROUTER_MODEL` is comma-separated and each
+  entry becomes its own attempt in the chain. A `:free` id is not a quota you own, it is a **queue you
+  share** — so any single one is unreliable *by construction*, and pinning the universal fallback to
+  one is a single point of failure that can only be discovered at the moment it is needed. Measured:
+  the configured id and one sibling were 429 while three other siblings served the identical request
+  correctly **in the same minute**.
+- **(b) A rate-limit cooldown is keyed on (bucket, model), not bucket.** The provider's own message
+  names the model ("<model> is temporarily rate-limited upstream"). Cooling the whole bucket would
+  skip healthy siblings — exactly how one busy free model took the entire safety net down.
+  `module_events.provider` still records the bucket, so the stored shape is unchanged.
+- **(c) One bounded retry pass, transient failures only.** OpenRouter's body says "Please retry
+  shortly" and means it. A 429/5xx/timeout gets exactly one more pass after ~1.5 s; a 404
+  model_not_found or a 401 gets none, because retrying a permanent answer only spends the patient's
+  time to receive it twice.
+- **(d) The WHOLE call is time-bounded (`CALL_DEADLINE_S = 90`), not just each attempt.** Five
+  attempts x 45 s x a retry pass is 7.5 minutes of spinner. "Stuck loading" is indistinguishable from
+  a broken kiosk and is **worse** than an honest error, which at least carries the retry button. 90 s
+  is ~6x the slowest MEASURED degraded success (14.1 s), so it can only cut off a genuine hang.
+- **(e) Models replaced with live-verified ones.** Groq → `openai/gpt-oss-120b`, verified on this
+  project's real M3 prompt (valid JSON, the patient's name preserved in Bangla script, ~2.8 s).
+  ⚠ **Rejected in the same measurement:** `qwen/qwen3.6-27b` emits a `<think>` block that breaks
+  `_parse_json`, and `groq/compound*` are agentic models with **built-in web search** — sending
+  patient speech to a search tool would breach rule #4.
+
+### The patient-facing surface (f)–(i)
+
+- **(f) `str(exc)` may never answer a patient.** All six route call sites go through ONE helper,
+  `api/_llm_errors.llm_unavailable()`. The exception still carries the full body for the log and for
+  `module_events`; the HTTP `detail` is a fixed safe sentence naming no provider, model, quota or URL,
+  plus `Retry-After`. A test walks `routes_*.py` and fails if any file handling `LLMCallError` skips
+  the helper.
+- **(g) The kiosk shows its OWN bilingual panel and never echoes server text for these calls.** So a
+  future regression on the server cannot reach a patient. It is amber with an hourglass, **not red**:
+  an upstream queue that clears in a moment is a WAIT, and danger-red tells an unwell patient that
+  something is wrong with them or their answers.
+- **(h) The panel does not auto-hide, and it offers the action.** The 8-second error banner is right
+  for "you typed something wrong" and wrong for "the assistant could not be reached", which must stay
+  until acted on.
+- **(i) ⚠ The retry resumes from the step that FAILED and never re-posts the utterance.** The
+  utterance succeeded; re-posting would write the patient's sentence into their verbatim record
+  twice, and a transcript that says something twice that was said once is no longer verbatim
+  (rule #1). Verified live: 4 patient utterances before the outage, 4 after the retry, zero
+  duplicates.
+
+### Also decided
+
+- **(j) `check_api_keys` order is load-bearing.** Groq's reply for a decommissioned model is a 404
+  whose body reads `'type': 'invalid_request_error'`. The old order tested "invalid" first, so a
+  **valid credential was reported as REJECTED and the human was sent to rotate a good key**. The
+  model verdict is now decided before the credential verdict. A checker that accuses a good key is
+  worse than no checker. It also probes **every** model of every bucket.
+- **(k) The S42 `visibilitychange` handler is NOT Step S5.** It calls the existing
+  `stopListening(false)` — the identical call `setInputMode('type')` and `finishConversation()`
+  already make — so it introduces **no new rule** about the patient's captured words. The open
+  rule #1 decision on `finalBuffer` remains the human's, and a test forbids this handler from
+  referencing `finalBuffer`, any submit path, or any S5 timing.
+
+- Status: Accepted. Supersedes S41's single-id fix for `openrouter_model`; extends ADR-0026 rather
+  than replacing it — the three-bucket strategy is unchanged, the buckets simply stopped being
+  one-model-deep.

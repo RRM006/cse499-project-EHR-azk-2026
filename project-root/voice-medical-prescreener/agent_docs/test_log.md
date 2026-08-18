@@ -1876,3 +1876,85 @@ Defect 7 is now asserted by constraint NAME, not by exception type.
   HTTP walkthrough; how they LOOK is untested and unclaimed. (The PDF itself was inspected visually.)
 - **The FHIR bundle against a real receiving system:** not attempted, and the PDF inherits that
   caveat — it is a rendering of the same record, and claims nothing more.
+
+---
+
+## Session 42 — 2026-08-19 — the demo-eve provider outage
+
+**Suite: 1056 → 1087 passed, 2 skipped, 0 failures.** New file `test_provider_failure_s42.py` (24);
+`test_llm_client.py` +5; `test_kiosk_patient_feedback.py` +2. Two existing tests UPDATED, not
+weakened — both re-stated as properties (see below).
+
+### Live measurements against the real providers (synthetic data only, rule #4)
+
+| What | Result |
+|---|---|
+| `groq / llama-3.3-70b-versatile` | **404 `model_not_found`** — decommissioned. Groq's live list has no Llama chat model. |
+| `openrouter / google/gemma-4-31b-it:free` | **429**, `limit_source: upstream_provider_shared_pool` |
+| Sibling `:free` models, same minute | `nvidia/nemotron-3-super-120b-a12b` 7.2 s ✅ · `z-ai/glm-5.2` 20.8 s ✅ · `google/gemma-4-26b-a4b-it` 31.3 s ✅ · `openai/gpt-oss-20b` **429** |
+| Gemini free tier | **429**, `GenerateRequestsPerDayPerProjectPerModel-FreeTier`, limit **20/day** — the original failure condition, still active |
+| Groq candidates on the real M3 prompt | `openai/gpt-oss-120b` ✅ JSON, name "রফিক", age 45, 2.8 s · `openai/gpt-oss-20b` ✅ 1.3 s · `qwen/qwen3.6-27b` ❌ `<think>` block breaks `_parse_json` · `groq/compound-mini` ⚠ works but carries web search → **rejected, rule #4** |
+
+### End-to-end intake, live
+
+| Scenario | Result |
+|---|---|
+| Normal | **14.5 s**, M3 `gemini_flash_lite ok`, M4 `gemini_flash ok`, M6 `groq ok` |
+| Gemini quota-dead | **6.2 s**, both Gemini calls fell to `groq fallback` |
+| Gemini AND Groq dead | **20.5 s**, all three modules served by `openrouter fallback` — the multi-model list carrying the whole intake |
+| After the `CALL_DEADLINE_S` change, live | **7.3 s** with Gemini genuinely 429 → `groq fallback` in 825 ms |
+
+### The real total outage (second uvicorn, deliberately invalid keys, human's `.env` untouched)
+
+- `POST /visits/<uuid>/intake` → **502**, `Retry-After: 30`, detail = the fixed safe sentence.
+- Leak scan over the HTTP body **and** the whole rendered patient screen for
+  `gemini/groq/openrouter/gemma/nvidia/glm/429/502/rate-limit/quota/api key/provider/http/model`:
+  **NONE**.
+- ⚠ **Rule #1 through the outage:** all 4 patient utterances stored **verbatim**, `corrected_text`
+  NULL, `case_profiles` rows 0. The panel's claim "Your answers are saved" is factually true.
+- **Try again** after the provider returned → intake completed, Bangla follow-up generated,
+  **4 patient utterances still, zero duplicates**.
+- `module_events` across outage + recovery: `M3` gemini→groq→openrouter×3 error, then
+  `gemini_flash_lite ok`. The three openrouter rows are the model list working.
+- No key material in any server log, any `module_events.error` (51 rows), or any tracked file.
+
+### Browser (Chrome, in-app pane)
+
+Full patient flow driven end to end on the **typed** path (same pipeline, `source: manual`):
+phone → OTP → 4 scripted turns → intake → follow-up loop → resume loop → **10/10 fields** → submit →
+`awaiting_review`, arriving top of the medic queue as **HIGH**. Clean console on all three portals.
+
+| Check | Result |
+|---|---|
+| Medic **Edit → Save** button (the S41 bug) | y=**677–708** in a 720px viewport — fully in view (was y=727) |
+| S41 transcript containment, 375/768/1280 px | `display:block`, `overflow-wrap:anywhere`, `min-width:0`; nothing escapes; no horizontal page scroll |
+| Listening hint | "🎤 You can speak now…" / "🎤 এখন কথা বলুন…" — intact |
+| `visibilitychange` while listening | `listening` → false, listening class cleared, bilingual notice shown |
+| AI-retry panel at 375 px | fits, button full-width and fully visible, no horizontal scroll |
+
+⚠ **Appearance IS claimed this session — for the new panel only.** The Browser pane composites frames
+now, so the AI-retry panel was screenshotted in **both** English and Bangla (Bengali shaping correct).
+No other screen was re-screenshotted; S41's "appearance unclaimed" note still applies to the rest.
+
+### Non-vacuity
+
+The new file was run against the **pre-fix code** via `git stash`: **15 of 22 failed**, including
+every disclosure, retry, classifier and route assertion. The 7 that passed pin pre-existing fallback
+behaviour against regression, which is their job.
+
+### Two tests updated (intent preserved and strengthened, not relaxed)
+
+1. `test_a_late_profile_is_never_drawn_onto_the_next_patients_review` — `renderSummary` moved into
+   `buildSummary`. Now **searches** for every function that renders a profile and requires the epoch
+   guard in each, instead of naming one function. Stronger: it would catch a second unguarded render.
+2. `test_step_s5_is_still_not_implemented` — S42 added a `visibilitychange` handler, so the blanket
+   string-absence check was replaced by a **boundary**: the handler may not reference `finalBuffer`,
+   any submit path, `setTimeout`, or either S5 timing, and the two S5 knobs must be referenced
+   exactly once (their config default) and read by nothing.
+
+### Not measured (unchanged)
+
+- **WER / precision-recall:** still not formally measured.
+- **⚠ No real-microphone run this session** — `microphone: denied` in this environment. S42 changed
+  no STT/TTS code, and the typed path exercises the same endpoint and flow.
+- **Edge:** still never run.

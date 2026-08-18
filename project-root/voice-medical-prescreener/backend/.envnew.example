@@ -25,5 +25,15 @@ GROQ_API_KEY=
 # --- OpenRouter (universal :free fallback, ADR-0026) ---
 OPENROUTER_API_KEY=
 
+# ⚠ S42: OPENROUTER_MODEL accepts a COMMA-SEPARATED LIST and every entry is tried with
+# its own cooldown. A single `:free` id is a SHARED queue, not a quota you own — pinning
+# the universal fallback to one of them is what turned a routine 429 into a 502 on the
+# patient's screen. Leave unset to use the shipped multi-model default.
+# OPENROUTER_MODEL=
+
+# --- Cerebras (recommended extra free bucket; blank = skipped) ---
+# Free ~1M tokens/day, and it sits AHEAD of OpenRouter's shared pool in the chain.
+# CEREBRAS_API_KEY=
+
 # NOTE: Module 1 uses the browser Web Speech API for speech-to-text (client-side),
 # so there is no STT provider configuration here.

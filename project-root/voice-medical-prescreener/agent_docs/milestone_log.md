@@ -6,6 +6,67 @@
 
 **Status keys:** ⬜ Not started · 🟨 In progress · 🟦 Blocked · ✅ Done · ⛔ Retired
 
+**Last updated:** 2026-08-19 (**Session 42 — DEMO-HARDENING. The reported Patient-Portal 502 root-caused
+and fixed, the provider chain given real redundancy, and the raw upstream provider error stopped from
+reaching the patient's screen. 1056 → 1087 tests pass, 2 skipped, 0 failures.** New ADR **0067**.
+⚠ **No schema, migration, Alembic, dependency, FHIR, PDF, OTP or auth change. Head stays 0014, 18 tables.**
+⚠ **NO MODULE CHANGED STATUS.** **M15 stays 🟨.**
+⚠ **No STT/TTS logic changed** — the speech pipeline is exactly as S41 left it.
+
+**THE ROOT CAUSE WAS THREE FAULTS, AND THE REPORTED ONE WAS THE LEAST IMPORTANT.** (1) Groq's
+`llama-3.3-70b-versatile` is **DECOMMISSIONED** — no Llama chat model remains in Groq's live model
+list and the call answers `404 model_not_found`. Groq is `FALLBACK_ORDER[0]`, so the *first* bucket
+every module falls back to had been silently dead. (2) OpenRouter's `google/gemma-4-31b-it:free`
+answered **429 from its SHARED upstream pool** — and that bucket is ADR-0026's *universal fallback*.
+(3) Which left **Gemini as the only working provider**, so its ordinary free daily 429 took the whole
+system down and `POST /visits/<uuid>/intake` returned 502. The error text named only the last
+provider to fail, which is why it presented as an OpenRouter problem.
+
+⚠ **AND THE PATIENT WAS BEING SHOWN THE UPSTREAM PROVIDER'S ERROR BODY.** Six routes answered
+`HTTPException(502, detail=str(exc))`; `str(exc)` ends in the raw provider reply, measured as carrying
+the model id, `'provider_name': 'Google AI Studio'` and a signup URL — and the kiosk pipes `detail`
+straight into its banner. That is configuration disclosure from a system handling medical data. It is
+now converted at ONE helper (`api/_llm_errors.py`) that every LLM route uses, and a test walks
+`routes_*.py` and fails if any file handling `LLMCallError` skips it.
+
+**A PROVIDER BUCKET NOW NAMES SEVERAL MODELS.** `OPENROUTER_MODEL` is comma-separated and each entry
+becomes its own attempt with its **own cooldown** — keyed on `bucket|model`, because the provider's
+429 names a MODEL, not a bucket, so cooling the whole bucket skipped healthy siblings.
+⚠ Measured during the outage: the configured id and one sibling were 429 while **three other `:free`
+siblings answered the identical request correctly in the same minute**. A `:free` id is not a quota
+you own, it is a queue you SHARE — so pinning the universal fallback to one id is a single point of
+failure by construction, and S41's one-id-for-one-id fix could only hold until that id got busy.
+
+**MODELS REPLACED WITH LIVE-VERIFIED ONES.** Groq → `openai/gpt-oss-120b`, checked against this
+project's real M3 extraction prompt: valid JSON, the patient's name preserved in Bangla script
+("রফিক"), ~2.8 s. ⚠ **Rejected in the same measurement:** `qwen/qwen3.6-27b` emits a `<think>` block
+that breaks `_parse_json`, and `groq/compound*` are agentic models with **built-in web search** —
+sending patient speech to a search tool would breach rule #4.
+
+**ONE BOUNDED RETRY, PLUS A BOUND ON THE WHOLE CALL.** Transient failures (429/5xx/timeout) get
+exactly one more pass after ~1.5 s; a 404 model_not_found or a 401 gets none. Separately
+`CALL_DEADLINE_S = 90` bounds the ENTIRE call — unbounded it was five attempts x 45 s x a retry pass
+= **7.5 minutes** of spinner, and "stuck loading" is worse than an honest error because an error at
+least carries the retry button.
+
+**A TOTAL OUTAGE IS NOW A WAIT THE PATIENT CAN ACT ON.** An amber panel — deliberately **not red**,
+because an upstream queue clearing in a moment is a WAIT and danger-red tells an unwell patient
+something is wrong with *them* — says "The assistant is busy right now / Your answers are saved" in
+both languages and offers **Try again**. It does not auto-hide.
+⚠ **The retry resumes from the step that FAILED and never re-posts the utterance** — re-posting would
+write the patient's sentence into their verbatim record twice (rule #1).
+
+⚠ **VERIFIED LIVE, NOT SIMULATED — and the original failure condition is ACTIVE.** Gemini's free daily
+quota is genuinely exhausted on this machine (limit 20/day); under the old code that call *was* the
+reported 502, and it now falls back to Groq in 825 ms with intake completing in 7.3 s. A second
+uvicorn was run with deliberately invalid keys (the human's `.env` untouched) to force a REAL total
+outage: 502 + `Retry-After: 30`, **zero** leaked terms, the bilingual panel shown, **all four patient
+utterances stored verbatim through the outage**, and **Try again** completing the intake with **zero
+duplicates**. The full patient flow then ran end to end into the medic queue as HIGH, and the medic
+**Edit → Save** button measured at y=677 in a 720px viewport (S41's fix intact).
+⚠ **NO REAL-MICROPHONE RUN** — the browser here reports `microphone: denied`. Everything used the
+typed path, which is the SAME pipeline (ADR-0048). S42 changed no STT code.
+
 **Last updated:** 2026-08-15 (**Session 41 — the four defects the human's REAL-MICROPHONE run
 surfaced are fixed, the synthetic test visit is deleted, and the API keys are now checkable.
 1031 → 1056 tests pass, 2 skipped, 0 failures.** New ADR **0066**.

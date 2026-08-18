@@ -182,7 +182,17 @@ async function api(method, path, body) {
   if (!res.ok) {
     let detail = `${res.status} ${res.statusText}`;
     try { detail = (await res.json()).detail || detail; } catch (_) { /* keep default */ }
-    throw new Error(detail);
+    const err = new Error(detail);
+    /* S42: carry the STATUS, not just the message. The kiosk has to distinguish "the
+       AI provider chain is down" (502 — temporary, worth a retry button) from a real
+       client error like 409 "question already answered" (retrying only fails again).
+       Deciding that by matching words in `detail` would break the moment the wording
+       changed — and the whole point of S42 is that the wording no longer carries
+       provider text. `retryAfter` is the server's own hint, when it sends one. */
+    err.status = res.status;
+    const retryAfter = res.headers.get('Retry-After');
+    if (retryAfter) err.retryAfter = Number(retryAfter) || null;
+    throw err;
   }
   return res.json();
 }

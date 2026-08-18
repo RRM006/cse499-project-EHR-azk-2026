@@ -36,7 +36,7 @@ from backend.app.core.llm_providers import (
     GROQ,
     MISTRAL,
     OPENROUTER,
-    get_provider,
+    provider_variants,
 )
 
 # The three keys the project actually depends on (ADR-0026's independent buckets),
@@ -74,13 +74,21 @@ def _probe(provider) -> tuple[bool, str]:
         # ⚠ Never echo the exception verbatim: a provider that rejects a key sometimes
         # quotes it back in the error body, and this function's contract is that no key
         # value reaches the terminal.
-        if "401" in text or "invalid" in lowered or "unauthor" in lowered:
+        # ⚠ S42 — ORDER IS LOAD-BEARING, and getting it wrong cost real trust. Groq's
+        # reply for a decommissioned model is a 404 whose body reads
+        # `'type': 'invalid_request_error'`. The old order tested "invalid" FIRST, so a
+        # perfectly valid credential was reported as "REJECTED — the key is wrong,
+        # revoked, or not yet active" and the human was sent to rotate it. A checker
+        # that accuses a good key of being bad is worse than no checker. The model
+        # verdict is therefore decided BEFORE the credential verdict, and the
+        # credential test no longer keys on the bare word "invalid".
+        if "404" in text or "model_not_found" in lowered or "does not exist" in lowered:
+            return False, "key OK, but the configured MODEL was not found (rotate the MODEL, not the key)"
+        if "401" in text or "unauthor" in lowered or "invalid api key" in lowered                 or "invalid_api_key" in lowered:
             return False, "REJECTED — the key is wrong, revoked, or not yet active"
         if "429" in text or "quota" in lowered or "rate limit" in lowered:
             # The key is valid; the free tier is simply spent for now.
             return True, "authenticated (free quota currently exhausted — 429)"
-        if "404" in text or "model" in lowered:
-            return False, "key accepted but the configured MODEL was not found"
         if "timeout" in lowered or "connect" in lowered:
             return False, "network problem — could not reach the provider"
         return False, f"failed ({type(exc).__name__})"
@@ -95,22 +103,30 @@ def main() -> int:
     checked = 0
 
     for key, env_name, console_url in PROBE_ORDER:
-        provider = get_provider(key, settings)
-        if not provider.configured:
+        variants = provider_variants(key, settings)
+        if not variants or not variants[0].configured:
             print(f"  {key:<18} {env_name:<20} not set — skipped")
             continue
-        if provider.api_key in seen_keys:
+        if variants[0].api_key in seen_keys:
             print(f"  {key:<18} {env_name:<20} same credential as above — not re-probed")
             continue
-        seen_keys.add(provider.api_key)
+        seen_keys.add(variants[0].api_key)
 
+        # S42: a bucket may name several models. Probe EACH — the whole point of the
+        # list is that one model being unusable must not condemn the bucket, so the
+        # report has to say which models work, not just whether the first one does.
+        # The credential passes if ANY of its models answers.
         checked += 1
-        ok, verdict = _probe(provider)
-        mark = "PASS" if ok else "FAIL"
-        print(f"  {key:<18} {env_name:<20} [{len(provider.api_key)} chars] {mark} — {verdict}")
-        if not ok:
+        bucket_ok = False
+        for provider in variants:
+            ok, verdict = _probe(provider)
+            bucket_ok = bucket_ok or ok
+            mark = "PASS" if ok else "FAIL"
+            label = f"{key} [{provider.model}]"
+            print(f"  {label:<62} {mark} — {verdict}")
+        if not bucket_ok:
             failures += 1
-            print(f"       rotate or fix at: {console_url}")
+            print(f"       {env_name}: rotate or fix at: {console_url}")
 
     print()
     if not checked:

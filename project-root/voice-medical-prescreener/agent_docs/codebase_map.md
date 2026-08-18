@@ -781,3 +781,16 @@ voice-medical-prescreener/
   and never delete the DB (ADR-0022).
 - **The red-flag check lives in `risk.py`/`red_flags.py` (Module 10)** — there is no separate
   emergency module/route/node anymore (ADR-0024).
+
+## S42 (2026-08-19) — provider-failure hardening
+
+| Path | What it is |
+|---|---|
+| `backend/app/api/_llm_errors.py` | **NEW.** The ONE place an `LLMCallError` becomes an HTTP response. Every LLM route imports `llm_unavailable()`. It exists because `detail=str(exc)` was putting the raw upstream provider body — model id, provider name, signup URL — on the patient's screen. Sets a safe fixed sentence + `Retry-After`. |
+| `backend/tests/test_provider_failure_s42.py` | **NEW.** 24 tests pinning the outage: the 9 brief scenarios, the transient/permanent classifier, the no-provider-text and no-secret-in-logs properties, the call deadline, and a scan that fails if any `routes_*.py` handling `LLMCallError` skips the helper. |
+| `backend/app/core/llm_providers.py` | `split_models()` + `provider_variants()`: a bucket may name a comma-separated LIST of models, each becoming its own chain attempt. `ProviderConfig.cooldown_key` is `bucket-pipe-model`. |
+| `backend/app/services/llm_client.py` | Per-(bucket, model) cooldowns, `is_transient()`, one bounded retry pass, and `CALL_DEADLINE_S` bounding the whole call. `LLMCallError.safe_detail` is the patient-facing text. |
+| `frontend/kiosk.js` | `showAiRetry` / `hideAiRetry` / `retryLastAiStep` / `isAiUnavailable`, plus `startOpeningLoop()` and `buildSummary()` — the two retryable units, extracted so a retry never re-posts an utterance. `handleVisibilityChange()` stops a mic left open on a hidden tab (NOT Step S5). |
+| `frontend/kiosk.html`, `frontend_shared/shared.css` | The `#ai-retry-panel` markup and its amber (not red) styling. |
+| `frontend_shared/shared.js` | `api()` now attaches `err.status` and `err.retryAfter`, so the kiosk can tell a 502 outage from a 4xx client error without matching message text. |
+| `backend/scripts/check_api_keys.py` | Probes EVERY model of every bucket; the MODEL verdict is now decided BEFORE the credential verdict (it was calling a valid Groq key "REJECTED"). |
