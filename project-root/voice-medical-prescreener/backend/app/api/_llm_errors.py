@@ -26,7 +26,7 @@ from __future__ import annotations
 
 from fastapi import HTTPException
 
-from backend.app.services.llm_client import LLMCallError
+from backend.app.services.llm_client import LLM_UNAVAILABLE_DETAIL, LLMCallError
 
 # Seconds. Matches the shortest provider cooldown (a plain RPM 429 clears inside a
 # minute), so a client that honours the header retries at roughly the moment the
@@ -45,5 +45,26 @@ def llm_unavailable(exc: LLMCallError) -> HTTPException:
     return HTTPException(
         status_code=502,
         detail=exc.safe_detail,
+        headers={"Retry-After": str(RETRY_AFTER_SECONDS)},
+    )
+
+
+def provider_unavailable() -> HTTPException:
+    """The same patient-safe 502, for a provider call that does NOT come through
+    ``call_module`` and therefore never raises ``LLMCallError``.
+
+    ⚠ S43 — there was exactly one such call site and S42 missed it: ``POST /api/correct``
+    (Module 2, the legacy Phase-0 transcript demo) reaches its provider through the
+    ``Corrector`` seam rather than the module chain, so it kept answering
+    ``detail=f"Correction failed: {exc}"`` — the same raw upstream body, on the same
+    kind of screen, from the same system, months after the pattern was declared unsafe.
+
+    It takes no exception argument on purpose: there is no ``safe_detail`` to read off
+    an arbitrary provider exception, and accepting one invites a caller to interpolate
+    it. The technical text belongs in the server log, which the caller writes.
+    """
+    return HTTPException(
+        status_code=502,
+        detail=LLM_UNAVAILABLE_DETAIL,
         headers={"Retry-After": str(RETRY_AFTER_SECONDS)},
     )

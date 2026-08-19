@@ -6,6 +6,169 @@
 
 **Status keys:** ⬜ Not started · 🟨 In progress · 🟦 Blocked · ✅ Done · ⛔ Retired
 
+**Last updated:** 2026-08-19 (**Session 45 — the medic "✏️ Edit does nothing" mouse-click bug, fixed
+in one CSS rule. 1181 → 1196 tests pass, 2 skipped, 0 failures.**
+⚠ **NO MODULE OR PHASE STATUS CHANGED** — this entry exists only so the board's date and test count
+are not stale. Modules 1-14 ✅, M5 ⛔, **M15 🟨**, Alembic head **0014, 18 tables**.
+⚠ **No new ADR** (a stylesheet bug fix, not an architectural decision). No schema, migration,
+dependency, route, service or JavaScript change.
+
+**A CONTROL WAS UNCLICKABLE BECAUSE THE CARD MOVED BETWEEN mousedown AND mouseup.** Measured on the
+shipped page with real mouse events and a capture-phase listener, aiming at the Edit button's own
+centre: `mousedown` landed on the wrapper `DIV` and `mouseup` on `BUTTON#intake-toggle` — two
+**different** elements — so the browser fired `click` on their nearest common ancestor and the
+button's handler never ran. No request, no error, nothing on screen.
+`.fx-card` (the S37 depth layer) carried `transform-style: preserve-3d` + `will-change: transform`
+and moved in Z inside `.fx-scene { perspective: 1400px }`: `translate3d(0,-2px,12px)` on hover, then
+`translate3d(0,0,2px)` on press. Under a perspective, changing Z **rescales** the element, so
+pressing the mouse shifted every child of the card by a few pixels — proportional to distance from
+the perspective origin, which is why it hit some buttons and not others and read as intermittent.
+Fixed by carrying the depth in the **elevation shadow** instead: `.fx-card` sets no transform at all
+and transitions `box-shadow` alone. Hover, press and keyboard focus all still respond; nothing was
+removed. `.queue-item`'s 2-D slide, `.fx-lift`'s 1px button lift and `.fx-scene`'s perspective were
+deliberately left alone.
+
+⚠ **THE REAL FINDING IS ABOUT VERIFICATION.** S41 and S43 both "verified" this area and both missed
+it, because they used `element.click()` and clicks aimed at the SAVE button. A programmatic
+`.click()` invokes the handler and **skips hit-testing entirely**, so it cannot detect a hit-target
+defect by construction. The bug was found within minutes of driving a real mouse at the real button,
+and the fix was A/B proved in the live page: re-injecting the old rule reproduced the split
+mousedown/mouseup and the editor stayed shut; removing it delivered all four events to the button.
+
+**Acceptance re-run by real mouse and real keystrokes:** Edit opens the editor, 🩸 Sugar reference
+opens its chart, the blood sugar was retyped to 5.8, Save produced **exactly one** PATCH, the card
+then read `5.8 mmol/L (104 mg/dL) · random`, the editor closed, and the console produced no messages
+at all. Doctor portal unaffected.
+
+**Last updated:** 2026-08-19 (**Session 44 — THREE API KEYS PER PROVIDER, reachable through the one
+existing chain. 1150 → 1181 tests pass, 2 skipped, 0 failures.** New ADR **0069**, which
+**SUPERSEDES ADR-0068 (g)**.
+⚠ **No schema, migration, Alembic, dependency, FHIR, PDF, OTP or auth change. Head stays 0014, 18 tables.**
+⚠ **NO MODULE CHANGED STATUS.** **M15 stays 🟨.**
+⚠ **No frontend file was touched at all** — no kiosk, medic, doctor, voice, TTS or CSS change.
+
+**ADR-0068 (g) WAS WRONG ON ITS PREMISE, AND S44 REVERSES IT.** S43 rejected multiple keys per
+provider because "three keys" was read as three PROVIDERS, which the six-bucket registry already
+covered. The real situation is three keys **for each** of Gemini, Groq and OpenRouter. A free tier is
+metered per ACCOUNT, so those nine credentials are **nine independent daily quotas** the architecture
+could not reach — and Gemini's quota had already been measured spent that same day. The rejection is
+recorded as superseded rather than deleted.
+
+**IT IS THE SAME CHAIN, ONE LEVEL DEEPER — NOT A SECOND ROUTER.** A bucket already expanded into one
+attempt per model (ADR-0067); it now expands into one attempt per **(credential, model)**.
+`FALLBACK_ORDER` is unchanged, `provider_chain_for_module` keeps its shape, and **`llm_client.py`
+changed by exactly one log line**. Verified against the real chain builder:
+
+    Gemini key 1 → key 2 → key 3 → Groq key 1 → key 2 → key 3 → Cerebras → OpenRouter key 1 → key 2 → key 3
+
+with every MODEL of one key tried before the next key. That nesting is deliberate: an OpenRouter
+`:free` 429 comes from a **shared per-model queue** (a sibling model on the same key answers), while
+a daily-quota 429 is **per account** (only another key helps) — key-major serves both without
+interleaving them.
+
+⚠ **THE CRUX WAS THE COOLDOWN.** `cooldown_key` was `bucket|model` and is now `bucket#slot|model`.
+Measured against the old formula: three Gemini keys produced **ONE** cooldown identity, so a 429 on
+key 1 would have put keys 2 and 3 to sleep on the evidence of a third — the feature would have
+silently defeated itself while still appearing to work. Cooldowns stay **time-based and in-process**:
+no key is ever permanently disabled and nothing about key health is persisted.
+
+**BACKWARD COMPATIBLE BY CONSTRUCTION.** Each bucket reads four slots — the bare `GEMINI_API_KEY`
+then `_1`, `_2`, `_3` — with blanks and duplicates dropped. An existing .env that sets only the bare
+name is a one-element list and behaves exactly as it did; **verified against the real .env, whose
+live chain this session did not change.** The same key pasted into two slots counts once: it is one
+quota, not two, and counting it twice would make the slot report overstate the redundancy available.
+⚠ Cerebras and Mistral keep ONE slot each, said out loud in `.env.example`, because
+`CEREBRAS_API_KEY_2` would be a line nothing reads.
+
+**A CREDENTIAL SLOT IS AN INDEX EVERYWHERE IT IS NAMED.** `ProviderConfig.key_index` and `.label`
+("groq key 2 [model]") let a log line say WHICH key is exhausted without a credential reaching a log
+file. `module_events.provider` still records the **bucket alone**, so no slot number reaches the
+database and the stored shape is unchanged. `check_api_keys` prints a slot inventory
+("key 1 configured / key 2 configured / …") before spending a request and reports a provider as
+failed **only when every one of its keys failed**.
+
+⚠ **REAL API-KEY FAILOVER WAS NOT TESTED.** The nine slots are empty — the human pastes the keys.
+All 31 new tests use **mocked providers**; no network call, no real credential, no quota spent.
+⚠ **Two self-inflicted problems, both recorded rather than quietly fixed:** a `.env` backup this
+session created was **not matched by `.gitignore`** (it held every real key; it never reached git and
+was deleted, and `.gitignore` now covers `.env.*` with the example re-included and both directions
+tested); and a smoke-test selector `.btn-primary` **forwarded visit `1bbe6d80…` (ইসরাত) to a doctor**,
+emptying the medic queue. Nothing was deleted, `audit_log` records it correctly, and the reversal is
+one UPDATE — but it is the human's data and their call.
+
+**Last updated:** 2026-08-19 (**Session 43 — SECOND demo-hardening pass of the same day. The
+medic's Intake & Vitals card is now actually usable before a referral, no route can answer a user
+with an upstream provider's error text, and a `.env` line that silently deleted a fallback bucket
+reports itself. 1087 → 1150 tests pass, 2 skipped, 0 failures.** New ADR **0068**.
+⚠ **No schema, migration, Alembic, dependency, FHIR, PDF, OTP or auth change. Head stays 0014, 18 tables.**
+⚠ **NO MODULE CHANGED STATUS.** **M15 stays 🟨.**
+⚠ **No STT/TTS/voice code was touched at all** — the speech pipeline is exactly as S41 left it.
+
+**"THE SUGAR REFERENCE / EDIT INTERACTION DOES NOT WORK" WAS THREE DEFECTS, AND THE BUTTON WAS NEVER
+ONE OF THEM.** All three were MEASURED in a real browser at 1280x720; reading the source found
+nothing, because every handler was correctly attached and `saveIntake()` worked when called directly.
+
+1. **The Save click was landing on a `<div>`.** `#bmi-live` is **15.7px tall while empty and 45.6px**
+   once the `/api/reference/bmi` answer lands, and it sat directly ABOVE the Save/Cancel row — so
+   Save **moved down 29.9px, 94% of its own 31.6px height**, about 250ms (the `liveBmi` debounce)
+   plus one network round-trip after the medic stopped typing, i.e. exactly while their hand was
+   travelling to the button. An instrumented listener recorded `click -> DIV`: the inline `onclick`
+   never ran, **no PATCH was sent, no error appeared**, and the form stayed open with the values
+   still in it. Indistinguishable from a dead button. Fixed by DOM order — the readout now follows
+   the action row, so nothing interactive can be displaced at any width in either language.
+   ⚠ A `min-height` reservation was **rejected on measurement**: 3 lines at 800px in English and
+   more in Bangla at a narrow width, so any fixed number fails on some layout. Nothing was removed —
+   the BMI, both WHO ladders and the rule #2 disclaimer all still render, 35px lower.
+2. **The language toggle silently CLOSED the 🩸 Sugar reference chart, in BOTH staff portals**
+   (`display` block → none, 2186 characters → 0). Whether the panel was open had been inferred from
+   `panel.style.display` — a property of an element the card's `innerHTML` rebuild destroys and
+   recreates from a template saying `display:none`. Both portals call `renderGlucosePanel()` on a
+   language change precisely so the chart follows, and it returned immediately every time; the
+   intent was written in a comment in both portals and had never once executed. State now lives in
+   one `Set` in `frontend_shared/staff.js` keyed by mount id — **one fix, both portals**, and the
+   medic and doctor disclose independently.
+3. **The language toggle silently DISCARDED unsaved vitals** (a typed 63.5 read 62.5 again). The
+   draft is now captured before the rebuild and handed back — ⚠ **stamped with the patient id it was
+   typed for**, because the editor deliberately stays open across a patient switch and the first
+   version of this fix was a genuine cross-patient leak that **S41's existing test caught**.
+
+⚠ **THE ONE LLM ROUTE S42's DISCLOSURE FIX COULD NOT HAVE CAUGHT.** `POST /api/correct` (Module 2)
+reaches its provider through the `Corrector` seam rather than `call_module`, so it never raises
+`LLMCallError` — and S42's guard only inspects `routes_*.py` files that mention that exception. It
+was still answering `detail=f"Correction failed: {exc}"`, the same raw upstream body. Now routed
+through a new sibling helper `_llm_errors.provider_unavailable()`; the technical text goes to the
+server log, and a companion test covers the gap in the original guard.
+
+**A BLANK `.env` LINE COULD DELETE THE UNIVERSAL FALLBACK, SILENTLY.** `OPENROUTER_MODEL=` beside a
+perfectly valid key makes `split_models` return `[]`, `provider_variants` return nothing, and
+`provider_chain_for_module` **skip the bucket entirely** — with no error and no trace.
+`check_api_keys` made it worse by reporting that bucket as "not set", i.e. **blaming the key** and
+sending the operator to the wrong file. `misconfigured_buckets()` names the case, the server warns
+about it at startup, and the checker gives it its own verdict pointing at the `*_MODEL` line. A
+bucket with **neither** key nor model is deliberately still not reported — that is the normal state
+of every optional provider.
+
+⚠ **MULTIPLE KEYS PER PROVIDER WAS CONSIDERED AND REJECTED (ADR-0068 g).** Six buckets exist, the
+three available keys map onto three of them, the two optional buckets are already wired and skipped
+while blank, and every `*_MODEL` already accepts a comma-separated list. Redundancy comes from more
+BUCKETS and more MODELS, not more keys per bucket; a second credential mechanism would be exactly the
+"second routing system" the brief forbids.
+
+**NO REDUNDANCY:** the M2 corrector's private copy of Groq's and OpenRouter's base URLs is gone (it
+resolves through `llm_providers.provider_credentials()`, and a test fails if either URL is written
+down twice again); `backend/.envnew.example` — a second, partial template whose header told the
+reader to copy it to `.env` — was removed; `.env.example` gained the six provider settings that
+existed in code but nowhere in the template.
+
+⚠ **VERIFIED BY MEASUREMENT, NOT BY APPEARANCE.** The Browser pane did not composite frames this
+session, so there are no screenshots: every claim above is a `getBoundingClientRect` figure, an
+`elementFromPoint` result, an instrumented event trace or a server request log. After the fix the
+Save button's top measured **627.01px before and after** the BMI lands (shift **0.00**, was 29.9) and
+a real click sends **exactly one** `PATCH /api/patients/16/vitals`. The doctor portal, the logout →
+root navigation and the kiosk were all smoke-checked with clean consoles.
+⚠ **NO REAL-MICROPHONE RUN** — S43 changed no speech code. ⚠ **No live provider call** — fallback is
+proved by mocks only, as the brief required.
+
 **Last updated:** 2026-08-19 (**Session 42 — DEMO-HARDENING. The reported Patient-Portal 502 root-caused
 and fixed, the provider chain given real redundancy, and the raw upstream provider error stopped from
 reaching the patient's screen. 1056 → 1087 tests pass, 2 skipped, 0 failures.** New ADR **0067**.

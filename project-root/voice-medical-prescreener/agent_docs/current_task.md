@@ -6,179 +6,161 @@
 
 ---
 
-**Date:** 2026-08-19 (end of Session 42) — **DEMO-HARDENING SESSION, demo is TOMORROW**
-**Phase:** The reported Patient-Portal **502** is fixed at its root, the provider chain no longer has
-a single point of failure, and a total AI outage now fails safely and **recoverably** instead of
-showing the patient an upstream provider's error.
-Test suite: **1087 passed, 2 skipped, 0 failures** (was 1056).
+**Date:** 2026-08-19 (end of Session 45) — **fourth hardening session of the same day.**
+**Phase:** The medic's **"clicking ✏️ Edit does nothing" bug is FIXED and verified by a real mouse
+click** — it was the card moving between `mousedown` and `mouseup`, not the handler and not the API.
+Test suite: **1196 passed, 2 skipped, 0 failures** (was 1181).
 Alembic head: **0014 — unchanged. 18 tables. No new dependency. No schema or migration change.**
-New ADR: **0067**. ⚠ **No STT/TTS logic was touched** — the speech pipeline is exactly as S41 left it.
-**No module changed status. M15 stays 🟨.**
+**No new ADR** (a stylesheet bug fix). **No module changed status. M15 stays 🟨.**
+⚠ **S45 changed exactly one CSS rule and added one test file — no JavaScript, no route, no service.**
 
-**⚠ Step S5 is STILL NOT implemented.** S42 added a `visibilitychange` handler that is deliberately
-NOT S5 — see the bottom of this file.
+**There is no outstanding coding task.** Everything below is demo validation only.
 
 ---
 
-## 🚦 BEFORE THE DEMO — do these in order
+## 🚦 NEXT SESSION — do these in order
 
-### 1. ⚠ Gemini's free daily quota is SPENT right now (measured 2026-08-19)
+### 1. Paste the nine API keys (5 minutes) — the only blocking item
 
-Not a bug and not a key problem. The key authenticates; the free tier allows **20 requests/day** on
-`gemini-3.7-flash` and it is used up. **It resets at midnight Pacific Time.**
+`backend/.env` has nine **empty** slots waiting. One key per line, no quotes, no spaces around `=`:
 
-This is now survivable — Groq picks the work up in under a second and intake completes in ~7 s — but
-it means **the demo is currently running on ONE healthy provider bucket**, which is the exact shape
-of the problem this session just fixed. Please close that:
+```
+GEMINI_API_KEY_1=      GROQ_API_KEY_1=      OPENROUTER_API_KEY_1=
+GEMINI_API_KEY_2=      GROQ_API_KEY_2=      OPENROUTER_API_KEY_2=
+GEMINI_API_KEY_3=      GROQ_API_KEY_3=      OPENROUTER_API_KEY_3=
+```
 
-### 2. ⚠ RECOMMENDED — add a Cerebras key (5 minutes, free, no card)
+- The **bare** `GEMINI_API_KEY` / `GROQ_API_KEY` / `OPENROUTER_API_KEY` lines are still read and are
+  **slot 1** — your existing keys are in them and still work. The same key in two slots counts once.
+- Blank slots are skipped; sparse is legal (key 1 + key 3 = two working keys).
+- Keys are read **at startup**, so restart uvicorn, then verify (never prints a key):
+  ```
+  .venv\\Scripts\\python.exe -m backend.scripts.check_api_keys
+  ```
+  Expect `key 1 configured / key 2 configured / key 3 configured` under each of `gemini_flash`,
+  `groq` and `openrouter`, then a PASS/FAIL per (key, model).
+- ⚠ `CEREBRAS_API_KEY` has **one** slot only. ⚠ Do **not** set `MISTRAL_API_KEY` (trains on inputs,
+  rule #4).
 
-This is the single highest-value thing you can do before tomorrow.
+Resulting chain: `Gemini k1→k2→k3 → Groq k1→k2→k3 → Cerebras → OpenRouter k1→k2→k3`, every model of
+one key before the next key (ADR-0069).
 
-1. Sign up at **https://cloud.cerebras.ai** and create an API key.
-2. Add ONE line to `backend/.env` (gitignored — never paste a key into chat or a commit):
-   ```
-   CEREBRAS_API_KEY=<your key>
-   ```
-3. Restart uvicorn (keys are read at startup), then verify:
-   ```
-   .venv\\Scripts\\python.exe -m backend.scripts.check_api_keys
-   ```
+### 2. Hard-reload every portal
 
-Why Cerebras specifically: free ~1M tokens/day, OpenAI-compatible, very fast, **already wired into
-the chain** (`FALLBACK_ORDER`), and it sits **ahead of** OpenRouter's shared free pool. With it set
-the chain becomes `Gemini → Groq → Cerebras → OpenRouter(x3)`. Nothing else needs changing.
-⚠ **Do NOT set `MISTRAL_API_KEY`** — that tier trains on inputs (rule #4).
+`Ctrl-F5` on `/kiosk.html`, `/medic/` and `/doctor/`. **S45 changed `frontend_shared/motion.css`**,
+which both staff portals load and browsers cache aggressively — without a hard reload the Edit
+button will still be broken on your machine.
 
-**Optional (not required):** rotating the 3 existing keys, pending since S25. All three
-authenticate today, so this is hygiene before a *public* demo, not a fix.
+### 3. The real-microphone pass — the last thing only you can do
 
-### 3. Hard-reload every portal before the demo
-
-`Ctrl-F5` on `/kiosk.html`, `/medic/` and `/doctor/`. These are static files and S42 changed
-`kiosk.js`, `kiosk.html`, `shared.js` and `shared.css`.
-
-### 4. What only YOU can verify — a real-microphone pass
-
-**No microphone run happened this session.** The browser here reports `microphone: denied`.
-Everything was verified through the **typed** path, which is the SAME pipeline (`source: manual` vs
-`mic`, one endpoint, ADR-0048) — so the backend, the AI chain and the whole flow are proven, but the
-speech capture itself is not re-proven by S42 (and S42 changed no STT code).
-
-Please check, speaking normally:
+**No microphone run has happened since S41**, and S42/S43/S44/S45 changed no speech code at all.
+Speaking normally, check:
 - normal Bangla, then Banglish; one short answer and one long one
 - the words stay inside the box and the newest line is visible (S41)
 - the red **"🎤 এখন কথা বলুন — বলা শেষ হলে থেমে যান"** banner appears while the mic is open and
   disappears the moment it closes
-- **NEW (S42):** while the mic is open, switch to another browser tab and come back. The kiosk must
-  stop listening and say *"পেজটি ছেড়ে যাওয়ায় রেকর্ডিং থেমে গেছে…"* — it must NOT sit there still
-  showing the red "speak now" banner.
+- while the mic is open, switch to another browser tab and come back: the kiosk must stop listening
+  and say *"পেজটি ছেড়ে যাওয়ায় রেকর্ডিং থেমে গেছে…"* (S42)
+
+### 4. Two data items from S44 that are yours to accept or undo
+
+**(a) A case I forwarded by accident.** Visit `1bbe6d80-48cd-42aa-a819-214be28eeb07` (ইসরাত,
+patient 16) went to Dr. M. Rahman, so **the medic queue is empty**. Nothing was deleted and
+`audit_log` records it correctly. To put it back:
+
+```sql
+UPDATE visits SET status='awaiting_review', assigned_doctor_id=NULL
+WHERE uuid='1bbe6d80-48cd-42aa-a819-214be28eeb07';
+```
+
+⚠ Leave the `audit_log` row alone — it is a true record.
+
+**(b) Synthetic vitals on that same patient:** height 170cm, weight 70.5kg, BP 118/76, blood sugar
+**5.8 mmol/L random** (S45's verification re-saved it). All four fields were empty before, so
+nothing of yours was overwritten. Clearing them needs a direct DB write.
+The three S42 synthetic visits (`+8801955000321/322/323`) are also still there.
 
 ---
 
-## ✅ What Session 42 shipped (settled — do not redo or re-derive)
+## ✅ What Session 45 shipped (settled — do not redo or re-derive)
 
-**The root cause was three faults, not one**
-- Groq's `llama-3.3-70b-versatile` is **decommissioned** — no Llama chat model remains in Groq's live
-  list, the call answers `404 model_not_found`. Groq is `FALLBACK_ORDER[0]`, so the first fallback
-  bucket was dead.
-- OpenRouter's `google/gemma-4-31b-it:free` answered **429 from a SHARED upstream pool**. That is
-  ADR-0026's universal fallback.
-- Which left **Gemini alone**, so its routine daily 429 took everything down. The reported error named
-  only the *last* provider to fail, which is why it read as an OpenRouter problem.
+**The bug was the card moving between the two halves of one click.** Measured on the shipped page
+with real mouse events and a capture-phase listener, aiming at the Edit button's own centre:
 
-**A bucket now names SEVERAL models**
-- `OPENROUTER_MODEL` is comma-separated; each entry is its own attempt with its **own cooldown**
-  (keyed on `bucket|model`, because the provider's 429 names a model, not a bucket).
-- ⚠ Measured: the configured id and one sibling were 429 while **three other siblings served the
-  identical request correctly in the same minute**. A `:free` id is a queue you share, not a quota you
-  own — so pinning the universal fallback to one id is a single point of failure by construction.
+```
+mousedown @628,526 -> DIV
+mouseup   @628,526 -> BUTTON#intake-toggle    <-- a DIFFERENT element
+click     @628,526 -> DIV                     <-- their common ancestor
+```
 
-**Live-verified model choices**
-- Groq → `openai/gpt-oss-120b`. ⚠ **Rejected on measurement:** `qwen/qwen3.6-27b` emits a `<think>`
-  block that breaks `_parse_json`; `groq/compound*` carry **built-in web search** — patient speech
-  must never reach a search tool (rule #4).
+`.fx-card` carried `transform-style: preserve-3d` + `will-change: transform` and moved in Z inside
+`.fx-scene { perspective: 1400px }` — `translate3d(0,-2px,12px)` on hover, `translate3d(0,0,2px)` on
+press. Under a perspective, changing Z **rescales** the card, so pressing the mouse shifted every
+child by a few pixels and the button slid out from under a stationary pointer.
 
-**Retry and time bounds**
-- One retry pass for **transient** failures only (429/5xx/timeout). A 404 or 401 is never retried.
-- `CALL_DEADLINE_S = 90` bounds the **whole** call. Unbounded it was 5 attempts x 45 s x 2 passes =
-  **7.5 minutes** of spinner. 90 s is ~6x the slowest measured degraded success (14.1 s).
+**Fixed** by carrying the depth in the **elevation shadow**: `.fx-card` sets no transform at all and
+transitions `box-shadow` only. Hover, press and keyboard focus all still respond; nothing removed.
+⚠ **A/B proved in the live page** — re-injecting the old rule reproduced the split
+mousedown/mouseup and the editor stayed shut.
 
-**The patient never sees provider text again**
-- ⚠ Six routes answered `detail=str(exc)`, which ends in the raw upstream body — measured as
-  containing the model id, `'provider_name': 'Google AI Studio'` and a signup URL.
-- All six now go through ONE helper, `backend/app/api/_llm_errors.py`. A test walks `routes_*.py` and
-  fails if any file handling `LLMCallError` skips it.
-- The kiosk shows its **own** bilingual panel and never echoes server text for these calls, so a
-  future server regression cannot reach a patient.
-
-**A total outage is a WAIT, not a dead end**
-- Amber panel + hourglass, **not red** — an upstream queue clearing in a moment is a wait, and
-  danger-red tells an unwell patient something is wrong with *them*.
-- It does not auto-hide (the 8 s banner is right for a typo, wrong for this) and it offers **Try again**.
-- ⚠ **The retry resumes from the FAILED step and never re-posts the utterance.** Re-posting would
-  write the patient's sentence into their verbatim record twice (rule #1). Verified live: 4 utterances
-  before, 4 after, zero duplicates.
-
-**`check_api_keys` was accusing a valid key**
-- Groq's 404 body contains `'type': 'invalid_request_error'` and the classifier tested `"invalid"`
-  **before** `404` — so it said "REJECTED — the key is wrong" about a perfectly good credential and
-  would have sent you to rotate it. Order fixed; it now probes **every** model of every bucket.
+⚠ **THE LESSON, which is why this survived two "verified" sessions:** S41 and S43 checked this area
+with `element.click()` and with clicks aimed at the SAVE button. **A programmatic `.click()` cannot
+detect a hit-target defect — it invokes the handler and skips hit-testing entirely.** Anything about
+whether a control can be *pressed* must be driven with a real mouse.
 
 ## ⚠ Open gaps / honest caveats (carry these forward)
 
-- **No real-microphone run this session** — `microphone: denied` here. Verified via the typed path,
-  which is the same pipeline. S42 changed no STT/TTS code.
-- **Appearance IS claimed this time, for the new panel only.** The Browser pane composites frames now,
-  so the AI-retry panel was screenshotted in English and Bangla. Nothing else was re-screenshotted.
-- **I created 3 synthetic test visits in the dev DB** while verifying (phones `+8801955000321/322/323`,
-  synthetic Bangla symptoms, rule #4 respected). One of them — সাবিনা — **will appear at the top of
-  the medic queue at the demo**. Deleting it is your call, not mine; S41's careful deletion procedure
-  is the precedent. Say the word and I will do it the same way.
-- **The six committed `.db.bak` files are still tracked** (unchanged since S41). Repo-content decision.
-- **Still not done:** Step S5, the mid-turn word-loss rule #1 decision, formal WER, the Edge run.
+- **Real API-key failover is mock-tested only** — the nine slots are empty (item 1 above).
+- **No real-microphone run** since S41; nothing since has touched speech code.
+- **No screenshots.** The Browser pane composites no frames here, so every visual claim in S43-S45
+  is a measurement — event traces, `getBoundingClientRect`, computed styles, request logs. The
+  *appearance* of S45's shadow-only hover is unclaimed; its behaviour is measured.
+- **The corrector seam (`/api/correct`) uses key slot 1 only** and has no chain (ADR-0069 g).
+- **Still not done:** Step S5, the mid-turn word-loss rule #1 decision, formal WER, the Edge run,
+  rotating the older keys, the six committed `.db.bak` files.
 
 ## Locked decisions — do NOT re-open
 
-- **ADR-0067 (S42):** a bucket may name several models and each is its own attempt with its own
-  cooldown; cooldowns key on `bucket|model`; only transient failures are retried, exactly once; the
-  whole call is time-bounded; `str(exc)` never answers a patient and all LLM routes go through
-  `_llm_errors.llm_unavailable()`; the kiosk shows its own bilingual panel rather than server text;
-  the retry never re-posts an utterance; `check_api_keys` decides the MODEL verdict before the
-  CREDENTIAL verdict; the `visibilitychange` handler is **not** S5 and takes no position on
-  `finalBuffer`.
-- **ADR-0066 (S41), ADR-0065 (S40), ADR-0064 (S39), ADR-0060–0063 (S38), ADR-0058/0059 (S37)** and
-  earlier — see `decisions.md`. All still stand; S42 re-verified S41's containment and Edit-scroll fixes.
+- **S45 (no ADR, recorded in `motion.css` and `CLAUDE.md`):** a container of interactive controls is
+  **never moved** — no `transform`, `translate3d`/`translateZ`, `preserve-3d` or
+  `will-change: transform` on `.fx-card` or any card holding controls; depth is the `--elev-*`
+  shadow. Moving the control ITSELF stays fine (`.fx-lift`, `.queue-item`) because the pointer
+  stays inside it. `.fx-scene` keeps its perspective — a card that never moves in Z is never
+  re-projected.
+- **ADR-0069 (S44):** three keys per provider through the SAME chain, never a second router;
+  key-major ordering; the cooldown includes the credential slot; four slots per bucket with blanks
+  and duplicates dropped; a provider is "failed" only when every one of its keys failed.
+  **Supersedes ADR-0068 (g).**
+- **ADR-0068 (S43)** — all but (g) stands: an asynchronously-filled element never sits above an
+  interactive control; disclosure state lives outside the DOM node that gets rebuilt; an unsaved
+  draft is stamped with its patient; every provider-reaching route answers through `_llm_errors`;
+  a key with no model is a REPORTED configuration error; one env template.
+- **ADR-0067 (S42), ADR-0066 (S41), ADR-0065 (S40), ADR-0064 (S39), ADR-0060–0063 (S38),
+  ADR-0058/0059 (S37)** and earlier — see `decisions.md`. All still stand.
 - **S31's terminal/transient STT split** — `no-speech`, `aborted`, `bad-grammar` stay OUT of
   `TERMINAL_STT_ERRORS` or Chrome's continuous listening regresses. `r.onend` stays untouched.
 - **⚠ No apostrophes in comments inside the `CONFIRM_*` literals** in `kiosk.js`.
-- **⚠ Write project files as LF.** S42 wasted a cycle: Python's `write_text` on Windows converts LF to
-  CRLF, which silently broke two tests that split on a bare newline. Pass `newline="\\n"`.
+- **⚠ Match each file's existing line endings.** S42 broke two tests by converting LF to CRLF.
+- **⚠ Never use a bare `.btn-primary` selector in a browser smoke test** — it is how S44 forwarded a
+  case by accident. Address elements by id.
+- **⚠ `resize_window` in the Browser pane desynchronises the click coordinate frame** (measured:
+  1.75x). Verify at the native viewport, or compare the reported click position with the position
+  the page actually receives before believing a reproduction.
 
-## ⛔ Step S5 is NOT implemented — and S42's visibility handler is NOT it
+## ⛔ Step S5 is NOT implemented
 
 S5 (`faculty_future_features.md` §J) is: **no-speech re-prompt, empty-submit guard, 120 s answer cap,
 and permission/visibility recovery.** `no_speech_ms` and `max_answer_ms` are still served by
-`/api/config` and **read by nothing** — pinned by a test that now counts their references.
-
-S42 added `handleVisibilityChange()`, which does ONE thing: when the tab is hidden while the mic is
-open, it calls the **existing** `stopListening(false)` so `r.onend` cannot spin a recogniser that
-cannot hear while the screen still shows the red "speak now" banner. It uses the identical call
-`setInputMode('type')` and `finishConversation()` already make, so it introduces **no new rule** about
-the patient's captured words. Tests forbid it from referencing `finalBuffer`, any submit path, or any
-S5 timing.
+`/api/config` and **read by nothing** — pinned by a test. S42's `handleVisibilityChange()` is not S5,
+and S43/S44/S45 added no kiosk code at all.
 ⚠ **The mid-turn word-loss rule #1 decision is still YOURS and still blocks the second half of S5.**
-⚠ The `visibilitychange` listener in **`frontend_shared/staff.js`** is the S38 staff queue
-auto-refresh and is unrelated.
 
 ## Reminders (the four non-negotiables)
 
-- **Rule #1:** raw words are never edited. S42 touched no transcript storage, and the retry path was
-  built specifically so a retry cannot duplicate an utterance. Verified live through a real outage.
-- **Rule #2:** never diagnoses. S42 added no clinical content of any kind.
+- **Rule #1:** raw words are never edited. S45 touched no transcript storage and no JavaScript.
+- **Rule #2:** never diagnoses. S45 added no clinical content of any kind.
 - **Rule #3:** red flags ADD-only. Untouched.
-- **Rule #4:** synthetic/consented data only. All S42 test data is synthetic. Two candidate models
-  were **rejected** for carrying built-in web search.
+- **Rule #4:** synthetic/consented data only. No real provider call was made this session.
 - Run (Windows): `.venv\\Scripts\\python.exe -m uvicorn backend.app.main:app --reload --port 8001`
-- Tests: `pytest backend/tests/` (**1087 passing, 2 skipped**). Windows: `PYTHONIOENCODING=utf-8`.
+- Tests: `pytest backend/tests/` (**1196 passing, 2 skipped**). Windows: `PYTHONIOENCODING=utf-8`.
 - Keys: `.venv\\Scripts\\python.exe -m backend.scripts.check_api_keys` (never prints a key).

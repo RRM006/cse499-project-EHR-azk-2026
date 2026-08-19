@@ -18,19 +18,42 @@ regional dialect — *before* they see the doctor. The system:
 This is a **15-module** system (Module 5 is retired in the current design — see below; S23 added
 **M16**, a doctor-side drug-info assistant with a server-attached disclaimer — ADR-0044).
 We build it one module at a time.
-**Status (Session 25, 2026-07-12): BOTH build cycles COMPLETE + the HUMAN LIVE RUN PASSED.** The
-original 20-step build AND the **"Context Fixed Problem 2.0" cycle** are done (teal redesign,
-bilingual portals, background-assessed submit, Dhaka times, M16 assistant, and **real OTP**:
-hashed/expiring/single-use codes behind a pluggable sender seam, `OTP_CHANNEL=dev|textbee`,
-`000000` bypass dev-channel-only — ADR-0045). DB = Alembic head **0014**
-(18 tables) as of S39 — it had held at 0012 from S25 to S38. **192 tests passed at S25; the current
-count is 1005 (see the S39 and S38 paragraphs below).**
-**S25: the human live real-mic run PASSED on Windows 11** — TC-V1/V2/V3/F2/R1 all ✅ (STT "very
-accurate", ~2 s latency). On that gate **Modules 1-14 went ✅** (M5 retired, **M15 stays 🟨** =
-future retrain/regression pipeline). What's left is NOT build work: **rotate the 3 API keys** before
-any public demo (still pending) + optionally log formal WER/precision-recall as thesis evidence.
+## ▶ CURRENT STATUS — read this first (Session 45, 2026-08-19)
+
+**The build is COMPLETE. Modules 1-14 ✅, M5 retired ⛔, M15 🟨** (future retrain/regression
+pipeline). **Alembic head 0014, 18 tables.** **Test suite: 1196 passed, 2 skipped, 0 failed.**
+**Latest ADR: 0069.** Nothing outstanding is build work.
+
+**The ONE thing waiting on the human:** `backend/.env` now has nine EMPTY credential slots
+(`GEMINI_API_KEY_1/_2/_3`, `GROQ_API_KEY_1/_2/_3`, `OPENROUTER_API_KEY_1/_2/_3`). Paste the keys,
+restart uvicorn, then run `python -m backend.scripts.check_api_keys` (it never prints a key).
+Each provider tries its keys **in order** before the chain moves on:
+`Gemini k1→k2→k3 → Groq k1→k2→k3 → Cerebras → OpenRouter k1→k2→k3` (ADR-0069).
+
+**Also still open, none of it build work:** a real-microphone pass (nothing since S41 has touched
+speech code); **Step S5** (blocked on the human's mid-turn word-loss rule #1 decision); formal
+WER/precision-recall as thesis evidence; rotating the older keys.
 Manual-testing findings go in `agent_docs/context fixed problem 3.0.md`; the three faculty future
 requirements in `agent_docs/faculty_future_features.md`.
+⚠ **`current_task.md` is the authoritative snapshot** — the paragraphs below are history, kept
+because they explain WHY things are the way they are. Read `current_task.md` before acting.
+
+**Recent sessions in one line each:** S40 kiosk two-column layout (ADR-0065) · S41 the first
+real-mic run's four defects, containment + the medic scroll (ADR-0066) · S42 the demo-eve provider
+outage: a bucket names several models, and a dead chain never speaks to the patient (ADR-0067) ·
+S43 the medic Intake & Vitals defects + the last provider-error leak (ADR-0068) · S44 three API keys
+per provider through the same chain (ADR-0069, supersedes ADR-0068 g).
+
+---
+
+**Status (Session 25, 2026-07-12) — historical: BOTH build cycles COMPLETE + the HUMAN LIVE RUN
+PASSED.** The original 20-step build AND the **"Context Fixed Problem 2.0" cycle** are done (teal
+redesign, bilingual portals, background-assessed submit, Dhaka times, M16 assistant, and **real
+OTP**: hashed/expiring/single-use codes behind a pluggable sender seam, `OTP_CHANNEL=dev|textbee`,
+`000000` bypass dev-channel-only — ADR-0045). DB had held at Alembic 0012 from S25 to S38.
+**192 tests passed at S25.**
+**S25: the human live real-mic run PASSED on Windows 11** — TC-V1/V2/V3/F2/R1 all ✅ (STT "very
+accurate", ~2 s latency). On that gate **Modules 1-14 went ✅** (M5 retired, **M15 stays 🟨**).
 **The faculty Requirement 3 + 3b build (voice-first Patient Portal, ADR-0048 — supersedes
 ADR-0027's voice-only rule) is built through Step S4** — mic opens itself after TTS → visible 3-2-1
 confirmation window → the turn ends on silence → next question, **with typing always available as
@@ -175,6 +198,11 @@ Spread load across **three independent daily buckets** so no single quota is the
 - **OpenRouter `:free`** → universal fallback (tip: a one-time $10 top-up raises 50→1,000 req/day).
 - M1 STT, M9 completion check, M13/M14/M15 = **LOCAL / NO-API**.
 - ⚠ Free tiers may train on inputs → synthetic/consented data only (rule #4).
+- **Redundancy has THREE dimensions and they multiply (S42 + S44):** BUCKETS (the list above, in
+  `FALLBACK_ORDER`) × **KEYS** (up to 4 slots per bucket for Gemini/Groq/OpenRouter — `<NAME>` then
+  `_1/_2/_3`, ADR-0069) × **MODELS** (every `*_MODEL` accepts a comma-separated list, ADR-0067).
+  Order: every model of key 1, then key 2, then key 3, then the next bucket. A 429 cools down only
+  that (bucket, key, model) and only for a time — no key is ever permanently disabled.
 
 ## VOICE INTERACTION RULES (ADR-0027/0028, amended by ADR-0048)
 
@@ -217,7 +245,14 @@ Spread load across **three independent daily buckets** so no single quota is the
   `/medic/` and `/doctor/` **after** shared.css; the kiosk must NOT load it. Rules: every
   `animation`/`@keyframes` stays inside `@media (prefers-reduced-motion: no-preference)`, nothing is
   conveyed by movement alone, only composited properties animate, and a looping animation is
-  reserved for urgency. The two staff portals must never read as one screen (medic = amber `TRIAGE`
+  reserved for urgency.
+  ⚠ **A CONTAINER OF INTERACTIVE CONTROLS IS NEVER MOVED — depth is the SHADOW (S45).** No
+  `transform`, `translate3d`/`translateZ`, `transform-style: preserve-3d` or `will-change:
+  transform` on `.fx-card` or any card holding buttons/inputs. Moving a card in Z inside
+  `.fx-scene`'s `perspective` rescales it, so `:hover` → `:active` slid a button out from under a
+  stationary pointer: `mousedown` and `mouseup` hit different elements, the browser fired `click`
+  on their common ancestor, and the handler never ran. Use `--elev-*` shadows for elevation.
+  Moving the control ITSELF is fine (`.fx-lift`, `.queue-item`) — the pointer stays inside it. The two staff portals must never read as one screen (medic = amber `TRIAGE`
   operations desk, doctor = indigo `CLINICAL` workspace) — see `agent_docs/portal_roles.md`.
 - **Bangla text always uses Noto Sans Bengali (NOT mono — mono breaks Bangla shaping).**
 - **Bilingual EN/BN** via `data-en` / `data-bn` attributes + the `setLanguage()` helper.

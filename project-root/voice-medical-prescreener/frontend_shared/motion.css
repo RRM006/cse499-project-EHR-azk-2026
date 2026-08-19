@@ -70,21 +70,56 @@ body.portal-medic, body.portal-doctor { height: 100vh; overflow: hidden; }
   body.portal-medic, body.portal-doctor { height: auto; overflow: visible; }
 }
 
+/* ⚠ S45 — A CARD THAT HOLDS CONTROLS IS NEVER MOVED IN 3D. THE DEPTH IS THE SHADOW.
+
+   The reported bug: a medic clicks "✏️ Edit" on Intake & Vitals with a normal mouse and
+   nothing happens. MEASURED with real mouse events and a capture-phase listener, aiming
+   at the button's OWN centre from getBoundingClientRect():
+
+       pointerdown @628,526 -> DIV
+       mousedown   @628,526 -> DIV
+       mouseup     @628,526 -> BUTTON#intake-toggle     <-- a DIFFERENT element
+       click       @628,526 -> DIV
+
+   That third line is the whole diagnosis. `mousedown` and `mouseup` landed on different
+   elements, and the browser's rule for that is to fire `click` on their nearest COMMON
+   ANCESTOR — the wrapper div. The button's own handler therefore never ran: no request,
+   no error, nothing on screen. Indistinguishable from a dead control.
+
+   Why the element under a STATIONARY pointer changed mid-click: this rule put the card
+   into a 3D rendering context (`transform-style: preserve-3d`), forced it onto its own
+   compositor layer (`will-change: transform`), and moved it in Z inside `.fx-scene`'s
+   `perspective: 1400px` — `translate3d(0,-2px,12px)` on hover, then
+   `translate3d(0,0,2px)` on :active. Under a perspective, changing Z RESCALES the
+   element about the perspective origin, so pressing the mouse shifted every child of
+   the card by a few pixels. A control near the card's edge slides out from under the
+   pointer between the two halves of one click. The shift is proportional to a child's
+   distance from the origin, which is why it hit some buttons and not others, and why it
+   felt intermittent.
+
+   ⚠ A/B PROVED in the browser, not argued: re-injecting the old rule reproduced the
+   split mousedown/mouseup and the editor stayed shut; removing it again delivered all
+   four events to BUTTON#intake-toggle and the editor opened.
+
+   The fix keeps S37's intent and drops only the part that moves things: elevation is
+   still signalled, and it is signalled by the ELEVATION SHADOW, which is what
+   `--elev-*` is for. Nothing is removed from the UI, no handler changed, no markup
+   touched. Hover, press and keyboard focus all still respond.
+
+   ⚠ Do not reintroduce `translate3d`, `translateZ`, `preserve-3d` or `will-change:
+   transform` here. `.queue-item` keeps its 2-D `translateX` because it is a single
+   click target with no nested controls; this card is full of them. */
 .fx-card {
-  transition: transform var(--dur-base) var(--ease-out),
-              box-shadow var(--dur-base) var(--ease-out);
-  transform-style: preserve-3d;
-  will-change: transform;
+  transition: box-shadow var(--dur-base) var(--ease-out);
 }
-.fx-card:hover { transform: translate3d(0, -2px, 12px); box-shadow: var(--elev-3); }
-/* Press: the card goes back INTO the screen — the physical answer to a click. */
-.fx-card:active { transform: translate3d(0, 0, 2px); box-shadow: var(--elev-1); }
+.fx-card:hover { box-shadow: var(--elev-3); }
+/* Press: the card settles back down — the physical answer to a click, in shadow only. */
+.fx-card:active { box-shadow: var(--elev-1); }
 
 /* Keyboard users get the same affordance, without a hover they cannot trigger. */
 .fx-card:focus-visible {
   outline: none;
   box-shadow: var(--elev-3), var(--elev-focus);
-  transform: translate3d(0, -2px, 12px);
 }
 
 .fx-lift { transition: transform var(--dur-fast) var(--ease-out), box-shadow var(--dur-fast) var(--ease-out); }

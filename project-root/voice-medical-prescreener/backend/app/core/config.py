@@ -56,6 +56,26 @@ class Settings(BaseSettings):
     groq_api_key: str = ""
     openrouter_api_key: str = ""
 
+    # --- S44: EXTRA CREDENTIAL SLOTS for the three main buckets (ADR-0069) ---
+    # Each of these three providers may hold up to four keys. The bucket's ordered key
+    # list is [<BARE>, _1, _2, _3] with blanks and duplicates dropped, so:
+    #   * an existing .env that sets only GEMINI_API_KEY keeps behaving exactly as it
+    #     did — one key, one slot, unchanged chain;
+    #   * a fresh .env may use GEMINI_API_KEY_1/_2/_3 and leave the bare name empty;
+    #   * both may be set, and they are simply four slots in order.
+    # A key is a per-account free quota. Three keys is three quotas, tried in order
+    # BEFORE the chain moves to the next provider — see llm_providers.provider_api_keys.
+    # ⚠ Values live only in backend/.env (gitignored) and are never logged or printed.
+    gemini_api_key_1: str = ""
+    gemini_api_key_2: str = ""
+    gemini_api_key_3: str = ""
+    groq_api_key_1: str = ""
+    groq_api_key_2: str = ""
+    groq_api_key_3: str = ""
+    openrouter_api_key_1: str = ""
+    openrouter_api_key_2: str = ""
+    openrouter_api_key_3: str = ""
+
     # --- extra free fallback buckets (optional; blank key = bucket skipped) ---
     # Cerebras: free tier ~1M tokens/day, OpenAI-compatible, very fast.
     # Mistral "Experiment" tier: ~1B tokens/month BUT trains on inputs — rule #4:

@@ -83,8 +83,14 @@ def test_the_intake_form_has_a_reading_and_a_context_control():
     medic = _served("/medic/")
     assert "num('in-glucose'" in medic
     assert 'id="in-glucose-context"' in medic
-    assert "getElementById('in-glucose')" in medic
-    assert "getElementById('in-glucose-context')" in medic
+    # S43 moved the PREFILL of these two controls into one loop over INTAKE_FIELD_IDS,
+    # so the literal getElementById lines are gone. What this test is really about —
+    # that the form reads BOTH controls — is asserted on the save path, which is where
+    # it actually matters and is a stronger claim than the prefill was.
+    assert "'in-glucose'" in medic.split("const INTAKE_FIELD_IDS = [")[1].split("];")[0]
+    assert "'in-glucose-context'" in medic.split("const INTAKE_FIELD_IDS = [")[1].split("];")[0]
+    assert "val('in-glucose')" in medic
+    assert "val('in-glucose-context')" in medic
     # The dropdown is built from the shared map, not from a second hard-coded list.
     assert "Object.keys(GLUCOSE_CONTEXTS)" in medic
 

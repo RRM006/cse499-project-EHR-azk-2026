@@ -4,6 +4,98 @@
 > re-exploring the whole project each session. Update it whenever you add or move
 > a folder/file. Keep each note to one line.
 
+**Last updated:** 2026-08-19 (**Session 45 — ONE new test file and ONE changed CSS rule. No new
+production module, no directory, no dependency, no JavaScript change. Alembic stays 0014, 18 tables.**)
+
+**NEW in S45 — the medic "✏️ Edit does nothing" mouse-click bug:**
+
+| File | What it is |
+|---|---|
+| `backend/tests/test_card_click_target_s45.py` | **NEW (15).** Pins the root cause of a control inside a staff card being unclickable: `.fx-card` moved in Z inside `.fx-scene`'s perspective, so `:hover` → `:active` rescaled the card and slid the button out from under a stationary pointer — `mousedown` and `mouseup` hit different elements and the browser fired `click` on their common ancestor. Asserts `.fx-card` sets no `transform`, no `translate3d`/`translateZ`/`preserve-3d`, no `will-change`, and transitions `box-shadow` only; that the affordance was NOT deleted (hover, press and focus-visible each still change the shadow, and focus keeps its ring); and what was deliberately left alone — `.queue-item`'s 2-D slide, `.fx-lift`'s 1px button lift, and `.fx-scene`'s perspective. Plus: both staff portals still load motion.css and the kiosk still does not, and the two intake controls are still plain buttons in the card with exactly one handler each. |
+
+**Changed in S45:**
+- `frontend_shared/motion.css` — `.fx-card` no longer carries `transform-style: preserve-3d`,
+  `will-change: transform` or any `transform` in its `:hover` / `:active` / `:focus-visible` states,
+  and transitions `box-shadow` alone. The elevation feedback is unchanged in intent and is now
+  carried entirely by the `--elev-*` shadow tokens. ⚠ The rule block carries the measured event
+  trace and the A/B result, because the defect is invisible in review: the CSS looks tasteful and
+  the handler looks correct.
+- `CLAUDE.md` — the frontend section gained the durable rule this produced.
+
+**Last updated:** 2026-08-19 (**Session 44 — ONE new test file. No new production module, no new
+directory, no new dependency, and NO frontend file touched. Alembic stays 0014, 18 tables.**)
+
+**NEW in S44 — three API keys per provider (ADR-0069, supersedes ADR-0068 g):**
+
+| File | What it is |
+|---|---|
+| `backend/tests/test_multi_key_fallback_s44.py` | **NEW (31).** The nine-credential chain, entirely mocked — no network, no real key, no quota. Pins the order (`Gemini key1→2→3 → Groq key1→2→3 → Cerebras → OpenRouter key1→2→3`, every model of one key before the next key), that the bucket order itself is unchanged, and that one configured key behaves exactly as before. Covers the brief's scenarios A–O by asserting the recorded ATTEMPT SEQUENCE per case, plus 404 fall-through, ⚠ **that a 429 on one key does not cool down another** (the crux — the old formula collapsed three keys into one cooldown identity), that a cooled key is skipped while its siblings are not, dedup/whitespace/sparse configuration, and the credential-safety properties: no key in a log record, a `module_event`, `str(exc)` or `safe_detail`, and `module_events.provider` still storing the bucket alone. |
+
+**Changed in S44:**
+- `backend/app/core/config.py` — nine new settings: `gemini_api_key_1..3`, `groq_api_key_1..3`,
+  `openrouter_api_key_1..3`. All default `""`.
+- `backend/app/core/llm_providers.py` — the registry's first element is now an ordered **list** of
+  credentials; new `dedup_keys()`, `provider_api_keys()`, `_bucket()` and `KEY_ENV_NAMES` (the .env
+  names each bucket reads, beside the registry so a report cannot name a variable nothing reads);
+  `ProviderConfig` gained `key_index` and `label`, and **`cooldown_key` is now
+  `bucket#slot|model`**; `provider_variants()` yields one attempt per (credential, model);
+  `provider_credentials()` returns the FIRST key; `misconfigured_buckets()` reads the key list.
+- `backend/app/services/llm_client.py` — **one line**: the failure log uses `provider.label`
+  (bucket + slot number + model, never a key) instead of bucket + model.
+- `backend/scripts/check_api_keys.py` — new `report_slots()` prints the slot inventory before
+  spending a request and names the empty `.env` variables; probing now walks every (key, model)
+  attempt and a bucket fails only when **all** its keys fail.
+- `backend/.env` — nine empty numbered slots appended (existing values untouched; append-only).
+- `backend/.env.example` — the nine slots documented per provider with the fallback picture, the
+  four-slot rule, dedup, sparse configuration, and ⚠ that Cerebras/Mistral have one slot each.
+- `.gitignore` — ⚠ `.env.*` and `*.env.*` added with `!*.env.example` / `!.env.example` re-included.
+  `*.env` did not match `.env.20260819.bak`, and a backup of that exact shape (holding every real
+  key) landed in the working tree during this session. It never reached git and was deleted.
+
+**Last updated:** 2026-08-19 (**Session 43 — TWO new test files, ONE file REMOVED, and one new
+helper in each of two existing modules. No new production module, no new directory, no new
+dependency. Alembic stays 0014, 18 tables.**)
+
+**NEW in S43 — the medic Intake & Vitals defects and the provider configuration surface (ADR-0068):**
+
+| File | What it is |
+|---|---|
+| `backend/tests/test_medic_intake_editor_s43.py` | **NEW (33).** The reported "Sugar reference / Edit does not work", which was three defects and never the button. Pins that the live BMI readout renders **AFTER** the Save/Cancel row (it grows 15.7px → 45.6px when the async `/api/reference/bmi` answer lands, which used to move Save down 29.9px — 94% of its own height — so a real click landed on the wrapper `DIV`); that nothing interactive sits below it; that the readout was moved, not removed; that the glucose panel's open/closed state lives outside the DOM node a re-render destroys; that an unsaved draft is captured before the rebuild, handed back, **and stamped with its patient id** so it can never cross patients; plus the BACKEND round-trip for all four vitals (record, then CORRECT each one), the unchanged reading+context pairing, no cross-patient change, what the doctor reads, and that the referral still works after an edit. |
+| `backend/tests/test_provider_config_s43.py` | **NEW (29).** The configuration layer beneath S42's runtime chain, plus the leak S42 could not catch. Pins `misconfigured_buckets()` (a key with a blank `*_MODEL` is a reported error; a bucket with neither is not), that such a bucket really does vanish from the chain — one blank line deleting the universal fallback — that the healthy three-key setup builds the documented order with one cooldown per OpenRouter model, that `provider_credentials()` agrees with the chain and the M2 corrector keeps no private copy of a provider URL, that `POST /api/correct` answers the safe detail with none of six leaky terms and leaves the raw text untouched, that a config error is still reported loudly, that the two kiosk retry units can never re-post an utterance (rule #1), and that `.env.example` is complete, placeholder-only, and the only env template. |
+
+**REMOVED in S43:** `backend/.envnew.example` — a second, partial env template whose own header told
+the reader to copy it to `.env`, which would have produced one with no `DATABASE_URL`, no OTP
+channel, no TTS provider and no voice-loop settings. `backend/.env.example` is the single template;
+a test now asserts that.
+
+**Changed in S43:**
+- `frontend_medic/index.html` — `#bmi-live` **moved below** the Save/Cancel row (the whole fix for
+  "Save does nothing"); new `INTAKE_FIELD_IDS` + `readIntakeDraft(patientId)`; `openIntakeEditor()`
+  now writes every field from one `stored` map through that one list and restores an unsaved draft
+  **only when it belongs to the patient on screen**.
+- `frontend_shared/staff.js` — `glucoseOpenMounts` (a `Set` keyed by mount id) replaces reading
+  `panel.style.display` to decide whether the chart is open, so the disclosure survives the
+  `innerHTML` rebuild that both staff portals do on a language change. One fix, both portals.
+- `backend/app/core/llm_providers.py` — new `_registry()` (the single place a provider's endpoint is
+  written down), `provider_credentials()` (api_key + base_url without picking a model) and
+  `misconfigured_buckets()` (a key with no model, the silent config error).
+- `backend/app/api/_llm_errors.py` — new `provider_unavailable()`, the same patient-safe 502 for a
+  provider call that does not come through `call_module`. Takes no exception argument by design.
+- `backend/app/api/routes_transcripts.py` — `POST /api/correct` stopped answering with the raw
+  upstream body; logs it and raises the shared helper instead.
+- `backend/app/services/correction/openai_compatible.py` — `_PROVIDER_BASE_URLS` (a private copy of
+  Groq's and OpenRouter's endpoints) replaced by `_CORRECTION_BUCKETS` + `provider_credentials()`.
+- `backend/app/main.py` — the lifespan warns at startup about any bucket with a key and no model.
+- `backend/scripts/check_api_keys.py` — reports that case as its own verdict instead of calling the
+  bucket "not set", which had blamed a perfectly good key.
+- `backend/.env.example` — documents the six provider settings that existed in code but nowhere in
+  the template (`GEMINI_FLASH_MODEL`, `GEMINI_FLASH_LITE_MODEL`, `CEREBRAS_BASE_URL`,
+  `CEREBRAS_MODEL`, `MISTRAL_BASE_URL`, `MISTRAL_MODEL`), states that every `*_MODEL` accepts a
+  comma-separated list, and states that there is ONE key per bucket.
+- `backend/tests/test_medic_intake_editor_s41.py` (8 → 9) and `backend/tests/test_staff_portal_s39.py`
+  — three pinned literals updated to the new implementation shape, same intent, two of them
+  strictly stronger.
+
 **Last updated:** 2026-08-15 (**Session 41 — TWO new test files, ONE new script, and a new
 `backend/scripts/` directory. No new production module; the only backend edit is one configuration
 default. Alembic stays 0014, 18 tables, no new dependency.**)

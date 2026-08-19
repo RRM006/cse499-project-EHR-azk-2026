@@ -2491,3 +2491,202 @@ model id, the upstream provider's name ("Google AI Studio") and a signup URL.**
 - Status: Accepted. Supersedes S41's single-id fix for `openrouter_model`; extends ADR-0026 rather
   than replacing it — the three-bucket strategy is unchanged, the buckets simply stopped being
   one-model-deep.
+
+---
+
+## ADR-0068 — 2026-08-19 — S43: a control must not move under the pointer, disclosure state must outlive the DOM node, and a key with no model is a reported error
+
+**Context.** Demo-hardening, the day of the capstone demonstration. Three things were reported or
+found: the medic's "🩸 Sugar reference ✏️ Edit" interaction "does not work correctly before
+referral"; the provider chain needed to survive any one provider hitting its limit; and an audit of
+what S42 left behind.
+
+Everything below was **measured in a real browser at 1280x720 against the shipped portal**, not
+reasoned about from the source — which matters, because reading the code found nothing wrong. Every
+handler was correctly attached, `saveIntake()` worked perfectly when called directly, and the
+element under the button's centre was the button.
+
+**(a) An asynchronously-filled element must never sit above an interactive control.**
+`#bmi-live` is **15.7px tall while empty and 45.6px once `/api/reference/bmi` answers**, and it sat
+directly above the Save/Cancel row. Save therefore moved down **29.9px — 94% of its own 31.6px
+height** — about 250ms (the `liveBmi` debounce) plus one network round-trip after the medic stopped
+typing, which is precisely when their hand is travelling to the button. An instrumented listener
+recorded `mousedown/mouseup/click -> DIV`, not `-> BUTTON`: the inline `onclick` never ran, no
+request was sent, no error appeared, and the form stayed open with the values still in it. That is
+indistinguishable from a dead button, and it is how it was reported.
+
+The fix is DOM order: the readout follows the action row. Nothing interactive can then be displaced,
+at any viewport width, in either language.
+
+⚠ **Rejected: reserving the space with a `min-height`.** It is the more obvious fix and it does not
+hold. The box is three lines at 800px in English; in Bangla, in the narrow column the card's
+`minmax(150px, 1fr)` grid permits, it is more. Any fixed reservation is a number measured on one
+layout and wrong on the others — and when it is too small the defect returns silently, which is the
+worst property a fix can have. ⚠ **Also rejected: removing the disclaimer** to make the box short.
+It is a rule #2 disclaimer attached to a displayed clinical number; tidiness does not outrank it.
+
+The generalisation, which is the durable part: **feedback that arrives asynchronously goes below the
+controls it describes, or it is given space that cannot change.** This is the same class of defect
+as S34's read-back panel and S41's off-screen Save button — the third time this project has shipped
+a button a user could not successfully press — and the first two were about where a control *was*,
+while this one is about where a control *goes*.
+
+**(b) Whether something is disclosed is state, and it must not be stored on a node that gets
+rebuilt.** With the sugar chart open, a language toggle closed it: `display` went `block -> none`,
+2186 characters went to 0. Both staff portals call `renderGlucosePanel()` on a language change
+*precisely so the chart follows the toggle*, and it returned immediately every time, because
+"is it open" was read from `panel.style.display` — a property of an element that
+`renderIntakeCard()` / `renderPatientDetails()` had just destroyed and recreated from a template
+saying `display:none`. The intent was written down in a comment in both portals and had never once
+executed.
+
+One `Set` in `frontend_shared/staff.js`, keyed by mount id: the state now outlives the node, one fix
+covers both portals (S39's rule that the chart has exactly one implementation), and the medic and
+the doctor disclose independently because the key is the mount, not the chart.
+
+**(c) Unsaved clinical input survives a re-render — stamped with the patient it belongs to.**
+A weight of 63.5 typed into the open editor read 62.5 again after a language toggle, because
+`renderIntakeCard()` re-opens the editor from the stored patient. Silent loss of a medic's own
+measurement, and worse than losing it: a medic who does not notice saves the old number over their
+own reading.
+
+⚠ **The first version of this fix was itself a defect, and an existing test caught it.** The editor
+deliberately stays open across a PATIENT SWITCH (`intakeOpen`), which is exactly why S41 required
+every control to be re-seeded from the patient on every open — "a field left out would keep the
+previous patient's value in a form the medic is about to save onto somebody else". A draft restored
+blindly does that for *every* field at once. The draft therefore carries the patient id it was typed
+for and is discarded for anyone else, and S41's test gained a companion that says so. **Preserving
+input must never outrank not mixing two patients' data.**
+
+**(d) Every route that reaches a provider answers through the one safe helper — including the ones
+that do not use `call_module`.** `POST /api/correct` (Module 2, via the `Corrector` seam) still
+answered `detail=f"Correction failed: {exc}"`, the same raw upstream body ADR-0067 removed from six
+routes. S42's guard walks `routes_*.py` but only inspects files mentioning `LLMCallError`, so it was
+structurally incapable of catching this one. New sibling `_llm_errors.provider_unavailable()` —
+same message, same `Retry-After`, and deliberately **taking no exception argument**, because there
+is no `safe_detail` to read off an arbitrary provider exception and accepting one invites a caller
+to interpolate it.
+
+**(e) A provider bucket with a key and no model is a CONFIGURATION ERROR, not an unconfigured
+bucket.** `OPENROUTER_MODEL=` — one blank line beside a perfectly valid key — makes `split_models`
+return `[]`, `provider_variants` return nothing, and `provider_chain_for_module` skip the bucket
+entirely. ADR-0026's universal fallback, deleted by an empty line, with no error and no trace.
+`check_api_keys` reported that bucket as "not set", i.e. **blamed the key** — a report that is not
+merely unhelpful but points the operator at the wrong file.
+
+`misconfigured_buckets()` names the case; the server warns at startup, where an operator already
+looks; the checker gives it its own verdict and names the `*_MODEL` line. A bucket with **neither**
+key nor model is deliberately NOT reported: that is the normal state of every optional provider, and
+reporting it would train the operator to ignore the report.
+
+**(f) A provider's endpoint is written down once.** The Module-2 corrector kept a private copy of
+Groq's and OpenRouter's base URLs. They are published endpoints and they move — S41 and S42 each had
+to chase a provider's changed configuration — and a second copy is the one that gets updated once.
+`llm_providers.provider_credentials()` exists so a caller that picks its own model can still resolve
+its endpoint from the single registry.
+
+**(g) REJECTED: multiple API keys per provider.** The brief permitted it "if genuinely necessary for
+the existing providers". It is not. There are six buckets; the three keys available map onto three
+of them; the two optional buckets are already wired and skipped while blank; and every `*_MODEL`
+setting already accepts a comma-separated list, so within-bucket redundancy exists too. Adding a
+second credential mechanism would be the "second routing system" the brief forbids, for redundancy
+the architecture already provides. This is recorded so it is not re-litigated: **redundancy comes
+from more buckets and more models, not more keys per bucket.**
+
+**(h) One env template.** `backend/.envnew.example` was a second, partial copy whose own header told
+the reader to make it their `.env` — which would have produced one with no `DATABASE_URL`, no OTP
+channel, no TTS provider and no voice settings. Removed; a test asserts exactly one template exists,
+and another fails if any provider setting exists in code but nowhere in it.
+
+- Status: Accepted. Extends ADR-0067 (d) rather than replacing it; extends ADR-0026 (e, g) without
+  changing the bucket strategy; sits beside ADR-0060's "BMI is derived, never stored" (a — the
+  readout moved, the rule did not) and ADR-0064's glucose rules (b, unchanged: the chart still takes
+  no patient value). Does not touch ADR-0048, ADR-0055/0056/0057 or any voice rule — **S43 changed
+  no speech code at all.**
+
+---
+
+## ADR-0069 — 2026-08-19 — S44: three keys per provider, tried inside the existing chain, with the cooldown keyed on the credential
+
+**Supersedes ADR-0068 (g).**
+
+**Context.** ADR-0068 (g) rejected multiple API keys per provider and recorded the reasoning so it
+would not be re-litigated. That reasoning rested on a premise that turned out to be wrong: "three
+keys" was read as three PROVIDERS, which the six-bucket registry already covered. The actual
+situation is three keys **for each** of Gemini, Groq and OpenRouter — nine credentials.
+
+That difference is not cosmetic. A free tier is metered **per account**, so nine keys are **nine
+independent daily quotas**, and on the day this was raised Gemini's free quota had already been
+measured spent. The architecture had no way to reach eight of the nine. A rejection is only as good
+as the premise under it, so this reverses it — and the old entry is marked superseded rather than
+deleted, because "we considered this and here is what changed" is the useful record.
+
+**(a) The same chain, one level deeper — NOT a second router.** A bucket already expanded into one
+attempt per model (ADR-0067). It now expands into one attempt per **(credential, model)**.
+`FALLBACK_ORDER` is untouched, `provider_chain_for_module` keeps its shape, and `llm_client.py`
+changed by exactly one log line. A separate key-rotation layer would have been a second thing that
+decides what to call next, and the failure mode of two such things is that they disagree.
+
+**(b) Key-major, and the nesting is the decision.** Every model of key 1, then every model of key 2.
+Both orders were considered against failures this project has actually measured:
+
+  * an OpenRouter `:free` 429 comes from a **shared per-model queue** — the provider's own body says
+    "<model> is temporarily rate-limited upstream". There, a sibling MODEL on the same key is what
+    answers, and S42 measured exactly that: three siblings served the identical request in the same
+    minute the configured id was 429ing.
+  * a daily-quota 429 is **per account**. Only another KEY helps — and by the time it is reached,
+    every model of the exhausted key has already been ruled out.
+
+Key-major serves both without interleaving them, and it is statable in one sentence, which
+model-major is not.
+
+**(c) ⚠ THE COOLDOWN IS KEYED ON THE CREDENTIAL, and this is the crux.** `cooldown_key` was
+`bucket|model`; it is now `bucket#slot|model`. Measured against the old formula: three Gemini keys
+produced **one** cooldown identity, so a 429 on key 1 would have put keys 2 and 3 to sleep on the
+evidence of a third — the feature would have silently defeated itself, and looked like it worked
+because the chain still fell through to the next provider.
+
+Cooldowns stay **time-based and in-process**. No key is ever permanently disabled, nothing persists
+key health to disk or the database, and a key that was busy this minute is tried again later. The
+brief asked for simple and deterministic; a health store would have been neither, and it would have
+turned a transient 429 into a lasting decision about a credential.
+
+**(d) Four slots, and the bare name is the first of them.** Each of the three buckets reads
+`<NAME>`, `<NAME>_1`, `<NAME>_2`, `<NAME>_3`, blanks and duplicates dropped, order preserved.
+
+  * An existing `.env` that sets only `GEMINI_API_KEY` is a one-element list and behaves **exactly**
+    as it did — verified against the real `.env`, whose live chain is unchanged. Backward
+    compatibility here is not politeness; the file holds working credentials the evening before a
+    demo.
+  * A fresh `.env` may leave the bare name empty and use `_1/_2/_3` alone.
+  * The same key in two slots counts **once**. It is one quota, not two, and counting it twice would
+    make the slot report overstate the redundancy actually available — a report that flatters the
+    configuration is worse than no report.
+
+⚠ Cerebras and Mistral keep **one** slot each and `.env.example` says so, because the asymmetry is
+otherwise a trap: they are optional extra BUCKETS, and `CEREBRAS_API_KEY_2` would be a line nothing
+reads.
+
+**(e) A credential slot is an INDEX everywhere it is named.** `ProviderConfig.key_index` and
+`.label` ("groq key 2 [model]") exist so a log line can say *which* key is exhausted without a
+credential reaching a log file. ⚠ `module_events.provider` still records the **bucket alone**, so no
+slot number reaches the database and the stored shape is unchanged. Nothing anywhere prints, logs or
+persists `api_key`.
+
+**(f) A provider is "failed" only when EVERY one of its keys failed.** `check_api_keys` reports the
+slot inventory before spending a request, names the exact empty `.env` variables from the registry
+(`KEY_ENV_NAMES`, so it cannot point at a variable nothing reads), probes every (key, model)
+attempt, and passes the bucket if any attempt answers. The alternative — condemning a provider
+because slot 2 is blank — is the same class of error S43 fixed in this same script, where a valid
+key was reported as "not set".
+
+**(g) The Module-2 corrector deliberately uses slot 1 only.** `provider_credentials()` returns the
+first key. The `Corrector` seam is single-shot and has no chain of its own; giving it one would mean
+either duplicating `call_module`'s fallback (the second router this ADR exists to avoid) or
+rewriting the M2 seam the evening before a demo. It fails honestly on slot 1, exactly as it did
+before, and that is recorded as deferred rather than hidden.
+
+- Status: Accepted. Supersedes ADR-0068 (g) only; the rest of ADR-0068 stands. Extends ADR-0067
+  (a bucket expands into several attempts) and ADR-0026 (the bucket strategy and order are
+  unchanged) rather than replacing either. Touches no voice, kiosk or portal rule — **S44 changed no
+  frontend file at all.**

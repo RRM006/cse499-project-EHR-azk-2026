@@ -1958,3 +1958,260 @@ behaviour against regression, which is their job.
 - **⚠ No real-microphone run this session** — `microphone: denied` in this environment. S42 changed
   no STT/TTS code, and the typed path exercises the same endpoint and flow.
 - **Edge:** still never run.
+
+---
+
+## Session 43 — 2026-08-19 — demo-hardening: the medic Intake & Vitals defects, and the provider configuration surface
+
+- Setup: Windows 11, Python 3.14 venv, `pytest backend/tests/` with `PYTHONIOENCODING=utf-8`.
+  Browser measurements taken against the shipped portals on `http://localhost:8001` at a
+  **1280x720** viewport, using an instrumented capture-phase listener for the click trace and
+  `getBoundingClientRect()` for every pixel figure. No real provider calls were made by any test
+  (mocked corrector, mocked chain); the dev SQLite DB was used for the browser run only.
+- Metric(s): suite pass/skip/fail; per-defect pixel measurements; requests per user action.
+
+### Baseline (before any change this session)
+- **1087 passed, 2 skipped, 0 failed** in 63.06s — matches the count recorded at the end of S42.
+
+### Final (after all changes)
+- **1150 passed, 2 skipped, 0 failed** in 66.67s.
+- Delta **+63 tests**, all added this session:
+  - `backend/tests/test_provider_config_s43.py` — **29 NEW**
+  - `backend/tests/test_medic_intake_editor_s43.py` — **33 NEW**
+  - `backend/tests/test_medic_intake_editor_s41.py` — 8 → **9** (+1: a draft must not cross patients)
+- **3 existing tests were UPDATED, not weakened** (2 in `test_medic_intake_editor_s41.py`, 1 in
+  `test_staff_portal_s39.py`). Each asserts the same intent against the new implementation shape;
+  two of the three are strictly stronger than what they replaced (the re-seeding test now also
+  forbids a cross-patient draft; the S39 glucose test moved from the prefill lines to the save
+  path).
+- One intermediate run failed **3 tests** — those same three, before they were updated. One of the
+  three was a **genuine regression I had introduced** (an unsaved draft being restored onto a
+  different patient), not a stale literal; it was fixed in the source, not in the test.
+
+### Defect 1 — the Save click landed on a `<div>` (medic Intake & Vitals)
+- `#bmi-live` height: **15.74px empty → 45.60px** with content (210–230 chars, 3 lines at 800px).
+- Save button top: **411.05px → 440.91px**. Shift **+29.86px**; button height **31.60px** → the
+  shift is **94.5% of the target's own height**.
+- Instrumented trace of a real click at the pre-shift centre:
+  `mousedown -> DIV`, `mouseup -> DIV`, `click -> DIV` (textContent "Save\n Ca…"). **Zero**
+  `PATCH /api/patients/{id}/vitals` requests; `#error-banner` empty; editor still open with the
+  typed values intact.
+- Control: calling `saveIntake(btn)` directly succeeded, proving the handler and the route were
+  fine and the defect was purely the pointer target.
+- **After the fix:** Save top **627.01px before and after** the BMI lands — shift **0.00px**;
+  `elementFromPoint()` at the pre-shift centre returns the button. A real click sends **exactly one**
+  `PATCH /api/patients/16/vitals → 200` and the card re-renders with the new values.
+- End-to-end through the UI in Bangla: height 170cm, weight 70.5kg, BP 118/76, blood sugar
+  5.4 mmol/L (random) all recorded and displayed; "Still to record" emptied; BMI 24.2 rendered with
+  both WHO ladders and the disclaimer.
+
+### Defect 2 — the language toggle closed the sugar reference chart (BOTH staff portals)
+- Medic, before: panel `display` **block → none**, textContent **2186 → 0** characters.
+- Medic, after: `display` **block → block**, **2031 (bn) → 2186 (en)** characters, i.e. it stayed
+  open AND re-rendered in the new language; a second click still closes it (`display: none`).
+- Doctor, after (same code path, exercised via `renderPatientDetails()` + `renderGlucosePanel()`):
+  **2186 → 2186** characters kept across the card rebuild; second click closes.
+
+### Defect 3 — the language toggle discarded unsaved vitals
+- Before: typed weight **63.5 → 62.5** (the stored value) after a language toggle.
+- After, three cases measured: (A) same patient + language toggle → typed **77.7 / 111/70** kept;
+  (B) a draft stamped with a different patient id → **discarded**, form falls back to the stored
+  record (70 / 118/76 / ইসরাত), not the foreign values (999 / 9/9 / "SOMEONE ELSE");
+  (C) a correctly-stamped draft → restored (**64.4 / 112/72**).
+
+### Non-vacuity — every new assertion checked against the pre-fix HEAD blobs
+- `#bmi-live` after Save at HEAD: **False** (the fix asserts True).
+- `glucoseOpenMounts` at HEAD: **absent**; `renderGlucosePanel` decided from the inline style: **True**.
+- `readIntakeDraft` / `INTAKE_FIELD_IDS` / the draft hand-back at HEAD: **all absent**.
+- `Correction failed: {exc}` present at HEAD: **True**; `provider_unavailable` absent: **True**.
+  The old detail string would have shown the caller all six leaky terms
+  (`openrouter`, `gemma`, `provider_name`, `Google AI Studio`, `http`, `429`).
+- Provider settings undocumented in `.env.example` at HEAD: **6**
+  (`CEREBRAS_BASE_URL`, `CEREBRAS_MODEL`, `MISTRAL_BASE_URL`, `MISTRAL_MODEL`,
+  `GEMINI_FLASH_MODEL`, `GEMINI_FLASH_LITE_MODEL`).
+- Env templates tracked at HEAD: **2** (`.env.example`, `.envnew.example`).
+
+### Portal smoke checks (browser, no console errors on any of the three)
+- **Medic** `/medic/`: login → queue → case → intake edit → save → language toggle → chart. One
+  `PATCH` per save; no duplicated listeners (`.onclick`/`.oninput` are assignments, not
+  `addEventListener`).
+- **Doctor** `/doctor/`: login, `GET /api/users?role=doctor` 200, queue (1 assigned case), case
+  opens, and all workflow controls present — ⬇ EHR record (FHIR), ⬇ EHR record (PDF),
+  📝 Write Prescription, Override to Low-Risk, Accept & Write to EHR.
+- **Logout / root** `/`: returns to the portal directory, all four entries render; `sessionStorage`
+  empty, only the `lang` UI preference in `localStorage` — no stale portal state.
+- **Kiosk** `/kiosk.html`: `GET /api/config` 200 with the expected voice-loop settings,
+  `screen-phone` shown and the other three hidden, `#ai-retry-panel` present and hidden,
+  `server_tts: true`.
+- `GET /favicon.ico` **404** was inspected as instructed: it is the browser's own automatic request,
+  it produces no console error and no user-visible effect. **Not a defect; nothing added for it.**
+
+### Not tested this session (stated so it is not assumed)
+- **No real-microphone run** — S43 changed no STT/TTS/voice code.
+- **No live provider call** — fallback is covered by mocks only, per the brief. Gemini's free daily
+  quota state was not re-measured.
+- **No formal WER / precision-recall.** Still the outstanding thesis-evidence item.
+- Notes: ⚠ the browser verification wrote synthetic vitals to the dev DB — patient 16
+  (`+8801875637607`) now has height 170, weight 70.5, BP 118/76, glucose 5.4 random. All four were
+  **empty** beforehand, so nothing was overwritten; the PATCH route cannot clear a value by design,
+  so removing them needs a direct DB write.
+
+---
+
+## Session 44 — 2026-08-19 — three API keys per provider, through the existing chain (ADR-0069)
+
+- Setup: Windows 11, Python 3.14 venv, `pytest backend/tests/` with `PYTHONIOENCODING=utf-8`.
+  **Every provider is MOCKED** — `llm_client._attempt` is patched and the recorder stores
+  `(bucket, key slot, model)` per attempt, never `api_key`. **No network call and no real credential
+  is used by any test; no quota was spent** (the brief's requirement, and rule #4).
+- Metric(s): suite pass/skip/fail; the exact attempt SEQUENCE per scenario; cooldown identities.
+
+### Baseline (start of S44)
+- **1150 passed, 2 skipped, 0 failed** — the number S43 finished on.
+
+### Final
+- **1181 passed, 2 skipped, 0 failed** in 108.47s.
+- Delta **+31**, all in one new file: `backend/tests/test_multi_key_fallback_s44.py`.
+- ⚠ **No existing test was modified, weakened or deleted.** The 1150 that passed before still pass
+  unchanged — which is the strongest available evidence that a bucket with one key still behaves
+  exactly as it did.
+
+### The order, asserted as a list
+`[(gemini_flash,1),(gemini_flash,2),(gemini_flash,3),(groq,1),(groq,2),(groq,3),(openrouter,1),(openrouter,2),(openrouter,3)]`
+and with two models configured on OpenRouter:
+`[(1,m-a),(1,m-b),(2,m-a),(2,m-b),(3,m-a),(3,m-b)]` — every model of one key before the next key.
+
+### The brief's scenarios A–O — attempt sequences actually recorded
+| # | Scenario | Recorded sequence |
+|---|---|---|
+| A | key 1 succeeds | `gemini 1` only — keys 2 and 3 never called |
+| B | gemini key 1 → 429 | `gemini 1, gemini 2` |
+| C | gemini keys 1+2 → 429 | `gemini 1, 2, 3` |
+| D | all gemini keys fail | `gemini 1,2,3` then `groq 1` |
+| E | groq key 1 → 429 | `… groq 1, groq 2` |
+| F | groq keys 1+2 → 429 | groq slots `1,2,3` |
+| G | all groq keys fail | 7 attempts, last is `openrouter 1` |
+| H | openrouter key 1 → 429 | `openrouter 1, openrouter 2` |
+| I | openrouter keys 1+2 → 429 | openrouter slots `1,2,3` |
+| J | all nine fail | all 9 in order, then `LLMCallError` with the safe detail |
+| K | successful fallback | exactly ONE `ok`/`fallback` module_event, `provider == "groq"` (bucket only) |
+| L | utterance never re-submitted | `llm_client` source contains no `Utterance(` / `raw_text` / `add_utterance` |
+| M | no upstream detail leaks | none of `429 / rate-limited / upstream / http / quota / gemini / groq / openrouter / gflash` in the patient message |
+| N | sparse config (key 2 blank) | key 1 + key 3 become slots 1 and 2 and BOTH are used |
+| O | checker sees all nine | 3 + 3 + 3 configured; Flash-Lite shares Gemini's list |
+
+Plus: Cerebras still sits between Groq and OpenRouter when configured; a **404 decommissioned
+model** falls through all three keys of its bucket and is never retried (`is_transient` False).
+
+### ⚠ The cooldown measurement — the crux of the change
+- With the **pre-S44** formula `bucket|model`: 3 Gemini attempts → **1** distinct cooldown identity.
+  A 429 on key 1 would have put keys 2 and 3 to sleep.
+- With `bucket#slot|model`: 3 attempts → **3** distinct identities. Measured after a real
+  daily-quota 429 on key 1: `_on_cooldown(key1) == True`, `key2 == False`, `key3 == False`, and the
+  next call went straight to key 2 and succeeded.
+- Cooldowns remain time-based (`RATE_LIMIT_COOLDOWN_S`, `DAILY_QUOTA_COOLDOWN_S` both > 0) and
+  in-process — no key is permanently disabled and nothing is persisted.
+
+### Credential safety
+- A fake secret (`sk-live-S44-DO-NOT-LOG-THIS-…`) placed in slot 1 appears in **no** log record, in
+  **no** `module_events` row, in `str(exc)` or in `safe_detail`; the diagnostic that DOES survive is
+  `"gemini_flash key 1"` — bucket and slot number, never the key.
+- `ProviderConfig.label` and `.cooldown_key` are asserted to contain no key material.
+- `check_api_keys` prints all nine slot lines with none of the nine fake values in the output.
+- A test asserts every name in `KEY_ENV_NAMES` is a real `Settings` field, so the checker cannot
+  name a `.env` variable nothing reads.
+
+### Non-vacuity against HEAD (pre-S44)
+- `provider_api_keys`, `KEY_ENV_NAMES`, `ProviderConfig.key_index`: **all absent**.
+- HEAD's `cooldown_key` was `f"{self.key}|{self.model}"` — 3 keys → 1 identity, as above.
+- With three Gemini keys in the numbered slots, HEAD produced **0** attempts for that bucket (it
+  read only the bare name, which is blank in that layout); S44 produces 3.
+
+### Live checks (no provider called)
+- Server starts clean with the nine slots present, migrations run, **no misconfiguration warning**.
+- The real `.env` resolves to 1 key per bucket → the live chain is **unchanged** by this session.
+- Medic Save button: **layout shift 0.00px, scroll delta 0.00px** while the live BMI grew to 210
+  characters (S43's fix re-measured after S44).
+- Doctor portal: 2 queue rows, both EHR buttons and "Accept & Write to EHR" present, clean console.
+- Kiosk: `/api/config` 200 (`voice_loop: auto`, `server_tts: true`), `/api/tts` returns real
+  `audio/mpeg` 200, phone screen shown, AI-retry panel hidden, clean console.
+
+### Not tested (stated so it is not assumed)
+- ⚠ **Real API-key failover was NOT tested** — the nine slots are empty and no real key was
+  available to this session. The complete behaviour is mock-tested only.
+- **No real-microphone run** — S44 changed no speech code and no frontend file.
+- **No formal WER / precision-recall.** Still the outstanding thesis-evidence item.
+
+---
+
+## Session 45 — 2026-08-19 — the medic "✏️ Edit does nothing" mouse-click bug
+
+- Setup: Windows 11, Python 3.14 venv, `pytest backend/tests/` with `PYTHONIOENCODING=utf-8`.
+  Browser verification on `http://localhost:8001/medic/` at the pane's native 731x694 viewport,
+  using **real CDP mouse events** (`hover`, `left_click`, `triple_click`, `type`) and a
+  capture-phase listener on `pointerdown / mousedown / mouseup / click`.
+- ⚠ **Method note, and it is the point of this entry:** S41 and S43 verified this area with
+  `element.click()` and with clicks aimed at the SAVE button. A programmatic `.click()` **cannot**
+  detect a hit-target defect — it invokes the handler and skips hit-testing entirely. That is why
+  the bug survived two sessions of "passing" verification.
+
+### Baseline (start of S45)
+- **1181 passed, 2 skipped, 0 failed** — the number S44 finished on.
+
+### Final
+- **1196 passed, 2 skipped, 0 failed** in 58.33s.
+- Delta **+15**, all in one new file: `backend/tests/test_card_click_target_s45.py`.
+- **No existing test was modified, weakened or deleted.**
+
+### The reproduction — real mouse, event trace
+Aiming at the Edit button's own centre from its own `getBoundingClientRect()`:
+
+| event | position | target |
+|---|---|---|
+| pointerdown | @628,526 | `DIV` (the button's wrapper) |
+| mousedown | @628,526 | `DIV` |
+| **mouseup** | @628,526 | **`BUTTON#intake-toggle`** |
+| click | @628,526 | `DIV` |
+
+`mousedown` and `mouseup` on **different elements** ⇒ the browser fires `click` on their nearest
+common ancestor ⇒ the button's handler never runs. Result: `intake-editor` stayed
+`display: none`, zero network requests, empty error banner, no console output.
+
+### The A/B, run in the live page
+| stylesheet | mousedown → mouseup | editor |
+|---|---|---|
+| pre-fix rule re-injected at runtime | `DIV` → `BUTTON#intake-toggle` (split) | **did not open** |
+| shipped fix | `BUTTON#intake-toggle` → `BUTTON#intake-toggle` | **opened** |
+
+### Hypotheses tested and REJECTED before the fix
+- **`resize_window` coordinate scaling** — the tool reported a click at (170,365) while the page
+  received it at (297,639), a **1.75x** offset (1280/731). My own tooling, not the application;
+  ruled out by returning to the native viewport, after which the same click worked.
+- **`transform-style: preserve-3d` alone, in a settled state** — probed `elementFromPoint` across
+  ±12px of the button while hovered, with `preserve-3d` and with `flat`: **7/7 HIT in both**. The
+  defect needs the transform to CHANGE (`:hover` → `:active`), not merely to exist.
+
+### Acceptance flow — real mouse and real keystrokes, after the fix
+1. Hover ✏️ Edit → click → all events reach `BUTTON#intake-toggle`; editor `display: flex`. ✅
+2. Click 🩸 Sugar reference → chart opens, 2031 characters. ✅
+3. Triple-click the blood-sugar box, type `5.8`. ✅
+4. Click Save → **exactly 1** `PATCH /api/patients/16/vitals` (no duplicate request). ✅
+5. Card reads `🩸 রক্তে সুগার: 5.8 mmol/L (104 mg/dL) · যেকোনো সময়`; editor closed. ✅
+6. Error banner empty; **console produced no messages at all**. ✅
+7. Doctor portal: queue loads (2 rows), case opens, EHR FHIR + PDF + Write Prescription +
+   Accept & Write to EHR present, clean console. ✅
+
+### Non-vacuity of the 15 new assertions, against the pre-fix stylesheet
+- `.fx-card` carried **three** `transform:` declarations (`:hover`, `:active`, `:focus-visible`),
+  all `translate3d` with a non-zero Z on two of them.
+- `transform-style: preserve-3d` — present.
+- `will-change: transform` — present.
+- the transition list included `transform`.
+All four guards therefore fail against HEAD and pass against the fix.
+
+### Not tested (stated so it is not assumed)
+- **No real-microphone run** — S45 changed no JavaScript at all, only one CSS rule.
+- **No screenshots** — the Browser pane composites no frames here, so the visual claims are event
+  traces, computed styles and request logs rather than pictures. The *appearance* of the new
+  shadow-only hover is unclaimed; its behaviour is measured.
+- **No live provider call**; no API key was pasted this session.

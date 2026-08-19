@@ -575,11 +575,46 @@
 
     let intakeOpen = false;   // survives a re-render (language toggle, save)
 
+    /* ⚠ S43 — the intake field ids in ONE list, because two functions have to agree
+       about them: the one that reads a half-typed form off the screen and the one that
+       puts it back. Two hand-written lists is how one of them quietly starts dropping
+       a field, and the field it drops is a clinical measurement. */
+    const INTAKE_FIELD_IDS = ['in-name', 'in-age', 'in-sex', 'in-height', 'in-weight',
+                              'in-bp', 'in-glucose', 'in-glucose-context'];
+
+    /* What the medic has typed but not yet saved, or null when the form is not on
+       screen. renderIntakeCard() rebuilds the card's innerHTML, which destroys every
+       input in it — so this is read BEFORE that happens and handed back afterwards.
+
+       ⚠ IT CARRIES THE PATIENT ID, and that is the safety half rather than a detail.
+       The editor deliberately stays open across a PATIENT SWITCH (`intakeOpen`), and a
+       draft restored blindly would put the previous patient's typed weight into the
+       new patient's form — the exact defect S41 pinned when it required every control
+       to be re-seeded from the patient on every open. A draft therefore only ever
+       returns to the patient it was typed for; for anyone else the form opens on their
+       own record, as it always did. */
+    function readIntakeDraft(patientId) {
+      const values = {};
+      let found = false;
+      INTAKE_FIELD_IDS.forEach((id) => {
+        const el = document.getElementById(id);
+        if (el) { values[id] = el.value; found = true; }
+      });
+      return found ? { patientId, values } : null;
+    }
+
     function renderIntakeCard() {
       const card = document.getElementById('intake-card');
       if (!card || !currentCase) return;
       const p = (currentCase.detail || {}).patient || {};
       const age = p.birth_year ? String(new Date().getFullYear() - p.birth_year) : '';
+      /* ⚠ S43 — MEASURED data loss: with the editor open and a weight of 63.5 typed,
+         switching language re-rendered the card and the box read 62.5 again, silently.
+         renderIntakeCard() re-opens the editor from the STORED patient, so every
+         unsaved keystroke was overwritten with no warning and no way back. A medic who
+         does not notice then saves the old numbers over their own reading. Captured
+         here, restored by openIntakeEditor below — and only for this same patient. */
+      const draft = intakeOpen ? readIntakeDraft(p.id) : null;
       card.style.display = 'flex';
       const missing = [];
       if (!p.display_name) missing.push(t('name', 'নাম'));
@@ -664,9 +699,25 @@
                 </select>`,
                      t('required with a reading', 'রিডিং দিলে এটি আবশ্যক'))}
            </div>
-           <!-- A5: recomputed as the medic types, from the SERVER's one definition of
-                the bands — so the portal cannot drift from the reference module. -->
-           <div id="bmi-live" style="font-size:.82rem; min-height:1.2em;"></div>
+           <!-- ⚠ S43 — THE ACTION ROW COMES BEFORE THE LIVE BMI, and the order is the
+                whole fix for a reported "Save does nothing".
+
+                MEASURED, not reasoned about: #bmi-live is 15.7px tall while empty and
+                45.6px once the /api/reference/bmi answer lands, so the Save button
+                below it MOVED DOWN 29.9px — 94% of its own 31.6px height. The growth
+                arrives ~250ms (the liveBmi debounce) plus one network round-trip after
+                the medic stops typing, i.e. exactly while their hand is travelling to
+                the button. An instrumented click then lands on this wrapper DIV
+                instead of the button, so the inline onclick never runs: no request, no
+                error, nothing on screen. Indistinguishable from a dead button, which
+                is precisely how it was reported.
+
+                Reserving space instead was rejected: the box is 3 lines at 800px in
+                English and more in Bangla at a narrow width, so any min-height is a
+                guess that fails on the layout it was not measured on. With the readout
+                AFTER the buttons, nothing interactive can be displaced at any width in
+                either language. Nothing is removed — the BMI, its two band ladders and
+                its rule-#2 disclaimer all still render, 35px lower. -->
            <div style="display:flex; gap:8px; flex-wrap:wrap;">
              <button class="btn btn-primary fx-lift" style="padding:7px 16px; font-size:.82rem;" onclick="saveIntake(this)">${t('Save', 'সংরক্ষণ')}</button>
              <button class="btn btn-secondary fx-lift" style="padding:7px 16px; font-size:.82rem;" onclick="closeIntakeEditor()">${t('Cancel', 'বাতিল')}</button>
@@ -674,6 +725,9 @@
                'Clearing a box leaves the stored value unchanged.',
                'কোনো ঘর ফাঁকা রাখলে আগের সংরক্ষিত মান অপরিবর্তিত থাকে।')}</span>
            </div>
+           <!-- A5: recomputed as the medic types, from the SERVER's one definition of
+                the bands — so the portal cannot drift from the reference module. -->
+           <div id="bmi-live" style="font-size:.82rem; min-height:1.2em;"></div>
          </div>`;
 
       // Patient/staff text — textContent only, never innerHTML.
@@ -700,19 +754,36 @@
       showBmi('bmi-readout', p.weight_kg, p.height_cm);
       document.getElementById('intake-toggle').onclick = () => openIntakeEditor(p, age);
       document.getElementById('glucose-toggle').onclick = () => toggleGlucosePanel('glucose-panel');
-      if (intakeOpen) openIntakeEditor(p, age);
+      if (intakeOpen) openIntakeEditor(p, age, draft);
     }
 
-    function openIntakeEditor(p, age) {
-      document.getElementById('in-name').value = p.display_name || '';
-      document.getElementById('in-age').value = age || '';
-      document.getElementById('in-sex').value = p.sex || '';
-      document.getElementById('in-height').value = p.height_cm != null ? p.height_cm : '';
-      document.getElementById('in-weight').value = p.weight_kg != null ? p.weight_kg : '';
-      document.getElementById('in-bp').value = p.bp || '';
-      document.getElementById('in-glucose').value =
-        p.blood_glucose_mmol_l != null ? p.blood_glucose_mmol_l : '';
-      document.getElementById('in-glucose-context').value = p.blood_glucose_context || '';
+    /* `draft` (S43) is what the medic had typed before a re-render wiped the inputs.
+       It is used ONLY to re-fill the form; nothing here writes to the record. Opening
+       the editor fresh passes nothing and prefills from the stored patient, exactly as
+       before.
+
+       ⚠ EVERY control is written on EVERY open, without exception — that is S41's rule
+       and it is what makes a patient switch safe: a field left out would keep the
+       previous patient's value in a form the medic is about to save onto somebody else.
+       A draft belonging to a DIFFERENT patient is discarded here rather than trusted,
+       so the same guarantee holds whether the re-render came from a language toggle or
+       from selecting another case. */
+    function openIntakeEditor(p, age, draft) {
+      const stored = {
+        'in-name': p.display_name || '',
+        'in-age': age || '',
+        'in-sex': p.sex || '',
+        'in-height': p.height_cm != null ? p.height_cm : '',
+        'in-weight': p.weight_kg != null ? p.weight_kg : '',
+        'in-bp': p.bp || '',
+        'in-glucose': p.blood_glucose_mmol_l != null ? p.blood_glucose_mmol_l : '',
+        'in-glucose-context': p.blood_glucose_context || '',
+      };
+      const mine = draft && draft.patientId === p.id ? draft.values : null;
+      INTAKE_FIELD_IDS.forEach((id) => {
+        const el = document.getElementById(id);
+        if (el) el.value = (mine && id in mine) ? mine[id] : stored[id];
+      });
       const editor = document.getElementById('intake-editor');
       editor.style.display = 'flex';
       intakeOpen = true;

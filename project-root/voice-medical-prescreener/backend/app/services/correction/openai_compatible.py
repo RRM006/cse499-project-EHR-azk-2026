@@ -13,6 +13,7 @@ from __future__ import annotations
 
 from openai import OpenAI
 
+from backend.app.core import llm_providers
 from backend.app.core.config import Settings, get_settings
 from backend.app.services.correction.base import Corrector
 
@@ -35,11 +36,17 @@ SYSTEM_PROMPT = (
     "- Return ONLY the corrected text, with no quotes, labels, or explanation."
 )
 
-# OpenAI-compatible base URLs for the providers we may use.
-_PROVIDER_BASE_URLS = {
-    "groq": "https://api.groq.com/openai/v1",
-    "openrouter": "https://openrouter.ai/api/v1",
-    # gemini uses settings.gemini_base_url (configurable), handled below.
+# ⚠ S43 — CORRECTION_PROVIDER names one of the buckets in the ONE provider registry.
+# Until now this file carried its own copy of Groq's and OpenRouter's base URLs, so the
+# project had two places that had to agree about where a provider lives. They are
+# published endpoints and they do move (S41 and S42 both had to chase a provider's
+# changed configuration), and a second copy is a thing that gets updated once.
+# `backend.app.core.llm_providers` is the registry the whole pipeline resolves through;
+# this now reads the same rows instead of restating them.
+_CORRECTION_BUCKETS = {
+    "gemini": llm_providers.GEMINI_FLASH,     # uses the configurable gemini_base_url
+    "groq": llm_providers.GROQ,
+    "openrouter": llm_providers.OPENROUTER,
 }
 
 
@@ -85,20 +92,13 @@ def build_corrector(settings: Settings | None = None) -> OpenAICompatibleCorrect
     settings = settings or get_settings()
     provider = settings.correction_provider.lower().strip()
 
-    if provider == "gemini":
-        api_key = settings.gemini_api_key
-        base_url = settings.gemini_base_url
-    elif provider == "groq":
-        api_key = settings.groq_api_key
-        base_url = _PROVIDER_BASE_URLS["groq"]
-    elif provider == "openrouter":
-        api_key = settings.openrouter_api_key
-        base_url = _PROVIDER_BASE_URLS["openrouter"]
-    else:
+    bucket = _CORRECTION_BUCKETS.get(provider)
+    if bucket is None:
         raise ValueError(
             f"Unknown CORRECTION_PROVIDER '{settings.correction_provider}'. "
-            "Expected one of: gemini, groq, openrouter."
+            f"Expected one of: {', '.join(_CORRECTION_BUCKETS)}."
         )
+    api_key, base_url = llm_providers.provider_credentials(bucket, settings)
 
     if not api_key:
         raise RuntimeError(

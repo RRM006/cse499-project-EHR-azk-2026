@@ -87,11 +87,33 @@ def test_every_editor_field_is_rewritten_from_the_patient_on_each_open():
     """The editor deliberately stays open across a patient switch (`intakeOpen`), and
     renderPatientCard re-opens it for the newly-selected patient. That is only safe if
     EVERY control is re-seeded — a field left out would keep the previous patient's
-    value in a form the medic is about to save onto somebody else."""
-    body = fn_body("openIntakeEditor", medic_html())
+    value in a form the medic is about to save onto somebody else.
+
+    ⚠ S43 rewrote HOW the seeding happens (one `stored` map written through
+    INTAKE_FIELD_IDS, instead of eight hand-written getElementById lines) so that an
+    unsaved draft could survive a language toggle. The requirement is unchanged and is
+    asserted here against the new shape: every field still has a value derived from the
+    patient object, and the write still covers every field in the list."""
+    html = medic_html()
+    body = fn_body("openIntakeEditor", html)
+    id_list = html.split("const INTAKE_FIELD_IDS = [")[1].split("];")[0]
     for field in ("in-name", "in-age", "in-sex", "in-height", "in-weight", "in-bp",
                   "in-glucose", "in-glucose-context"):
-        assert f"getElementById('{field}').value =" in body, f"{field} is never re-seeded"
+        assert f"'{field}':" in body, f"{field} has no value derived from the patient"
+        assert f"'{field}'" in id_list, f"{field} is never written on open"
+    # The one loop that does the writing, over that one list.
+    assert "INTAKE_FIELD_IDS.forEach" in body
+    assert "el.value =" in body
+
+
+def test_a_draft_from_another_patient_is_discarded_rather_than_restored():
+    """S43's draft-preservation must not become the very leak this file was written
+    about: the form stays open across a patient switch, so a draft is only ever handed
+    back to the patient it was typed for."""
+    body = fn_body("openIntakeEditor", medic_html())
+    assert "draft.patientId === p.id" in body, (
+        "a draft is restored without checking whose it is"
+    )
 
 
 def test_an_absent_value_is_written_as_empty_rather_than_left_alone():
@@ -104,9 +126,12 @@ def test_an_absent_value_is_written_as_empty_rather_than_left_alone():
 
 def test_the_editor_is_reopened_for_the_newly_selected_patient():
     """The pairing that makes the above true — the card re-opens the form with the NEW
-    patient object, rather than leaving the old form on screen."""
+    patient object, rather than leaving the old form on screen.
+
+    S43 added a third argument (the unsaved draft); `p` is still the patient the form
+    is re-seeded from, which is what this test is about."""
     html = medic_html()
-    assert "if (intakeOpen) openIntakeEditor(p, age);" in html
+    assert "if (intakeOpen) openIntakeEditor(p, age, draft);" in html
 
 
 # --- 3. backend: one patient's reading must never appear on another ------------------

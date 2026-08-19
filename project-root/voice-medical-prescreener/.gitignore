@@ -1,8 +1,16 @@
 # --- Secrets (NEVER commit) ---
 .env
 *.env
+# S44: ANY backup or variant of a .env is a full copy of every credential in it.
+# `*.env` does not match `.env.20260819.bak`, and during S44 a tooling backup with
+# that exact shape landed in the working tree unignored. It never reached git and was
+# deleted, but the pattern that would have caught it belongs here rather than in a
+# memory of the incident.
+.env.*
+*.env.*
 # the example template IS committed (key names only)
 !*.env.example
+!.env.example
 
 # --- Python ---
 .venv/

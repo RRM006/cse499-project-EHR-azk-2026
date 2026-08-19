@@ -215,8 +215,10 @@ def call_module(
                 latency_ms=int((time.monotonic() - start) * 1000),
                 error=str(exc)[:500],
             )
-            logger.warning("%s via %s (%s) failed: %s",
-                           module_code, provider.key, provider.model, exc)
+            # ⚠ `provider.label` is bucket + credential SLOT NUMBER + model id. It never
+            # contains a key value — which is what makes "Gemini key 2 is the one that
+            # is exhausted" a diagnosable fact without a credential reaching a log file.
+            logger.warning("%s via %s failed: %s", module_code, provider.label, exc)
             return None
 
     retryable: list[ProviderConfig] = []

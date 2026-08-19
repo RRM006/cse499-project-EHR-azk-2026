@@ -875,10 +875,27 @@ function renderNameProvenance(targetId, prov) {
 
 let glucoseRef = null;
 
+/* ⚠ S43 — WHICH MOUNTS ARE DISCLOSED, held here rather than read back off the DOM.
+
+   MEASURED defect, present in BOTH staff portals: with the chart open, switching
+   language closed it — display went block -> none and its 2186 characters went to 0,
+   silently. The cause is that whether the panel is open was inferred from
+   `panel.style.display`, and the element carrying that style is destroyed on every
+   re-render: `renderIntakeCard()` / `renderPatientDetails()` rebuild their card's
+   innerHTML, which recreates the mount from the template's `display:none`. Both
+   portals then call renderGlucosePanel() precisely so the chart follows the language —
+   and it returned immediately, because the brand-new element said it was closed.
+
+   So the panel's state is no longer stored in the thing that gets thrown away. One
+   Set, shared by both portals, keyed by mount id — the doctor and the medic disclose
+   independently and neither can close the other's. */
+const glucoseOpenMounts = new Set();
+
 async function toggleGlucosePanel(mountId) {
   const panel = document.getElementById(mountId);
   if (!panel) return;
-  const opening = panel.style.display === 'none' || !panel.style.display;
+  const opening = !glucoseOpenMounts.has(mountId);
+  if (opening) glucoseOpenMounts.add(mountId); else glucoseOpenMounts.delete(mountId);
   panel.style.display = opening ? 'block' : 'none';
   if (!opening) return;
   if (!glucoseRef) {
@@ -905,7 +922,10 @@ function bandRange(band) {
 
 function renderGlucosePanel(mountId) {
   const panel = document.getElementById(mountId);
-  if (!panel || !glucoseRef || panel.style.display === 'none') return;
+  if (!panel || !glucoseRef || !glucoseOpenMounts.has(mountId)) return;
+  // The mount may be a fresh element a re-render just created from a template that
+  // says display:none, so the disclosure is re-asserted rather than assumed.
+  panel.style.display = 'block';
   panel.innerHTML = '';
   const head = document.createElement('div');
   head.style.cssText = 'font-weight:800; color:var(--primary-color); margin-bottom:4px;';

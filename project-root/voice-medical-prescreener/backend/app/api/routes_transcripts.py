@@ -15,6 +15,7 @@ import logging
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session
 
+from backend.app.api._llm_errors import provider_unavailable
 from backend.app.db import repository as repo
 from backend.app.db.models import Utterance
 from backend.app.db.database import get_db
@@ -114,7 +115,14 @@ def correct_transcript(
     try:
         corrected = corrector.correct(utterance.raw_text)  # raw is read-only here
     except Exception as exc:  # network / quota / provider errors
-        raise HTTPException(status_code=502, detail=f"Correction failed: {exc}")
+        # ⚠ S43 — the last route in the project still answering with a provider's own
+        # words. `exc` here is the OpenAI-SDK exception, whose text ends in the raw
+        # upstream body — measured during S42 to carry the model id, the upstream
+        # provider's name and a signup URL. It is logged (where a developer is) and
+        # never returned (where a user is). Same helper, same message, same
+        # Retry-After as every other provider failure.
+        logger.warning("Correction failed via %s/%s: %s", corrector.provider, corrector.model, exc)
+        raise provider_unavailable() from exc
 
     updated = repo.set_correction(
         db,

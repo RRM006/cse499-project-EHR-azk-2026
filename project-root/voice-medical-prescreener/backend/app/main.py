@@ -29,6 +29,7 @@ from backend.app.api.routes_risk import router as risk_router
 from backend.app.api.routes_transcripts import router as transcripts_router
 from backend.app.api.routes_visit_documents import router as visit_documents_router
 from backend.app.api.routes_visits import router as visits_router
+from backend.app.core.llm_providers import misconfigured_buckets
 from backend.app.db.database import SessionLocal, init_db
 from backend.app.db.seed import seed_demo_letterhead
 
@@ -57,6 +58,16 @@ async def lifespan(app: FastAPI):
     init_db()  # create SQLite tables if missing
     with SessionLocal() as db:  # idempotent demo letterhead (fills NULLs only)
         seed_demo_letterhead(db)
+    # S43: a provider bucket whose key is set but whose model setting is blank is
+    # skipped entirely by the chain, silently — one blank .env line can delete the
+    # universal fallback and nothing anywhere says so until a patient sees a 502.
+    # Said once, at startup, where an operator is already reading.
+    for bucket in misconfigured_buckets():
+        logger.warning(
+            "LLM provider '%s' has a key but names NO model (%s_MODEL is blank) — "
+            "this bucket will be SKIPPED. Unset that line to use the shipped default.",
+            bucket, bucket.upper(),
+        )
     logger.info("App entry points (relative to the server root, e.g. http://localhost:8001):")
     for name, path in ENTRY_POINTS:
         logger.info("  %-22s %s", name, path)
