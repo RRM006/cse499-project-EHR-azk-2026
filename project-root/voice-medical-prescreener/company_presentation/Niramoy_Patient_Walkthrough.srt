@@ -1,0 +1,56 @@
+1
+00:00:00,500 --> 00:00:12,574
+Niramoy — a voice-first pre-screening system I built. This is the patient's experience.
+
+2
+00:00:14,174 --> 00:00:20,049
+The patient just enters their phone number — no app, no account to create.
+
+3
+00:00:21,449 --> 00:00:28,113
+A one-time code to sign in — type it, or speak the digits out loud.
+
+4
+00:00:29,513 --> 00:00:45,767
+The assistant asks aloud and the mic opens by itself — hands-free, nothing to tap.
+
+5
+00:00:47,167 --> 00:00:58,487
+The patient answers naturally in Bangla or Banglish — voice is the primary path.
+
+6
+00:00:59,887 --> 00:01:11,741
+It reads the answer back and stores the exact words, never edited — the system's first rule.
+
+7
+00:01:13,141 --> 00:01:23,381
+It asks spoken follow-up questions; the patient answers each one by voice.
+
+8
+00:01:24,781 --> 00:01:35,857
+Everything is organized into a structured summary — and read back aloud for review.
+
+9
+00:01:37,257 --> 00:01:50,434
+They submit. Risk and red-flags are assessed in the background — for the doctor, not the patient.
+
+10
+00:01:51,834 --> 00:01:57,105
+That's the patient's whole experience. Here's what happens next.
+
+11
+00:01:58,705 --> 00:02:08,190
+A medic verifies the AI's summary against the patient's exact words, and adds vitals.
+
+12
+00:02:09,590 --> 00:02:23,127
+The doctor leads with safety — a red-flag rule that runs independently of the AI.
+
+13
+00:02:24,527 --> 00:02:36,369
+The doctor decides and writes a structured EHR document. The system never diagnoses.
+
+14
+00:02:37,769 --> 00:02:46,744
+The patient speaks, hands-free; the system structures; the doctor decides. Niramoy.
+
