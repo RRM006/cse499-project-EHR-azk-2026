@@ -1,0 +1,216 @@
+1
+00:00:00,220 --> 00:00:03,822
+This is Niramoy, a voice-first medical pre-screening
+
+2
+00:00:03,822 --> 00:00:06,663
+system I built for clinics in Bangladesh.
+
+3
+00:00:06,863 --> 00:00:10,155
+The patient starts here. No app and no account.
+
+4
+00:00:10,155 --> 00:00:12,816
+Just a mobile number, typed, or spoken
+
+5
+00:00:12,816 --> 00:00:15,268
+digit by digit into the microphone.
+
+6
+00:00:15,468 --> 00:00:18,640
+A one-time code signs them in. It is hashed,
+
+7
+00:00:18,640 --> 00:00:21,740
+single-use, and it expires in five minutes.
+
+8
+00:00:21,940 --> 00:00:25,539
+Now the core of the system. The assistant asks its
+
+9
+00:00:25,539 --> 00:00:28,563
+question aloud and on screen, and then the
+
+10
+00:00:28,563 --> 00:00:31,658
+microphone opens by itself. Nothing to tap.
+
+11
+00:00:31,658 --> 00:00:34,249
+The portal says so in its own words.
+
+12
+00:00:34,449 --> 00:00:37,949
+The whole portal runs in Bangla or English, and the
+
+13
+00:00:37,949 --> 00:00:41,242
+patient can answer in Bangla, in Banglish, or in
+
+14
+00:00:41,242 --> 00:00:43,644
+their own regional way of speaking.
+
+15
+00:00:43,844 --> 00:00:47,316
+For this recording I am using the typing fallback,
+
+16
+00:00:47,316 --> 00:00:51,204
+because this capture environment has no live microphone.
+
+17
+00:00:51,204 --> 00:00:55,023
+The same flow accepts voice in the running application.
+
+18
+00:00:55,223 --> 00:00:59,013
+Everything else is live. The assistant works through its
+
+19
+00:00:59,013 --> 00:01:02,059
+questions, and every answer goes into exactly
+
+20
+00:01:02,059 --> 00:01:04,631
+the same pipeline the microphone uses.
+
+21
+00:01:04,831 --> 00:01:08,307
+And whatever the patient gives, it is stored exactly
+
+22
+00:01:08,307 --> 00:01:11,315
+as they said it. Never edited, never cleaned.
+
+23
+00:01:11,315 --> 00:01:14,857
+That is the first rule this whole system is built on.
+
+24
+00:01:15,057 --> 00:01:18,478
+And at the end of the visit, the patient leaves with
+
+25
+00:01:18,478 --> 00:01:21,965
+their own copy. The whole conversation, exactly as it
+
+26
+00:01:21,965 --> 00:01:26,044
+was captured, generated automatically and handed back to them.
+
+27
+00:01:26,244 --> 00:01:29,767
+When a patient submits, the case moves to the medic's
+
+28
+00:01:29,767 --> 00:01:32,824
+queue, ordered by urgency rather than arrival.
+
+29
+00:01:32,824 --> 00:01:36,015
+This one is Critical, and it carries a red flag.
+
+30
+00:01:36,215 --> 00:01:39,991
+Here is that patient's own conversation. The follow-up
+
+31
+00:01:39,991 --> 00:01:43,488
+questions the system asked, in Bangla and English,
+
+32
+00:01:43,488 --> 00:01:47,124
+and the answers, word for word. Underneath, the AI's
+
+33
+00:01:47,124 --> 00:01:50,201
+structured reading of the same conversation,
+
+34
+00:01:50,201 --> 00:01:51,809
+in ten clinical fields.
+
+35
+00:01:52,009 --> 00:01:55,119
+The medic checks the machine's reading against the
+
+36
+00:01:55,119 --> 00:01:57,856
+patient's own words, records the vitals, and
+
+37
+00:01:57,856 --> 00:02:00,095
+forwards the case to a named doctor.
+
+38
+00:02:00,295 --> 00:02:04,099
+The doctor's case opens with safety. A rule-based check
+
+39
+00:02:04,099 --> 00:02:07,350
+found chest pain in the patient's own words and
+
+40
+00:02:07,350 --> 00:02:10,601
+forced the tier to Critical. That rule is local
+
+41
+00:02:10,601 --> 00:02:13,852
+and deterministic. The model can raise concern.
+
+42
+00:02:13,852 --> 00:02:15,996
+It can never suppress the rule.
+
+43
+00:02:16,196 --> 00:02:19,739
+Beside it sits the stored explainable-AI reason.
+
+44
+00:02:19,739 --> 00:02:23,282
+Then the doctor writes the diagnosis themselves.
+
+45
+00:02:23,282 --> 00:02:25,939
+The AI's suggestion never enters it.
+
+46
+00:02:25,939 --> 00:02:29,039
+The system narrows. The clinician decides.
+
+47
+00:02:29,239 --> 00:02:32,683
+Accepting the case writes the encounter as an
+
+48
+00:02:32,683 --> 00:02:36,280
+HL7 FHIR R4 document bundle, with the patient's
+
+49
+00:02:36,280 --> 00:02:40,336
+verbatim words carried through, and the risk exported
+
+50
+00:02:40,336 --> 00:02:43,703
+as a RiskAssessment rather than a diagnosis.
+
+51
+00:02:43,703 --> 00:02:47,607
+The same record renders as a PDF a person can read.
+
+52
+00:02:47,807 --> 00:02:50,526
+The patient speaks. The system structures.
+
+53
+00:02:50,526 --> 00:02:53,052
+The medic verifies. The doctor decides.
+
+54
+00:02:53,052 --> 00:02:55,124
+And it becomes a medical record.
+
